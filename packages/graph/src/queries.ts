@@ -12,7 +12,14 @@ MATCH (r:Release {id: $releaseId, tenantId: $tenantId})-[cc:CURRENT_CUT]->(c:Cut
 OPTIONAL MATCH (c)-[ls:LISTED_IN]->(cs:Source {kind: 'cue_sheet', tenantId: $tenantId})
 RETURN r.id AS releaseId, r.title AS releaseTitle, r.revision AS revision, cc.id AS currentCutEdgeId,
        cc.sourceRefIds AS currentCutRefs, c.id AS cutId, c.version AS cutVersion, c.label AS cutLabel,
-       cs.id AS cueSheetId, cs.complete AS cueSheetComplete, ls.id AS listedInEdgeId, ls.sourceRefIds AS listedInRefs`,
+       cs.id AS cueSheetId, cs.complete AS cueSheetComplete, cs.cutVersion AS cueSheetCutVersion,
+       cs.declaredCueCount AS declaredCueCount, ls.id AS listedInEdgeId, ls.sourceRefIds AS listedInRefs`,
+
+  /** Cue entries parsed from one cue sheet (structured witness: index + title, with the exact excerpt). */
+  READ_CUE_ENTRIES: `
+MATCH (sr:SourceRef {tenantId: $tenantId, role: 'cue_entry'})-[:EXCERPT_OF]->(s:Source {id: $sourceId, tenantId: $tenantId})
+RETURN sr.id AS id, sr.cueIndex AS cueIndex, sr.cueTitle AS cueTitle
+ORDER BY cueIndex`,
 
   /** Every track the cut uses, with every license that covers it and every cut that license is valid for (all tenant-scoped). */
   READ_CUT_TRACK_LICENSES: `

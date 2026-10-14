@@ -12,34 +12,36 @@ type Label = 'Tenant' | 'Release' | 'Cut' | 'Track' | 'License' | 'Source' | 'So
 type RelType = 'HAS_CUT' | 'CURRENT_CUT' | 'SUPERSEDES' | 'LISTED_IN' | 'USES_TRACK' | 'COVERS' | 'VALID_FOR'
   | 'EVIDENCED_BY' | 'EXCERPT_OF' | 'MEMBER_OF';
 
-interface SourceSpec { id: string; file: string; kind: 'cue_sheet' | 'license' | 'email'; complete?: boolean }
-interface RefSpec { id: string; source: string; excerpt: string }
+interface SourceSpec { id: string; file: string; kind: 'cue_sheet' | 'license' | 'email' }
+/** Role of an excerpt; structured witness fields are parsed from the excerpt with a strict grammar. */
+export type RefRole = 'cue_cut' | 'cue_entry' | 'cue_count' | 'license_subject' | 'license_scope' | 'note';
+interface RefSpec { id: string; source: string; role: RefRole; excerpt: string }
 interface NodeSpec { label: Exclude<Label, 'Source' | 'SourceRef'>; id: string; props: Record<string, ParamValue> }
 interface EdgeSpec { id: string; type: RelType; from: string; to: string; refs?: string[]; props?: Record<string, ParamValue> }
 
-export const SEED_VERSION = 'wad-studio-seed@1';
+export const SEED_VERSION = 'wad-studio-seed@2';
 const TENANT = 't-wad';
 
 const SOURCES: SourceSpec[] = [
-  { id: 'src-cue-v3', file: 'cue-sheet-cut-v3.txt', kind: 'cue_sheet', complete: true },
-  { id: 'src-cue-v4', file: 'cue-sheet-cut-v4.txt', kind: 'cue_sheet', complete: true },
+  { id: 'src-cue-v3', file: 'cue-sheet-cut-v3.txt', kind: 'cue_sheet' },
+  { id: 'src-cue-v4', file: 'cue-sheet-cut-v4.txt', kind: 'cue_sheet' },
   { id: 'src-lic-night-drive', file: 'license-night-drive.txt', kind: 'license' },
   { id: 'src-mail-basement-hum', file: 'email-basement-hum.txt', kind: 'email' }
 ];
 
 const REFS: RefSpec[] = [
-  { id: 'ref-cue-v3-cut', source: 'src-cue-v3', excerpt: 'Cut: v3 (festival screener)' },
-  { id: 'ref-cue-v3-night-drive', source: 'src-cue-v3', excerpt: 'Cue 1: "Night Drive"' },
-  { id: 'ref-cue-v3-basement-hum', source: 'src-cue-v3', excerpt: 'Cue 2: "Basement Hum"' },
-  { id: 'ref-cue-v3-complete', source: 'src-cue-v3', excerpt: 'END OF CUE SHEET. Complete listing: 2 cues.' },
-  { id: 'ref-cue-v4-cut', source: 'src-cue-v4', excerpt: 'Cut: v4 (current distribution cut)' },
-  { id: 'ref-cue-v4-night-drive', source: 'src-cue-v4', excerpt: 'Cue 1: "Night Drive"' },
-  { id: 'ref-cue-v4-basement-hum', source: 'src-cue-v4', excerpt: 'Cue 2: "Basement Hum"' },
-  { id: 'ref-cue-v4-complete', source: 'src-cue-v4', excerpt: 'END OF CUE SHEET. Complete listing: 2 cues.' },
-  { id: 'ref-lic-nd-composition', source: 'src-lic-night-drive', excerpt: 'Composition: "Night Drive"' },
-  { id: 'ref-lic-nd-grant', source: 'src-lic-night-drive', excerpt: 'Grant: Synchronization rights for the motion picture WAD, Cut v4 (current distribution cut).' },
-  { id: 'ref-mail-bh-scope', source: 'src-mail-basement-hum', excerpt: 'Confirmed: "Basement Hum" is cleared for WAD Cut v3 (festival screener) only.' },
-  { id: 'ref-mail-bh-later', source: 'src-mail-basement-hum', excerpt: 'Any later cut or distribution release requires a new license.' }
+  { id: 'ref-cue-v3-cut', source: 'src-cue-v3', role: 'cue_cut', excerpt: 'Cut: v3 (festival screener)' },
+  { id: 'ref-cue-v3-night-drive', source: 'src-cue-v3', role: 'cue_entry', excerpt: 'Cue 1: "Night Drive"' },
+  { id: 'ref-cue-v3-basement-hum', source: 'src-cue-v3', role: 'cue_entry', excerpt: 'Cue 2: "Basement Hum"' },
+  { id: 'ref-cue-v3-complete', source: 'src-cue-v3', role: 'cue_count', excerpt: 'END OF CUE SHEET. Complete listing: 2 cues.' },
+  { id: 'ref-cue-v4-cut', source: 'src-cue-v4', role: 'cue_cut', excerpt: 'Cut: v4 (current distribution cut)' },
+  { id: 'ref-cue-v4-night-drive', source: 'src-cue-v4', role: 'cue_entry', excerpt: 'Cue 1: "Night Drive"' },
+  { id: 'ref-cue-v4-basement-hum', source: 'src-cue-v4', role: 'cue_entry', excerpt: 'Cue 2: "Basement Hum"' },
+  { id: 'ref-cue-v4-complete', source: 'src-cue-v4', role: 'cue_count', excerpt: 'END OF CUE SHEET. Complete listing: 2 cues.' },
+  { id: 'ref-lic-nd-composition', source: 'src-lic-night-drive', role: 'license_subject', excerpt: 'Composition: "Night Drive"' },
+  { id: 'ref-lic-nd-grant', source: 'src-lic-night-drive', role: 'license_scope', excerpt: 'Grant: Synchronization rights for the motion picture WAD, Cut v4 (current distribution cut).' },
+  { id: 'ref-mail-bh-scope', source: 'src-mail-basement-hum', role: 'license_scope', excerpt: 'Confirmed: "Basement Hum" is cleared for WAD Cut v3 (festival screener) only.' },
+  { id: 'ref-mail-bh-later', source: 'src-mail-basement-hum', role: 'note', excerpt: 'Any later cut or distribution release requires a new license.' }
 ];
 
 const NODES: NodeSpec[] = [
@@ -91,6 +93,39 @@ export function locateExcerpt(text: string, excerpt: string): { startOffset: num
   return { startOffset, endOffset: startOffset + Array.from(excerpt).length };
 }
 
+const CUE_ENTRY = /^Cue (\d+): "([^"\n]+)"$/;
+const CUE_ENTRY_LINES = /^Cue (\d+): "([^"\n]+)"$/gm;
+const CUE_CUT = /^Cut: v(\d+)\b/gm;
+const CUE_COUNT = /^END OF CUE SHEET\. Complete listing: (\d+) cues?\.$/gm;
+
+/**
+ * Cue-sheet coverage witness, parsed from the whole file with a strict line grammar (no NLP).
+ * complete=true only when the file names exactly one cut, declares a count, and lists exactly that
+ * many consecutively numbered cues. Anything else is recorded as incomplete (analysis: UNKNOWN).
+ */
+export function parseCueSheet(text: string): { cutVersion: number | null; declaredCueCount: number | null; entries: { index: number; title: string }[]; complete: boolean } {
+  const cuts = [...text.matchAll(CUE_CUT)].map(m => Number(m[1]));
+  const counts = [...text.matchAll(CUE_COUNT)].map(m => Number(m[1]));
+  const entries = [...text.matchAll(CUE_ENTRY_LINES)].map(m => ({ index: Number(m[1]), title: String(m[2]) }));
+  const cutVersion = cuts.length === 1 ? cuts[0]! : null;
+  const declaredCueCount = counts.length === 1 ? counts[0]! : null;
+  const consecutive = entries.every((e, i) => e.index === i + 1);
+  const unique = new Set(entries.map(e => e.title)).size === entries.length;
+  const complete = cutVersion !== null && declaredCueCount !== null && declaredCueCount > 0
+    && declaredCueCount === entries.length && consecutive && unique;
+  return { cutVersion, declaredCueCount, entries, complete };
+}
+
+/** Structured witness fields for one excerpt, by role. Throws when the excerpt does not fit its grammar. */
+export function refWitness(role: RefRole, excerpt: string): Record<string, ParamValue> {
+  if (role === 'cue_entry') {
+    const m = CUE_ENTRY.exec(excerpt);
+    if (!m) throw new Error(`cue_entry excerpt does not match grammar: ${JSON.stringify(excerpt.slice(0, 40))}`);
+    return { cueIndex: Number(m[1]), cueTitle: String(m[2]) };
+  }
+  return {};
+}
+
 const NODE_MERGE: Record<NodeSpec['label'] | 'Source' | 'SourceRef', string> = {
   Tenant: 'MERGE (n:Tenant {id: $id}) SET n += $props',
   Release: 'MERGE (n:Release {id: $id}) SET n += $props',
@@ -125,16 +160,29 @@ export async function seedGraph(client: GraphClient, repoRoot: string): Promise<
   for (const s of SOURCES) {
     const bytes = await readFile(join(sourceDir, s.file));
     texts.set(s.id, bytes.toString('utf8'));
+    const text = bytes.toString('utf8');
+    let witness: Record<string, ParamValue> = { complete: false };
+    if (s.kind === 'cue_sheet') {
+      const cue = parseCueSheet(text);
+      // Every cue line in the file must be cited by a cue_entry excerpt, or the seed is incomplete.
+      const cited = new Set(REFS.filter(r => r.source === s.id && r.role === 'cue_entry').map(r => r.excerpt));
+      for (const e of cue.entries) {
+        if (!cited.has(`Cue ${e.index}: "${e.title}"`)) throw new Error(`Seed manifest misses cue ${e.index} of ${s.id}`);
+      }
+      witness = { complete: cue.complete, cutVersion: cue.cutVersion, declaredCueCount: cue.declaredCueCount, cueEntryCount: cue.entries.length };
+    }
     await client.write(NODE_MERGE.Source, { id: s.id, props: {
       tenantId: TENANT, kind: s.kind, path: `graph/seed/sources/${s.file}`,
-      sha256: createHash('sha256').update(bytes).digest('hex'), complete: s.complete ?? false, offsetUnit: 'unicode-code-point'
+      sha256: createHash('sha256').update(bytes).digest('hex'), offsetUnit: 'unicode-code-point', ...witness
     } });
   }
   for (const r of REFS) {
     const text = texts.get(r.source);
     if (text === undefined) throw new Error(`Unknown source ${r.source}`);
     const { startOffset, endOffset } = locateExcerpt(text, r.excerpt);
-    await client.write(NODE_MERGE.SourceRef, { id: r.id, props: { tenantId: TENANT, sourceId: r.source, excerpt: r.excerpt, startOffset, endOffset } });
+    await client.write(NODE_MERGE.SourceRef, { id: r.id, props: {
+      tenantId: TENANT, sourceId: r.source, role: r.role, excerpt: r.excerpt, startOffset, endOffset, ...refWitness(r.role, r.excerpt)
+    } });
   }
   for (const n of NODES) await client.write(NODE_MERGE[n.label], { id: n.id, props: n.props });
   let edges = 0;
