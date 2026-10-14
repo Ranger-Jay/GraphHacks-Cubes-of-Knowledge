@@ -70,9 +70,9 @@ npm test
 npm run build
 ```
 
-`npm run verify` combines those bootstrap gates. The scaffold test starts a real local HTTP process and checks that liveness does not claim graph readiness and protected product routes do not silently succeed. These checks do not prove a graph-backed agent or UI. GitHub CI runs the same gates on Node 22 and 24.
+`npm run verify` combines those bootstrap gates. The scaffold test starts a real local HTTP process and checks that liveness does not claim graph readiness and protected product routes do not silently succeed. These checks do not prove a graph-backed agent or UI. GitHub CI runs those gates plus every branch-present offline lane suite (API, web and scene) on Node 22 and 24. A required named suite fails when missing or empty; missing optional lanes are explicitly reported as absent, never accepted.
 
-`npm run test:integration` deliberately exits nonzero until the real graph integration suite is implemented. Do not substitute a unit mock or a skipped green test for that gate. Record exact-SHA graph, authorization, persistence, browser and model-call evidence in independent reviews. Install failures and unavailable hosts remain explicit blockers.
+`npm run test:integration` runs the actual `tests/graph` files serially, with a distinct graph namespace per file. It fails when that suite is absent or empty, or when any test fails. Use a disposable test database: graph tests seed/mutate/delete test graphs. Do not run them against a shared or production instance. When graph tests exist on a PR branch, the `graph-live` CI job installs pinned FalkorDBLite 0.10.0 and launches a fresh loopback vendor server through `scripts/ci-graph-tests.py`. It uses a temporary data directory and a disposable randomly generated evidence key. This is real embedded/binary graph execution, not Docker/Cloud parity, deployment persistence, browser E2E or a working LLM-agent claim. With no graph suite, that CI job is explicitly skipped; the manual integration gate still fails. The separate Docker/Nexus proof remains runtime issue #2. Do not substitute unit mocks or a skipped green test for live acceptance. Record exact-SHA graph, authorization, persistence, browser and model-call evidence in independent reviews. Install failures and unavailable hosts remain explicit blockers.
 
 ## Repository layout
 
