@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { GraphClient, ParamValue } from './client.js';
+import { cueEntryOf, parseCueSheet, scopeOf, subjectOf } from './witness.js';
 
 /**
  * Synthetic studio seed. Source text lives in graph/seed/sources/. Every excerpt is located in the
@@ -19,7 +20,7 @@ interface RefSpec { id: string; source: string; role: RefRole; excerpt: string }
 interface NodeSpec { label: Exclude<Label, 'Source' | 'SourceRef'>; id: string; props: Record<string, ParamValue> }
 interface EdgeSpec { id: string; type: RelType; from: string; to: string; refs?: string[]; props?: Record<string, ParamValue> }
 
-export const SEED_VERSION = 'wad-studio-seed@3';
+export const SEED_VERSION = 'wad-studio-seed@4';
 const TENANT = 't-wad';
 
 const SOURCES: SourceSpec[] = [
@@ -117,63 +118,43 @@ export function locateExcerpt(text: string, excerpt: string): { startOffset: num
   return { startOffset, endOffset: startOffset + Array.from(excerpt).length };
 }
 
-const LICENSE_SUBJECT = /^Composition: "([^"\n]+)"$/;
-const SCOPE_CUT = /\bCut v(\d+)\b/g;
-const QUOTED = /"([^"\n]+)"/g;
-const CUE_ENTRY = /^Cue (\d+): "([^"\n]+)"$/;
-const CUE_ENTRY_LINES = /^Cue (\d+): "([^"\n]+)"$/gm;
-const CUE_CUT = /^Cut: v(\d+)\b/gm;
-const CUE_COUNT = /^END OF CUE SHEET\. Complete listing: (\d+) cues?\.$/gm;
-
-/**
- * Cue-sheet coverage witness, parsed from the whole file with a strict line grammar (no NLP).
- * complete=true only when the file names exactly one cut, declares a count, and lists exactly that
- * many consecutively numbered cues. Anything else is recorded as incomplete (analysis: UNKNOWN).
- */
-export function parseCueSheet(text: string): { cutVersion: number | null; declaredCueCount: number | null; entries: { index: number; title: string }[]; complete: boolean } {
-  const cuts = [...text.matchAll(CUE_CUT)].map(m => Number(m[1]));
-  const counts = [...text.matchAll(CUE_COUNT)].map(m => Number(m[1]));
-  const entries = [...text.matchAll(CUE_ENTRY_LINES)].map(m => ({ index: Number(m[1]), title: String(m[2]) }));
-  const cutVersion = cuts.length === 1 ? cuts[0]! : null;
-  const declaredCueCount = counts.length === 1 ? counts[0]! : null;
-  const consecutive = entries.every((e, i) => e.index === i + 1);
-  const unique = new Set(entries.map(e => e.title)).size === entries.length;
-  const complete = cutVersion !== null && declaredCueCount !== null && declaredCueCount > 0
-    && declaredCueCount === entries.length && consecutive && unique;
-  return { cutVersion, declaredCueCount, entries, complete };
-}
+export { parseCueSheet } from './witness.js';
 
 /** Structured witness fields for one excerpt, by role. Throws when the excerpt does not fit its grammar. */
 export function refWitness(role: RefRole, excerpt: string): Record<string, ParamValue> {
+  // Seed-time convenience copy of the witness. Analysis never reads these fields; it re-derives
+  // them from the verified excerpt text with the same grammars (witness.ts).
+  const bad = (what: string) => new Error(`${what} excerpt does not match grammar: ${JSON.stringify(excerpt.slice(0, 40))}`);
   if (role === 'cue_entry') {
-    const m = CUE_ENTRY.exec(excerpt);
-    if (!m) throw new Error(`cue_entry excerpt does not match grammar: ${JSON.stringify(excerpt.slice(0, 40))}`);
-    return { cueIndex: Number(m[1]), cueTitle: String(m[2]) };
+    const e = cueEntryOf(excerpt);
+    if (!e) throw bad('cue_entry');
+    return { cueIndex: e.index, cueTitle: e.title };
   }
   if (role === 'license_subject') {
-    const m = LICENSE_SUBJECT.exec(excerpt);
-    if (!m) throw new Error(`license_subject excerpt does not match grammar: ${JSON.stringify(excerpt.slice(0, 40))}`);
-    return { subjectTitle: String(m[1]) };
+    const t = subjectOf(excerpt);
+    if (t === null) throw bad('license_subject');
+    return { subjectTitle: t };
   }
   if (role === 'license_scope') {
-    const cuts = [...excerpt.matchAll(SCOPE_CUT)].map(m => Number(m[1]));
-    const titles = [...excerpt.matchAll(QUOTED)].map(m => String(m[1]));
-    if (cuts.length !== 1 || titles.length > 1) throw new Error(`license_scope excerpt must name exactly one cut and at most one title: ${JSON.stringify(excerpt.slice(0, 40))}`);
-    return { scopeCutVersion: cuts[0]!, scopeTitle: titles[0] ?? null };
+    const sc = scopeOf(excerpt);
+    if (!sc) throw new Error(`license_scope excerpt must name exactly one cut and at most one title: ${JSON.stringify(excerpt.slice(0, 40))}`);
+    return { scopeCutVersion: sc.cutVersion, scopeTitle: sc.title };
   }
   return {};
 }
 
+// Tenant-owned labels merge on (id, tenantId) so a same-id node of another tenant is never overwritten.
 const NODE_MERGE: Record<NodeSpec['label'] | 'Source' | 'SourceRef', string> = {
   Tenant: 'MERGE (n:Tenant {id: $id}) SET n += $props',
-  Release: 'MERGE (n:Release {id: $id}) SET n += $props',
-  Cut: 'MERGE (n:Cut {id: $id}) SET n += $props',
-  Track: 'MERGE (n:Track {id: $id}) SET n += $props',
-  License: 'MERGE (n:License {id: $id}) SET n += $props',
-  Source: 'MERGE (n:Source {id: $id}) SET n += $props',
-  SourceRef: 'MERGE (n:SourceRef {id: $id}) SET n += $props',
+  Release: 'MERGE (n:Release {id: $id, tenantId: $tenantId}) SET n += $props',
+  Cut: 'MERGE (n:Cut {id: $id, tenantId: $tenantId}) SET n += $props',
+  Track: 'MERGE (n:Track {id: $id, tenantId: $tenantId}) SET n += $props',
+  License: 'MERGE (n:License {id: $id, tenantId: $tenantId}) SET n += $props',
+  Source: 'MERGE (n:Source {id: $id, tenantId: $tenantId}) SET n += $props',
+  SourceRef: 'MERGE (n:SourceRef {id: $id, tenantId: $tenantId}) SET n += $props',
   Principal: 'MERGE (n:Principal {id: $id}) SET n += $props'
 };
+const TENANT_OWNED = new Set(['Release', 'Cut', 'Track', 'License', 'Source', 'SourceRef']);
 
 type AnyLabel = NodeSpec['label'] | 'Source' | 'SourceRef';
 
@@ -182,7 +163,9 @@ function edgeMerge(labels: Map<string, AnyLabel>, type: RelType, from: string, t
   const la = labels.get(from);
   const lb = labels.get(to);
   if (!la || !lb) throw new Error(`Edge endpoint not declared in seed: ${!la ? from : to}`);
-  return `MATCH (a:${la} {id: $from}), (b:${lb} {id: $to}) MERGE (a)-[e:${type} {id: $id}]->(b) SET e += $props RETURN count(e) AS n`;
+  const ta = TENANT_OWNED.has(la) ? ', tenantId: $tenantId' : '';
+  const tb = TENANT_OWNED.has(lb) ? ', tenantId: $tenantId' : '';
+  return `MATCH (a:${la} {id: $from${ta}}), (b:${lb} {id: $to${tb}}) MERGE (a)-[e:${type} {id: $id}]->(b) SET e += $props RETURN count(e) AS n`;
 }
 
 export interface SeedResult { seedVersion: string; sources: number; refs: number; nodes: number; edges: number }
@@ -220,7 +203,7 @@ export async function seedGraph(client: GraphClient, repoRoot: string, options: 
       }
       witness = { complete: cue.complete, cutVersion: cue.cutVersion, declaredCueCount: cue.declaredCueCount, cueEntryCount: cue.entries.length };
     }
-    await client.write(NODE_MERGE.Source, { id: s.id, props: {
+    await client.write(NODE_MERGE.Source, { id: s.id, tenantId: TENANT, props: {
       tenantId: TENANT, kind: s.kind, path: `graph/seed/sources/${s.file}`,
       sha256: createHash('sha256').update(bytes).digest('hex'), offsetUnit: 'unicode-code-point', ...witness
     } });
@@ -229,11 +212,11 @@ export async function seedGraph(client: GraphClient, repoRoot: string, options: 
     const text = texts.get(r.source);
     if (text === undefined) throw new Error(`Unknown source ${r.source}`);
     const { startOffset, endOffset } = locateExcerpt(text, r.excerpt);
-    await client.write(NODE_MERGE.SourceRef, { id: r.id, props: {
+    await client.write(NODE_MERGE.SourceRef, { id: r.id, tenantId: TENANT, props: {
       tenantId: TENANT, sourceId: r.source, role: r.role, excerpt: r.excerpt, startOffset, endOffset, ...refWitness(r.role, r.excerpt)
     } });
   }
-  for (const n of NODES_ALL) await client.write(NODE_MERGE[n.label], { id: n.id, props: n.props });
+  for (const n of NODES_ALL) await client.write(NODE_MERGE[n.label], { id: n.id, tenantId: TENANT, props: n.props });
   let edges = 0;
   const all: EdgeSpec[] = [
     ...EDGES_ALL,
@@ -241,7 +224,7 @@ export async function seedGraph(client: GraphClient, repoRoot: string, options: 
   ];
   for (const e of all) {
     for (const ref of e.refs ?? []) if (!REFS_ALL.some(r => r.id === ref)) throw new Error(`Edge ${e.id} cites unknown ref ${ref}`);
-    const rows = await client.write<{ n: number }>(edgeMerge(labels, e.type, e.from, e.to), { id: e.id, from: e.from, to: e.to, props: { ...(e.props ?? {}), sourceRefIds: e.refs ?? [] } });
+    const rows = await client.write<{ n: number }>(edgeMerge(labels, e.type, e.from, e.to), { id: e.id, from: e.from, to: e.to, tenantId: TENANT, props: { ...(e.props ?? {}), sourceRefIds: e.refs ?? [] } });
     if (rows[0]?.n !== 1) throw new Error(`Edge ${e.id} endpoints missing`);
     edges++;
   }

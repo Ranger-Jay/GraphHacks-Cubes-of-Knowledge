@@ -5,73 +5,92 @@ import type {
 } from '@cubes/contracts';
 import { GraphUnavailableError, type GraphClient } from './client.js';
 import { QUERIES } from './queries.js';
+import { SourceFiles } from './verify.js';
+import { cueEntryOf, parseCueSheet, scopeOf, subjectOf } from './witness.js';
 
 interface CurrentCutRow {
   releaseId: string; releaseTitle: string; revision: string; currentCutEdgeId: string; currentCutRefs: string[] | null;
   cutId: string; cutVersion: number; cutLabel: string;
-  cueSheetId: string | null; cueSheetComplete: boolean | null; cueSheetCutVersion: number | null; declaredCueCount: number | null;
+  cueSheetId: string | null; cueSheetPath: string | null; cueSheetSha256: string | null;
   listedInEdgeId: string | null; listedInRefs: string[] | null;
 }
 interface TrackRow {
   trackId: string; trackTitle: string; usesEdgeId: string; usesRefs: string[] | null;
   licenseId: string | null; licenseLabel: string | null; coversEdgeId: string | null; coversRefs: string[] | null;
   validCutId: string | null; validCutLabel: string | null; validCutVersion: number | null; validForEdgeId: string | null; validForRefs: string[] | null;
-  licenseSourceId: string | null; evidencedByEdgeId: string | null;
+  licenseSourceId: string | null; licenseSourcePath: string | null; evidencedByEdgeId: string | null;
 }
-interface WitnessRow { id: string; sourceId: string; role: string; subjectTitle: string | null; scopeTitle: string | null; scopeCutVersion: number | null }
-interface CueEntryRow { id: string; cueIndex: number; cueTitle: string }
-interface RefRow { id: string; path: string; sha256: string; excerpt: string; startOffset: number; endOffset: number }
+interface RefRow { id: string; sourceId: string; path: string; sha256: string; excerpt: string; startOffset: number; endOffset: number }
 
-export function unavailable(reason: UnavailableAnalysis['reason'], message: string, requestId = randomUUID()): UnavailableAnalysis {
+export interface AnalyzeOptions {
+  requestId?: string;
+  /** Directory containing graph/seed/sources (the trusted source files). Default: process.cwd(). */
+  sourceRoot?: string;
+}
+
+export function unavailable(reason: UnavailableAnalysis['reason'], message: string, requestId: string = randomUUID()): UnavailableAnalysis {
   return { status: 'UNAVAILABLE', requestId, reason, message, evidence: [], nodes: [], edges: [], sources: [], proposedActions: [] };
 }
 
 const refs = (v: string[] | null | undefined): string[] => (Array.isArray(v) ? v : []);
 
 /**
- * Current-cut music clearance from the graph only. Returns null when the release is not in the
- * caller's tenant (the API maps that to 404). Any graph failure returns UNAVAILABLE with no evidence.
- * Rules: a track is VERIFIED only by a license that COVERS it and is VALID_FOR the current cut;
- * STALE when its only licenses are valid for other cuts; MISSING when none covers it. Without a
- * complete cue sheet for the current cut, track coverage is not established: clearance is UNKNOWN.
+ * Current-cut music clearance. Returns null when the release is not in the caller's tenant (API: 404);
+ * any graph failure returns UNAVAILABLE with no evidence.
+ *
+ * Trust model: graph nodes, edges and properties are claims. Facts come only from the immutable source
+ * files: a cited excerpt counts only if the file's SHA-256 matches the graph record and the excerpt is
+ * the exact file text at its code-point offsets; its meaning is re-derived from that text with the
+ * strict grammars in witness.ts. Stored witness properties are never read.
+ *  - Coverage: the current cut's cue-sheet FILE is re-parsed; its cut number must equal the cut, and the
+ *    graph's USES_TRACK set must equal the file's cue list, each edge citing its own verified cue line.
+ *  - License: COVERS needs a verified excerpt naming the track; VALID_FOR needs a verified scope excerpt
+ *    naming exactly this cut number; both from the license's own evidence file.
+ *  - ESTABLISHED requires complete coverage, every track VERIFIED and no integrity item; GAP requires
+ *    complete coverage and a STALE/MISSING track; everything else is UNKNOWN.
  */
-export async function analyzeRelease(client: GraphClient, tenantId: string, releaseId: string, requestId = randomUUID()): Promise<AnalysisResponse | null> {
+export async function analyzeRelease(client: GraphClient, tenantId: string, releaseId: string, opts: AnalyzeOptions | string = {}): Promise<AnalysisResponse | null> {
+  const o: AnalyzeOptions = typeof opts === 'string' ? { requestId: opts } : opts;
+  const requestId: string = o.requestId ?? randomUUID();
+  const files = new SourceFiles(o.sourceRoot);
   try {
     const head = (await client.read<CurrentCutRow>(QUERIES.READ_RELEASE_CURRENT_CUT, { tenantId, releaseId }))[0];
     if (!head) return null;
     const rows = await client.read<TrackRow>(QUERIES.READ_CUT_TRACK_LICENSES, { cutId: head.cutId, tenantId });
 
+    // Fetch and verify every excerpt the graph cites for this cut.
+    const cited = new Set<string>([...refs(head.currentCutRefs), ...refs(head.listedInRefs)]);
+    for (const r of rows) for (const id of [...refs(r.usesRefs), ...refs(r.coversRefs), ...refs(r.validForRefs)]) cited.add(id);
+    const refRows = cited.size === 0 ? [] : await client.read<RefRow>(QUERIES.READ_SOURCE_REFS, { ids: [...cited], tenantId });
+    const verified = new Map<string, RefRow>();
+    for (const r of refRows) if (await files.excerptHolds(r)) verified.set(r.id, r);
+    const failedRefs = [...cited].filter(id => !verified.has(id));
+    const ok = (ids: string[]) => ids.filter(id => verified.has(id));
+    const fromFile = (ids: string[], path: string | null) => ok(ids).map(id => verified.get(id)!).filter(r => path !== null && r.path === path);
+
+    // Coverage from the verified cue-sheet file itself.
+    const sheetText = await files.text(head.cueSheetPath, head.cueSheetSha256);
+    const sheet = sheetText === null ? null : parseCueSheet(sheetText);
+    const sheetValid = sheet !== null && sheet.complete && sheet.cutVersion === head.cutVersion;
+    const cutName = sheetValid && sheet.cutLabel ? sheet.cutLabel : head.cutLabel;
+
     const nodes = new Map<string, GraphNode>();
     const edges = new Map<string, GraphEdge>();
-    const addNode = (id: string, label: string, kind: string, sourceRefIds: string[] = []) => {
-      if (!nodes.has(id)) nodes.set(id, { id, label, kind, sourceRefIds });
-    };
+    const addNode = (id: string, label: string, kind: string) => { if (!nodes.has(id)) nodes.set(id, { id, label, kind, sourceRefIds: [] }); };
     const addEdge = (id: string | null, from: string, to: string, type: string, sourceRefIds: string[]) => {
-      if (id && !edges.has(id)) edges.set(id, { id, from, to, type, sourceRefIds });
+      if (id && !edges.has(id)) edges.set(id, { id, from, to, type, sourceRefIds: ok(sourceRefIds) });
     };
-
     addNode(head.releaseId, head.releaseTitle, 'Release');
-    addNode(head.cutId, head.cutLabel, 'Cut');
+    addNode(head.cutId, cutName, 'Cut');
     addEdge(head.currentCutEdgeId, head.releaseId, head.cutId, 'CURRENT_CUT', refs(head.currentCutRefs));
-    const sheetValid = head.cueSheetId !== null && head.cueSheetComplete === true && head.cueSheetCutVersion === head.cutVersion;
-    const cueEntries = head.cueSheetId
-      ? await client.read<CueEntryRow>(QUERIES.READ_CUE_ENTRIES, { sourceId: head.cueSheetId, tenantId })
-      : [];
     if (head.cueSheetId) {
       addNode(head.cueSheetId, 'Cue sheet', 'Source');
       addEdge(head.listedInEdgeId, head.cutId, head.cueSheetId, 'LISTED_IN', refs(head.listedInRefs));
     }
 
-    // License-scope witness (#9): a COVERS/VALID_FOR link counts only when excerpts from the license's
-    // own evidence source name this track and this exact cut. Unsupported links never verify anything.
-    const citedIds = [...new Set(rows.flatMap(r => [...refs(r.coversRefs), ...refs(r.validForRefs)]))];
-    const witness = new Map((citedIds.length === 0 ? [] : await client.read<WitnessRow>(QUERIES.READ_REF_WITNESSES, { ids: citedIds, tenantId }))
-      .map(w => [w.id, w] as const));
-    const fromSource = (ids: string[], sourceId: string | null) =>
-      ids.map(id => witness.get(id)).filter((w): w is WitnessRow => w !== undefined && sourceId !== null && w.sourceId === sourceId);
+    type T = { title: string; usesRefs: string[]; current: string[]; stale: string[]; staleCuts: Set<string> };
+    const tracks = new Map<string, T>();
     const unsupportedCurrent: { edgeId: string; license: string; title: string; refs: string[]; scopes: number[] }[] = [];
-
-    const tracks = new Map<string, { title: string; usesRefs: string[]; current: string[]; stale: string[]; staleCuts: Set<string> }>();
     for (const r of rows) {
       let t = tracks.get(r.trackId);
       if (!t) {
@@ -89,99 +108,99 @@ export async function analyzeRelease(client: GraphClient, tenantId: string, rele
         addNode(r.licenseSourceId, 'License evidence', 'Source');
         addEdge(r.evidencedByEdgeId, r.licenseId, r.licenseSourceId, 'EVIDENCED_BY', []);
       }
-      const covW = fromSource(refs(r.coversRefs), r.licenseSourceId);
-      const vfW = fromSource(refs(r.validForRefs), r.licenseSourceId);
-      const coversOk = covW.some(w => w.subjectTitle === t!.title || w.scopeTitle === t!.title);
-      const scopeOk = vfW.some(w => w.role === 'license_scope' && w.scopeCutVersion === r.validCutVersion
-        && (w.scopeTitle === t!.title || (w.scopeTitle === null && coversOk)));
-      const cited = [...refs(r.coversRefs), ...refs(r.validForRefs)];
+      const covText = fromFile(refs(r.coversRefs), r.licenseSourcePath);
+      const vfText = fromFile(refs(r.validForRefs), r.licenseSourcePath);
+      const coversOk = covText.some(x => subjectOf(x.excerpt) === t!.title || scopeOf(x.excerpt)?.title === t!.title);
+      const scopes = vfText.map(x => scopeOf(x.excerpt)).filter(x => x !== null);
+      const scopeOk = scopes.some(sc => sc.cutVersion === r.validCutVersion && (sc.title === t!.title || (sc.title === null && coversOk)));
+      const citedOk = [...ok(refs(r.coversRefs)), ...ok(refs(r.validForRefs))];
+      const isCurrent = r.validCutId === head.cutId && r.validCutVersion === head.cutVersion;
       if (!(coversOk && scopeOk)) {
         if (r.validCutId === head.cutId) {
-          unsupportedCurrent.push({ edgeId: r.validForEdgeId ?? r.licenseId, license: r.licenseLabel ?? r.licenseId, title: t.title, refs: cited,
-            scopes: vfW.map(w => w.scopeCutVersion).filter((v): v is number => v !== null) });
+          unsupportedCurrent.push({ edgeId: r.validForEdgeId ?? r.licenseId, license: r.licenseLabel ?? r.licenseId, title: t.title,
+            refs: citedOk, scopes: scopes.map(sc => sc.cutVersion) });
         }
         continue;
       }
-      if (r.validCutId === head.cutId) t.current.push(...cited);
-      else { t.stale.push(...cited); t.staleCuts.add(r.validCutLabel ?? r.validCutId); }
+      if (isCurrent) t.current.push(...citedOk);
+      else { t.stale.push(...citedOk); t.staleCuts.add(r.validCutLabel ?? r.validCutId); }
     }
 
-    // Coverage witness (#8): the cue sheet's parsed entries must match the graph's USES_TRACK set
-    // exactly, and every USES_TRACK must cite the cue entry for that same title. Graph edges alone
-    // never prove coverage; any mismatch leaves absence unasserted (UNKNOWN).
-    const entryById = new Map(cueEntries.map(e => [e.id, e]));
+    // Coverage: graph USES_TRACK set must equal the verified file's cue list, each edge citing its own cue line.
     const supportedTitles = new Set<string>();
     const unsupportedTracks: string[] = [];
     for (const t of tracks.values()) {
-      const cites = t.usesRefs.map(id => entryById.get(id)).filter(e => e !== undefined && e.cueTitle === t.title);
-      if (cites.length > 0) supportedTitles.add(t.title); else unsupportedTracks.push(t.title);
+      const lines = fromFile(t.usesRefs, head.cueSheetPath).map(x => cueEntryOf(x.excerpt)).filter(x => x !== null);
+      if (sheetValid && lines.some(l => l.title === t.title && sheet!.entries.some(e => e.index === l.index && e.title === l.title))) supportedTitles.add(t.title);
+      else unsupportedTracks.push(t.title);
     }
-    const unlinked = cueEntries.filter(e => !supportedTitles.has(e.cueTitle));
-    const coverageComplete = sheetValid && cueEntries.length > 0 && cueEntries.length === head.declaredCueCount
-      && unlinked.length === 0 && unsupportedTracks.length === 0;
+    const expected = sheetValid ? sheet!.entries : [];
+    const unlinked = expected.filter(e => !supportedTitles.has(e.title));
+    const coverageComplete = sheetValid && expected.length > 0 && unlinked.length === 0 && unsupportedTracks.length === 0;
 
     const evidence: EvidenceItem[] = [];
     const integrity: EvidenceItem[] = [];
     const proposedActions: ProposedAction[] = [];
-    const listedRefs = refs(head.listedInRefs);
+    const listedRefs = ok(refs(head.listedInRefs));
     if (!coverageComplete) {
       const parts: string[] = [];
-      if (!head.cueSheetId) parts.push(`no cue sheet is linked to ${head.cutLabel}`);
-      else if (!sheetValid) parts.push(`the linked cue sheet is not a complete listing for ${head.cutLabel}`);
-      else if (cueEntries.length !== head.declaredCueCount) parts.push(`the cue sheet declares ${head.declaredCueCount ?? '?'} cue(s) but ${cueEntries.length} are recorded`);
-      if (unlinked.length > 0) parts.push(`not linked in the graph: ${unlinked.map(e => `"${e.cueTitle}"`).join(', ')}`);
-      if (unsupportedTracks.length > 0) parts.push(`linked without cue-sheet support: ${unsupportedTracks.map(t => `"${t}"`).join(', ')}`);
+      if (!head.cueSheetId) parts.push(`no cue sheet is linked to ${cutName}`);
+      else if (sheet === null) parts.push('the linked cue-sheet file is missing or does not match its recorded hash');
+      else if (!sheet.complete) parts.push('the cue-sheet file is not a complete, consistent listing');
+      else if (sheet.cutVersion !== head.cutVersion) parts.push(`the cue-sheet file is for Cut v${sheet.cutVersion}, not this cut`);
+      if (unlinked.length > 0) parts.push(`listed in the cue sheet but not linked in the graph: ${unlinked.map(e => `"${e.title}"`).join(', ')}`);
+      if (unsupportedTracks.length > 0) parts.push(`linked without a matching verified cue line: ${unsupportedTracks.map(t => `"${t}"`).join(', ')}`);
       integrity.push({ id: `ev-coverage-${head.cutId}`, status: 'UNKNOWN',
-        statement: `Track coverage for ${head.cutLabel} is not established: ${parts.join('; ')}.`,
-        sourceRefIds: [...new Set([...listedRefs, ...unlinked.map(e => e.id)])] });
+        statement: `Track coverage for ${cutName} is not established: ${parts.join('; ')}.`, sourceRefIds: listedRefs });
     }
     for (const u of unsupportedCurrent) {
-      const scope = u.scopes.length > 0 ? `its cited source scope is Cut v${[...new Set(u.scopes)].join(', v')}` : 'its cited source states no matching scope';
+      const scope = u.scopes.length > 0 ? `its cited source text scopes it to Cut v${[...new Set(u.scopes)].join(', v')}` : 'its cited source text does not support that scope';
       integrity.push({ id: `ev-unsupported-${u.edgeId}`, status: 'UNKNOWN',
-        statement: `"${u.license}" is linked to ${head.cutLabel} for "${u.title}", but ${scope}. The link is not counted as clearance.`,
+        statement: `"${u.license}" is linked to ${cutName} for "${u.title}", but ${scope}. The link is not counted as clearance.`,
         sourceRefIds: [...new Set(u.refs)] });
     }
+    if (failedRefs.length > 0) {
+      integrity.push({ id: `ev-unverified-refs-${head.cutId}`, status: 'UNKNOWN',
+        statement: `${failedRefs.length} cited excerpt(s) do not match their source files and were ignored: ${failedRefs.sort().join(', ')}.`, sourceRefIds: [] });
+    }
+
     for (const [trackId, t] of tracks) {
+      const uses = ok(t.usesRefs);
       if (t.current.length > 0) {
-        evidence.push({ id: `ev-${trackId}`, status: 'VERIFIED', statement: `"${t.title}" is licensed for ${head.cutLabel}.`, sourceRefIds: [...new Set([...t.usesRefs, ...t.current])] });
+        evidence.push({ id: `ev-${trackId}`, status: 'VERIFIED', statement: `"${t.title}" is licensed for ${cutName}.`, sourceRefIds: [...new Set([...uses, ...t.current])] });
         continue;
       }
       if (!coverageComplete) {
-        evidence.push({ id: `ev-${trackId}`, status: 'UNKNOWN', statement: `No current-cut license found for "${t.title}", but cue-sheet coverage for ${head.cutLabel} is not established.`, sourceRefIds: t.usesRefs });
+        evidence.push({ id: `ev-${trackId}`, status: 'UNKNOWN', statement: `No current-cut license found for "${t.title}", but track coverage for ${cutName} is not established.`, sourceRefIds: uses });
         continue;
       }
       const status = t.stale.length > 0 ? 'STALE' : 'MISSING';
       const statement = status === 'STALE'
-        ? `"${t.title}" is cleared only for ${[...t.staleCuts].join(', ')}; no license is valid for ${head.cutLabel}.`
-        : `"${t.title}" is used in ${head.cutLabel} and no license covers it.`;
-      const cite = [...new Set([...t.usesRefs, ...listedRefs, ...t.stale])];
+        ? `"${t.title}" is cleared only for ${[...t.staleCuts].join(', ')}; no license is valid for ${cutName}.`
+        : `"${t.title}" is used in ${cutName} and no license covers it.`;
+      const cite = [...new Set([...uses, ...listedRefs, ...t.stale])];
       evidence.push({ id: `ev-${trackId}`, status, statement, sourceRefIds: cite });
-      proposedActions.push({ id: `act-clear-${trackId}-${head.cutId}`, kind: 'REQUEST_CLEARANCE', label: `Request clearance of "${t.title}" for ${head.cutLabel}`, requiresHumanApproval: true, sourceRefIds: cite });
+      proposedActions.push({ id: `act-clear-${trackId}-${head.cutId}`, kind: 'REQUEST_CLEARANCE', label: `Request clearance of "${t.title}" for ${cutName}`, requiresHumanApproval: true, sourceRefIds: cite });
     }
 
-    // ESTABLISHED only with complete, witnessed coverage, every track VERIFIED and no integrity issue.
-    // GAP only when coverage is complete and a track is STALE/MISSING. Everything else is UNKNOWN.
     let clearance: ClearanceStatus;
     if (coverageComplete && evidence.some(e => e.status === 'STALE' || e.status === 'MISSING')) clearance = 'GAP';
     else if (coverageComplete && integrity.length === 0 && evidence.length > 0 && evidence.every(e => e.status === 'VERIFIED')) clearance = 'ESTABLISHED';
     else clearance = 'UNKNOWN';
     evidence.push(...integrity);
 
-    const allRefIds = new Set<string>();
-    for (const e of evidence) e.sourceRefIds.forEach(id => allRefIds.add(id));
-    for (const e of edges.values()) e.sourceRefIds.forEach(id => allRefIds.add(id));
-    const sources: SourceRef[] = allRefIds.size === 0 ? [] : (await client.read<RefRow>(QUERIES.READ_SOURCE_REFS, { ids: [...allRefIds], tenantId }))
+    const used = new Set<string>();
+    for (const e of evidence) e.sourceRefIds.forEach(id => used.add(id));
+    for (const e of edges.values()) e.sourceRefIds.forEach(id => used.add(id));
+    const sources: SourceRef[] = [...used].sort().map(id => verified.get(id)!)
       .map(r => ({ id: r.id, path: r.path, sha256: r.sha256, excerpt: r.excerpt, startOffset: r.startOffset, endOffset: r.endOffset }));
-    const missingRefs = [...allRefIds].filter(id => !sources.some(s => s.id === id));
-    if (missingRefs.length > 0) return unavailable('QUERY_FAILED', 'Cited source references are missing from the graph', requestId);
 
     const gaps = evidence.filter(e => e.status === 'STALE' || e.status === 'MISSING').length;
-    const trackCount = tracks.size;
     const summary = clearance === 'ESTABLISHED'
-      ? `${head.cutLabel}: all ${trackCount} tracks have current-cut license evidence.`
+      ? `${cutName}: all ${tracks.size} tracks have current-cut license evidence.`
       : clearance === 'GAP'
-        ? `${head.cutLabel} cannot ship: ${gaps} of ${trackCount} tracks lack a license valid for this cut.`
-        : `${head.cutLabel}: clearance cannot be established from the available sources.`;
+        ? `${cutName} cannot ship: ${gaps} of ${tracks.size} tracks lack a license valid for this cut.`
+        : `${cutName}: clearance cannot be established from the available sources.`;
     const result: AvailableAnalysis = {
       status: 'AVAILABLE', requestId, releaseId: head.releaseId, cutId: head.cutId, revision: head.revision,
       clearance, summary, evidence, nodes: [...nodes.values()], edges: [...edges.values()], sources, proposedActions
