@@ -14,7 +14,8 @@ Writes: only the idempotent seed (`seed.ts`, fixed labels and relationship types
 ## Commands (from repo root, server reachable via `FALKORDB_*`)
 
 ```bash
-node --env-file-if-exists=.env --import tsx packages/graph/src/cli.ts seed
+GRAPH_EVIDENCE_KEY=<32+ chars, server-side only> \
+  node --env-file-if-exists=.env --import tsx packages/graph/src/cli.ts seed
 node --env-file-if-exists=.env --import tsx packages/graph/src/cli.ts health
 node --env-file-if-exists=.env --import tsx packages/graph/src/cli.ts analyze rel-wad
 node --env-file-if-exists=.env --import tsx --test tests/graph/*.test.ts
@@ -23,3 +24,5 @@ node --env-file-if-exists=.env --import tsx --test tests/graph/*.test.ts
 The tests fail (they do not skip) when the graph is unreachable.
 
 Analysis verifies every returned excerpt against its source file and re-derives meaning from the text (see `graph/schema/README.md`, Trust model). Set the source root with `analyzeRelease(client, tenant, release, { sourceRoot })` (default: current directory).
+
+The seed and the analysis need `GRAPH_EVIDENCE_KEY` (32+ characters) in the server environment. Without it the seed refuses to run and the analysis never returns ESTABLISHED. The live tests set a test-only key when none is present.
