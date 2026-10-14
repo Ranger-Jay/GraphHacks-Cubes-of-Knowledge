@@ -102,8 +102,8 @@ test('MISSING: a current-cut track with no covering license is a GAP with a clea
   });
 });
 
-test('UNKNOWN: without complete cue-sheet coverage, absence is not asserted and no action is proposed', async () => {
-  await withVariant('unknown', "MATCH (s:Source {id: 'src-cue-v4'}) SET s.complete = false", async c => {
+test('UNKNOWN: an unverifiable cue sheet (hash mismatch) leaves absence unasserted and proposes no action', async () => {
+  await withVariant('unknown', "MATCH (s:Source {id: 'src-cue-v4'}) SET s.sha256 = '0000000000000000000000000000000000000000000000000000000000000000'", async c => {
     const a = await analyzeRelease(c, 't-wad', 'rel-wad');
     assert.ok(a && a.status === 'AVAILABLE');
     assert.equal(a.clearance, 'UNKNOWN');
@@ -183,6 +183,62 @@ test('positive: a genuine v4 license document clears the cut and advances the re
     const grant = a.sources.find(s => s.id === 'ref-lic-bh4-grant')!;
     assert.equal(grant.path, 'graph/seed/sources/license-basement-hum-v4.txt');
   }, ['basement-hum-v4-license']);
+});
+
+// --- Read-time verification regressions (review P1 at 679787c) ---
+const ESTABLISHED_FORBIDDEN = async (name: string, mutate: string, bundles: string[] = []) =>
+  withVariant(name, mutate, async c => {
+    const a = await analyzeRelease(c, 't-wad', 'rel-wad');
+    assert.ok(a && a.status === 'AVAILABLE');
+    assert.notEqual(a.clearance, 'ESTABLISHED', `${name} must not clear`);
+  }, bundles);
+
+test('attack 1: forged scopeCutVersion property + relink cannot clear (excerpt still says v3)', async () => {
+  await ESTABLISHED_FORBIDDEN('atk1', "MATCH (r:SourceRef {id: 'ref-mail-bh-scope'}) SET r.scopeCutVersion = 4 WITH r MATCH (l:License {id: 'lic-basement-hum-v3'}), (c:Cut {id: 'cut-wad-v4'}) CREATE (l)-[:VALID_FOR {id: 'e-atk1', sourceRefIds: ['ref-mail-bh-scope']}]->(c)");
+});
+
+test('attack 2: forged cueTitle property + edge delete cannot clear (file still lists both cues)', async () => {
+  await ESTABLISHED_FORBIDDEN('atk2', "MATCH (r:SourceRef {id: 'ref-cue-v4-basement-hum'}) SET r.cueTitle = 'Night Drive' WITH 1 AS one MATCH (:Cut {id: 'cut-wad-v4'})-[e:USES_TRACK]->(:Track {id: 'trk-basement-hum'}) DELETE e");
+});
+
+test('attack 2b: forged declaredCueCount + deleted cue ref + edge delete cannot clear', async () => {
+  await ESTABLISHED_FORBIDDEN('atk2b', "MATCH (s:Source {id: 'src-cue-v4'}) SET s.declaredCueCount = 1, s.cueEntryCount = 1 WITH 1 AS one MATCH (r:SourceRef {id: 'ref-cue-v4-basement-hum'}) DETACH DELETE r WITH 1 AS two MATCH (:Cut {id: 'cut-wad-v4'})-[e:USES_TRACK]->(:Track {id: 'trk-basement-hum'}) DELETE e");
+});
+
+test('attack 3: rewriting an excerpt to say Cut v4 is detected (text no longer matches the file)', async () => {
+  await withVariant('atk3', "MATCH (r:SourceRef {id: 'ref-mail-bh-scope'}) SET r.excerpt = 'Confirmed: \"Basement Hum\" is cleared for WAD Cut v4 (festival screener) only.' WITH r MATCH (l:License {id: 'lic-basement-hum-v3'}), (c:Cut {id: 'cut-wad-v4'}) CREATE (l)-[:VALID_FOR {id: 'e-atk3', sourceRefIds: ['ref-mail-bh-scope']}]->(c)", async c => {
+    const a = await analyzeRelease(c, 't-wad', 'rel-wad');
+    assert.ok(a && a.status === 'AVAILABLE');
+    assert.notEqual(a.clearance, 'ESTABLISHED');
+    assert.equal(statusOf(a, 'ev-unverified-refs-cut-wad-v4'), 'UNKNOWN');
+    assert.ok(!a.sources.some(s => s.id === 'ref-mail-bh-scope'), 'tampered excerpt is not returned as a source');
+  });
+});
+
+test('attack 4: relabelling the current cut as v3 cannot borrow the v3 clearance (cue-sheet file says v4)', async () => {
+  await ESTABLISHED_FORBIDDEN('atk4', "MATCH (c:Cut {id: 'cut-wad-v4'}) SET c.version = 3 WITH c MATCH (l:License {id: 'lic-basement-hum-v3'}) CREATE (l)-[:VALID_FOR {id: 'e-atk4', sourceRefIds: ['ref-mail-bh-scope']}]->(c)");
+});
+
+test('attack 5: re-pointing a Source record at another real file with its true hash cannot forge scope', async () => {
+  await ESTABLISHED_FORBIDDEN('atk5', "MATCH (s:Source {id: 'src-mail-basement-hum'}) SET s.path = 'graph/seed/sources/license-basement-hum-v4.txt' WITH s MATCH (l:License {id: 'lic-basement-hum-v3'}), (c:Cut {id: 'cut-wad-v4'}) CREATE (l)-[:VALID_FOR {id: 'e-atk5', sourceRefIds: ['ref-mail-bh-scope']}]->(c)");
+});
+
+test('tenant boundary: another tenant\'s license, source and excerpt cannot clear this tenant\'s cut', async () => {
+  await withVariant('foreign', `
+    MATCH (t:Track {id: 'trk-basement-hum', tenantId: 't-wad'}), (c:Cut {id: 'cut-wad-v4', tenantId: 't-wad'})
+    CREATE (l:License {id: 'lic-foreign', tenantId: 't-other', label: 'Foreign license'}),
+           (s:Source {id: 'src-foreign', tenantId: 't-other', kind: 'license', path: 'graph/seed/sources/license-basement-hum-v4.txt', sha256: 'x'}),
+           (r1:SourceRef {id: 'ref-foreign-subject', tenantId: 't-other', excerpt: 'Composition: "Basement Hum"', startOffset: 0, endOffset: 1}),
+           (r2:SourceRef {id: 'ref-foreign-grant', tenantId: 't-other', excerpt: 'Grant: Cut v4', startOffset: 0, endOffset: 1}),
+           (r1)-[:EXCERPT_OF]->(s), (r2)-[:EXCERPT_OF]->(s), (l)-[:EVIDENCED_BY]->(s),
+           (l)-[:COVERS {id: 'e-foreign-covers', sourceRefIds: ['ref-foreign-subject']}]->(t),
+           (l)-[:VALID_FOR {id: 'e-foreign-valid', sourceRefIds: ['ref-foreign-grant']}]->(c)`, async c => {
+    const a = await analyzeRelease(c, 't-wad', 'rel-wad');
+    assert.ok(a && a.status === 'AVAILABLE');
+    assert.equal(a.clearance, 'GAP');
+    assert.equal(statusOf(a, 'ev-trk-basement-hum'), 'STALE');
+    assert.ok(!a.nodes.some(n => n.id === 'lic-foreign') && !a.edges.some(e => e.id.startsWith('e-foreign')), 'foreign records are not returned');
+  });
 });
 
 test('witness grammar: incomplete or inconsistent cue sheets are not complete; malformed excerpts are refused', () => {
