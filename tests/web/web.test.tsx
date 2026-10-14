@@ -6,7 +6,7 @@ import { HealthPanel } from '../../apps/web/src/components/HealthPanel';
 import { SceneMount, toSceneData, type SceneProps } from '../../apps/web/src/components/SceneMount';
 import { Shell, IDENTITY } from '../../apps/web/src/App';
 import { getAnalysis, getGraphStatus, getHealth, type Fetcher } from '../../apps/web/src/api';
-import { parseRoute } from '../../apps/web/src/route';
+import { parseRoute, nextRoute } from '../../apps/web/src/route';
 import { available, unavailable, graphDown, jsonResponse } from './fixtures';
 
 const ok = (data: ReturnType<typeof available>) => ({ kind: 'ok' as const, httpStatus: 200, data });
@@ -101,4 +101,16 @@ test('api client: maps 503 UNAVAILABLE, 404, network failure and contract violat
   let url = '';
   await getAnalysis('a/b', async u => { url = u; return jsonResponse(404, {}); });
   assert.equal(url, '/api/releases/a%2Fb/analysis');
+});
+
+test('P2-A: clicking a cited source keeps the release view (no 404)', () => {
+  const rel = parseRoute('#/releases/rel-wad');
+  assert.deepEqual(nextRoute(rel, '#source-ref-mail-bh-scope'), rel);
+  assert.deepEqual(nextRoute(rel, '#source-s1'), rel);
+  assert.equal(nextRoute(rel, '#/nope').name, 'not_found');
+  const html = renderToStaticMarkup(<AnalysisView releaseId="r" result={ok(available('GAP'))} />);
+  for (const m of html.matchAll(/href="(#source-[^"]+)"/g)) {
+    assert.ok(html.includes(`id="${decodeURIComponent(m[1]!.slice(1))}"`), `target exists for ${m[1]}`);
+    assert.deepEqual(nextRoute(rel, m[1]!), rel);
+  }
 });

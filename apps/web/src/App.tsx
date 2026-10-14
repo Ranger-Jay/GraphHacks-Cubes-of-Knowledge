@@ -4,7 +4,7 @@ import { getAnalysis, getGraphStatus, getHealth, type ApiResult, type Fetcher, t
 import { HealthPanel, type Loadable } from './components/HealthPanel';
 import { AnalysisView } from './components/AnalysisView';
 import { SceneMount, toSceneData, type SceneProps } from './components/SceneMount';
-import { parseRoute, type Route } from './route';
+import { nextRoute, parseRoute, type Route } from './route';
 
 export const IDENTITY = 'Cubes of Knowledge: A company brain built on FalkorDB, with traceable decisions and persistent agent memory.';
 
@@ -42,14 +42,14 @@ function useReducedMotion(): boolean {
 }
 
 export function App({ Scene, fetcher }: { Scene: ComponentType<SceneProps> | null; fetcher?: Fetcher }) {
-  const [route, setRoute] = useState<Route>(() => parseRoute(window.location.hash));
+  const [route, setRoute] = useState<Route>(() => { const h = window.location.hash; return parseRoute(h.startsWith('#source-') ? '#/' : h); });
   const [health, setHealth] = useState<Loadable<HealthResponse>>({ state: 'loading' });
   const [graph, setGraph] = useState<Loadable<GraphStatusResponse>>({ state: 'loading' });
   const [analysis, setAnalysis] = useState<ApiResult<AnalysisResponse> | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
   const reducedMotion = useReducedMotion();
 
-  useEffect(() => { const h = () => setRoute(parseRoute(window.location.hash)); window.addEventListener('hashchange', h); return () => window.removeEventListener('hashchange', h); }, []);
+  useEffect(() => { const h = () => setRoute(prev => nextRoute(prev, window.location.hash)); window.addEventListener('hashchange', h); return () => window.removeEventListener('hashchange', h); }, []);
   useEffect(() => {
     void getHealth(fetcher).then(result => setHealth({ state: 'done', result }));
     void getGraphStatus(fetcher).then(result => setGraph({ state: 'done', result }));

@@ -6,3 +6,9 @@ export function parseRoute(hash: string): Route {
   if (m && m[1]) return { name: 'release', releaseId: m[1] };
   return { name: 'not_found', path: hash };
 }
+
+/** In-page anchors (e.g. cited sources) are not routes; the router must keep the current view. */
+export const isInPageAnchor = (hash: string) => /^#source-/.test(hash);
+export function nextRoute(prev: Route, hash: string): Route {
+  return isInPageAnchor(hash) ? prev : parseRoute(hash);
+}

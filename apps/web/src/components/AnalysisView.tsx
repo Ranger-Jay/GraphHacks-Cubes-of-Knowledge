@@ -2,12 +2,19 @@ import type { AnalysisResponse, AvailableAnalysis, SourceRef } from '@cubes/cont
 import type { ApiResult } from '../api';
 import { StatusBadge } from './StatusBadge';
 
+// In-page jump to a cited source record; never touches the hash router.
+function focusSource(e: { preventDefault: () => void }, id: string) {
+  e.preventDefault();
+  const el = typeof document !== 'undefined' ? document.getElementById(`source-${id}`) : null;
+  if (el) { el.setAttribute('tabindex', '-1'); el.scrollIntoView({ block: 'center' }); el.focus(); }
+}
+
 function Sources({ ids, byId }: { ids: string[]; byId: Map<string, SourceRef> }) {
   if (ids.length === 0) return <span className="muted">No cited source.</span>;
   return <ul className="sources">{ids.map(id => {
     const s = byId.get(id);
     return <li key={id}>{s
-      ? <a href={`#source-${encodeURIComponent(id)}`}>{s.path} [{s.startOffset}–{s.endOffset}]</a>
+      ? <a href={`#source-${encodeURIComponent(id)}`} onClick={e => focusSource(e, id)}>{s.path} [{s.startOffset}–{s.endOffset}]</a>
       : <span>{id} <StatusBadge value="UNKNOWN" label="source record" /></span>}</li>;
   })}</ul>;
 }
