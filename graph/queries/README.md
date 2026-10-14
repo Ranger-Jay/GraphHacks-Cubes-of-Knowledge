@@ -5,9 +5,7 @@ Source of truth: `packages/graph/src/queries.ts`. Callers choose a name and para
 | Name | Parameters | Returns |
 | --- | --- | --- |
 | HEALTH | none | `releases` count (ready only when > 0) |
-| READ_RELEASE_CURRENT_CUT | releaseId, tenantId | release, revision, current cut, cue-sheet coverage |
-| READ_CUE_ENTRIES | sourceId, tenantId | parsed cue entries (index, title) of one cue sheet |
-| READ_REF_WITNESSES | ids[], tenantId | role, source and parsed subject/scope of cited excerpts |
+| READ_RELEASE_CURRENT_CUT | releaseId, tenantId | release, revision, current cut, cue-sheet source record (path, sha256) |
 | READ_CUT_TRACK_LICENSES | cutId, tenantId | each track with every covering license and the cuts it is valid for |
 | READ_SOURCE_REFS | ids[], tenantId | exact excerpts with path, sha256, offsets |
 
@@ -23,3 +21,5 @@ node --env-file-if-exists=.env --import tsx --test tests/graph/*.test.ts
 ```
 
 The tests fail (they do not skip) when the graph is unreachable.
+
+Analysis verifies every returned excerpt against its source file and re-derives meaning from the text (see `graph/schema/README.md`, Trust model). Set the source root with `analyzeRelease(client, tenant, release, { sourceRoot })` (default: current directory).
