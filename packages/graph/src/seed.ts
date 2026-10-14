@@ -19,7 +19,7 @@ interface RefSpec { id: string; source: string; role: RefRole; excerpt: string }
 interface NodeSpec { label: Exclude<Label, 'Source' | 'SourceRef'>; id: string; props: Record<string, ParamValue> }
 interface EdgeSpec { id: string; type: RelType; from: string; to: string; refs?: string[]; props?: Record<string, ParamValue> }
 
-export const SEED_VERSION = 'wad-studio-seed@2';
+export const SEED_VERSION = 'wad-studio-seed@3';
 const TENANT = 't-wad';
 
 const SOURCES: SourceSpec[] = [
@@ -84,6 +84,30 @@ const EDGES: EdgeSpec[] = [
   { id: 'e-guz-member', type: 'MEMBER_OF', from: 'guz', to: TENANT, props: { role: 'AGENT' } }
 ];
 
+/**
+ * Optional evidence bundles, applied after the base seed only when requested. They model new source
+ * documents arriving later (for example a current-cut license) and bump the release revision.
+ */
+interface Bundle { sources: SourceSpec[]; refs: RefSpec[]; nodes: NodeSpec[]; edges: EdgeSpec[] }
+export const BUNDLES: Record<string, Bundle> = {
+  'basement-hum-v4-license': {
+    sources: [{ id: 'src-lic-basement-hum-v4', file: 'license-basement-hum-v4.txt', kind: 'license' }],
+    refs: [
+      { id: 'ref-lic-bh4-composition', source: 'src-lic-basement-hum-v4', role: 'license_subject', excerpt: 'Composition: "Basement Hum"' },
+      { id: 'ref-lic-bh4-grant', source: 'src-lic-basement-hum-v4', role: 'license_scope', excerpt: 'Grant: Synchronization rights for the motion picture WAD, Cut v4 (current distribution cut).' }
+    ],
+    nodes: [
+      { label: 'License', id: 'lic-basement-hum-v4', props: { tenantId: TENANT, label: 'Basement Hum sync license (v4)' } },
+      { label: 'Release', id: 'rel-wad', props: { tenantId: TENANT, title: 'WAD', revision: 'rel-wad@r2' } }
+    ],
+    edges: [
+      { id: 'e-lic-bh4-covers', type: 'COVERS', from: 'lic-basement-hum-v4', to: 'trk-basement-hum', refs: ['ref-lic-bh4-composition'] },
+      { id: 'e-lic-bh4-valid-v4', type: 'VALID_FOR', from: 'lic-basement-hum-v4', to: 'cut-wad-v4', refs: ['ref-lic-bh4-grant'] },
+      { id: 'e-lic-bh4-evidence', type: 'EVIDENCED_BY', from: 'lic-basement-hum-v4', to: 'src-lic-basement-hum-v4' }
+    ]
+  }
+};
+
 /** Code-point offsets of the first occurrence; throws if absent or ambiguous. */
 export function locateExcerpt(text: string, excerpt: string): { startOffset: number; endOffset: number } {
   const at = text.indexOf(excerpt);
@@ -93,6 +117,9 @@ export function locateExcerpt(text: string, excerpt: string): { startOffset: num
   return { startOffset, endOffset: startOffset + Array.from(excerpt).length };
 }
 
+const LICENSE_SUBJECT = /^Composition: "([^"\n]+)"$/;
+const SCOPE_CUT = /\bCut v(\d+)\b/g;
+const QUOTED = /"([^"\n]+)"/g;
 const CUE_ENTRY = /^Cue (\d+): "([^"\n]+)"$/;
 const CUE_ENTRY_LINES = /^Cue (\d+): "([^"\n]+)"$/gm;
 const CUE_CUT = /^Cut: v(\d+)\b/gm;
@@ -123,6 +150,17 @@ export function refWitness(role: RefRole, excerpt: string): Record<string, Param
     if (!m) throw new Error(`cue_entry excerpt does not match grammar: ${JSON.stringify(excerpt.slice(0, 40))}`);
     return { cueIndex: Number(m[1]), cueTitle: String(m[2]) };
   }
+  if (role === 'license_subject') {
+    const m = LICENSE_SUBJECT.exec(excerpt);
+    if (!m) throw new Error(`license_subject excerpt does not match grammar: ${JSON.stringify(excerpt.slice(0, 40))}`);
+    return { subjectTitle: String(m[1]) };
+  }
+  if (role === 'license_scope') {
+    const cuts = [...excerpt.matchAll(SCOPE_CUT)].map(m => Number(m[1]));
+    const titles = [...excerpt.matchAll(QUOTED)].map(m => String(m[1]));
+    if (cuts.length !== 1 || titles.length > 1) throw new Error(`license_scope excerpt must name exactly one cut and at most one title: ${JSON.stringify(excerpt.slice(0, 40))}`);
+    return { scopeCutVersion: cuts[0]!, scopeTitle: titles[0] ?? null };
+  }
   return {};
 }
 
@@ -138,26 +176,37 @@ const NODE_MERGE: Record<NodeSpec['label'] | 'Source' | 'SourceRef', string> = {
 };
 
 type AnyLabel = NodeSpec['label'] | 'Source' | 'SourceRef';
-const LABEL_OF = new Map<string, AnyLabel>([
-  ...NODES.map(n => [n.id, n.label] as [string, AnyLabel]),
-  ...SOURCES.map(s => [s.id, 'Source'] as [string, AnyLabel]),
-  ...REFS.map(r => [r.id, 'SourceRef'] as [string, AnyLabel])
-]);
 
-function edgeMerge(type: RelType, from: string, to: string): string {
-  // Labels and type come from the fixed allowlists above, never from input; endpoints matched by label + id.
-  const la = LABEL_OF.get(from);
-  const lb = LABEL_OF.get(to);
+function edgeMerge(labels: Map<string, AnyLabel>, type: RelType, from: string, to: string): string {
+  // Labels and type come from the fixed manifest above, never from input; endpoints matched by label + id.
+  const la = labels.get(from);
+  const lb = labels.get(to);
   if (!la || !lb) throw new Error(`Edge endpoint not declared in seed: ${!la ? from : to}`);
   return `MATCH (a:${la} {id: $from}), (b:${lb} {id: $to}) MERGE (a)-[e:${type} {id: $id}]->(b) SET e += $props RETURN count(e) AS n`;
 }
 
 export interface SeedResult { seedVersion: string; sources: number; refs: number; nodes: number; edges: number }
 
-export async function seedGraph(client: GraphClient, repoRoot: string): Promise<SeedResult> {
+export interface SeedOptions { bundles?: string[] }
+
+export async function seedGraph(client: GraphClient, repoRoot: string, options: SeedOptions = {}): Promise<SeedResult> {
+  const chosen = (options.bundles ?? []).map(name => {
+    const b = BUNDLES[name];
+    if (!b) throw new Error(`Unknown seed bundle: ${name}`);
+    return b;
+  });
+  const SOURCES_ALL = [...SOURCES, ...chosen.flatMap(b => b.sources)];
+  const REFS_ALL = [...REFS, ...chosen.flatMap(b => b.refs)];
+  const NODES_ALL = [...NODES, ...chosen.flatMap(b => b.nodes)];
+  const EDGES_ALL = [...EDGES, ...chosen.flatMap(b => b.edges)];
+  const labels = new Map<string, AnyLabel>([
+    ...NODES_ALL.map(n => [n.id, n.label] as [string, AnyLabel]),
+    ...SOURCES_ALL.map(x => [x.id, 'Source'] as [string, AnyLabel]),
+    ...REFS_ALL.map(r => [r.id, 'SourceRef'] as [string, AnyLabel])
+  ]);
   const sourceDir = join(repoRoot, 'graph', 'seed', 'sources');
   const texts = new Map<string, string>();
-  for (const s of SOURCES) {
+  for (const s of SOURCES_ALL) {
     const bytes = await readFile(join(sourceDir, s.file));
     texts.set(s.id, bytes.toString('utf8'));
     const text = bytes.toString('utf8');
@@ -165,7 +214,7 @@ export async function seedGraph(client: GraphClient, repoRoot: string): Promise<
     if (s.kind === 'cue_sheet') {
       const cue = parseCueSheet(text);
       // Every cue line in the file must be cited by a cue_entry excerpt, or the seed is incomplete.
-      const cited = new Set(REFS.filter(r => r.source === s.id && r.role === 'cue_entry').map(r => r.excerpt));
+      const cited = new Set(REFS_ALL.filter(r => r.source === s.id && r.role === 'cue_entry').map(r => r.excerpt));
       for (const e of cue.entries) {
         if (!cited.has(`Cue ${e.index}: "${e.title}"`)) throw new Error(`Seed manifest misses cue ${e.index} of ${s.id}`);
       }
@@ -176,7 +225,7 @@ export async function seedGraph(client: GraphClient, repoRoot: string): Promise<
       sha256: createHash('sha256').update(bytes).digest('hex'), offsetUnit: 'unicode-code-point', ...witness
     } });
   }
-  for (const r of REFS) {
+  for (const r of REFS_ALL) {
     const text = texts.get(r.source);
     if (text === undefined) throw new Error(`Unknown source ${r.source}`);
     const { startOffset, endOffset } = locateExcerpt(text, r.excerpt);
@@ -184,17 +233,17 @@ export async function seedGraph(client: GraphClient, repoRoot: string): Promise<
       tenantId: TENANT, sourceId: r.source, role: r.role, excerpt: r.excerpt, startOffset, endOffset, ...refWitness(r.role, r.excerpt)
     } });
   }
-  for (const n of NODES) await client.write(NODE_MERGE[n.label], { id: n.id, props: n.props });
+  for (const n of NODES_ALL) await client.write(NODE_MERGE[n.label], { id: n.id, props: n.props });
   let edges = 0;
   const all: EdgeSpec[] = [
-    ...EDGES,
-    ...REFS.map(r => ({ id: `e-${r.id}-excerpt-of`, type: 'EXCERPT_OF' as const, from: r.id, to: r.source }))
+    ...EDGES_ALL,
+    ...REFS_ALL.map(r => ({ id: `e-${r.id}-excerpt-of`, type: 'EXCERPT_OF' as const, from: r.id, to: r.source }))
   ];
   for (const e of all) {
-    for (const ref of e.refs ?? []) if (!REFS.some(r => r.id === ref)) throw new Error(`Edge ${e.id} cites unknown ref ${ref}`);
-    const rows = await client.write<{ n: number }>(edgeMerge(e.type, e.from, e.to), { id: e.id, from: e.from, to: e.to, props: { ...(e.props ?? {}), sourceRefIds: e.refs ?? [] } });
+    for (const ref of e.refs ?? []) if (!REFS_ALL.some(r => r.id === ref)) throw new Error(`Edge ${e.id} cites unknown ref ${ref}`);
+    const rows = await client.write<{ n: number }>(edgeMerge(labels, e.type, e.from, e.to), { id: e.id, from: e.from, to: e.to, props: { ...(e.props ?? {}), sourceRefIds: e.refs ?? [] } });
     if (rows[0]?.n !== 1) throw new Error(`Edge ${e.id} endpoints missing`);
     edges++;
   }
-  return { seedVersion: SEED_VERSION, sources: SOURCES.length, refs: REFS.length, nodes: NODES.length + SOURCES.length + REFS.length, edges };
+  return { seedVersion: SEED_VERSION, sources: SOURCES_ALL.length, refs: REFS_ALL.length, nodes: new Set(labels.keys()).size, edges };
 }

@@ -29,9 +29,16 @@ OPTIONAL MATCH (lic)-[vf:VALID_FOR]->(vc:Cut {tenantId: $tenantId})
 OPTIONAL MATCH (lic)-[eb:EVIDENCED_BY]->(ls:Source {tenantId: $tenantId})
 RETURN t.id AS trackId, t.title AS trackTitle, u.id AS usesEdgeId, u.sourceRefIds AS usesRefs,
        lic.id AS licenseId, lic.label AS licenseLabel, cov.id AS coversEdgeId, cov.sourceRefIds AS coversRefs,
-       vc.id AS validCutId, vc.label AS validCutLabel, vf.id AS validForEdgeId, vf.sourceRefIds AS validForRefs,
+       vc.id AS validCutId, vc.label AS validCutLabel, vc.version AS validCutVersion, vf.id AS validForEdgeId, vf.sourceRefIds AS validForRefs,
        ls.id AS licenseSourceId, eb.id AS evidencedByEdgeId
 ORDER BY trackId, licenseId, validCutId`,
+
+  /** Structured witness fields for cited excerpts (role, source, parsed license subject/scope). */
+  READ_REF_WITNESSES: `
+MATCH (sr:SourceRef {tenantId: $tenantId})
+WHERE sr.id IN $ids
+RETURN sr.id AS id, sr.sourceId AS sourceId, sr.role AS role, sr.subjectTitle AS subjectTitle,
+       sr.scopeTitle AS scopeTitle, sr.scopeCutVersion AS scopeCutVersion`,
 
   /** Exact stored excerpts for the given reference IDs, with their immutable source record. */
   READ_SOURCE_REFS: `

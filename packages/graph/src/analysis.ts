@@ -15,9 +15,10 @@ interface CurrentCutRow {
 interface TrackRow {
   trackId: string; trackTitle: string; usesEdgeId: string; usesRefs: string[] | null;
   licenseId: string | null; licenseLabel: string | null; coversEdgeId: string | null; coversRefs: string[] | null;
-  validCutId: string | null; validCutLabel: string | null; validForEdgeId: string | null; validForRefs: string[] | null;
+  validCutId: string | null; validCutLabel: string | null; validCutVersion: number | null; validForEdgeId: string | null; validForRefs: string[] | null;
   licenseSourceId: string | null; evidencedByEdgeId: string | null;
 }
+interface WitnessRow { id: string; sourceId: string; role: string; subjectTitle: string | null; scopeTitle: string | null; scopeCutVersion: number | null }
 interface CueEntryRow { id: string; cueIndex: number; cueTitle: string }
 interface RefRow { id: string; path: string; sha256: string; excerpt: string; startOffset: number; endOffset: number }
 
@@ -61,6 +62,15 @@ export async function analyzeRelease(client: GraphClient, tenantId: string, rele
       addEdge(head.listedInEdgeId, head.cutId, head.cueSheetId, 'LISTED_IN', refs(head.listedInRefs));
     }
 
+    // License-scope witness (#9): a COVERS/VALID_FOR link counts only when excerpts from the license's
+    // own evidence source name this track and this exact cut. Unsupported links never verify anything.
+    const citedIds = [...new Set(rows.flatMap(r => [...refs(r.coversRefs), ...refs(r.validForRefs)]))];
+    const witness = new Map((citedIds.length === 0 ? [] : await client.read<WitnessRow>(QUERIES.READ_REF_WITNESSES, { ids: citedIds, tenantId }))
+      .map(w => [w.id, w] as const));
+    const fromSource = (ids: string[], sourceId: string | null) =>
+      ids.map(id => witness.get(id)).filter((w): w is WitnessRow => w !== undefined && sourceId !== null && w.sourceId === sourceId);
+    const unsupportedCurrent: { edgeId: string; license: string; title: string; refs: string[]; scopes: number[] }[] = [];
+
     const tracks = new Map<string, { title: string; usesRefs: string[]; current: string[]; stale: string[]; staleCuts: Set<string> }>();
     for (const r of rows) {
       let t = tracks.get(r.trackId);
@@ -79,7 +89,19 @@ export async function analyzeRelease(client: GraphClient, tenantId: string, rele
         addNode(r.licenseSourceId, 'License evidence', 'Source');
         addEdge(r.evidencedByEdgeId, r.licenseId, r.licenseSourceId, 'EVIDENCED_BY', []);
       }
+      const covW = fromSource(refs(r.coversRefs), r.licenseSourceId);
+      const vfW = fromSource(refs(r.validForRefs), r.licenseSourceId);
+      const coversOk = covW.some(w => w.subjectTitle === t!.title || w.scopeTitle === t!.title);
+      const scopeOk = vfW.some(w => w.role === 'license_scope' && w.scopeCutVersion === r.validCutVersion
+        && (w.scopeTitle === t!.title || (w.scopeTitle === null && coversOk)));
       const cited = [...refs(r.coversRefs), ...refs(r.validForRefs)];
+      if (!(coversOk && scopeOk)) {
+        if (r.validCutId === head.cutId) {
+          unsupportedCurrent.push({ edgeId: r.validForEdgeId ?? r.licenseId, license: r.licenseLabel ?? r.licenseId, title: t.title, refs: cited,
+            scopes: vfW.map(w => w.scopeCutVersion).filter((v): v is number => v !== null) });
+        }
+        continue;
+      }
       if (r.validCutId === head.cutId) t.current.push(...cited);
       else { t.stale.push(...cited); t.staleCuts.add(r.validCutLabel ?? r.validCutId); }
     }
@@ -112,6 +134,12 @@ export async function analyzeRelease(client: GraphClient, tenantId: string, rele
       integrity.push({ id: `ev-coverage-${head.cutId}`, status: 'UNKNOWN',
         statement: `Track coverage for ${head.cutLabel} is not established: ${parts.join('; ')}.`,
         sourceRefIds: [...new Set([...listedRefs, ...unlinked.map(e => e.id)])] });
+    }
+    for (const u of unsupportedCurrent) {
+      const scope = u.scopes.length > 0 ? `its cited source scope is Cut v${[...new Set(u.scopes)].join(', v')}` : 'its cited source states no matching scope';
+      integrity.push({ id: `ev-unsupported-${u.edgeId}`, status: 'UNKNOWN',
+        statement: `"${u.license}" is linked to ${head.cutLabel} for "${u.title}", but ${scope}. The link is not counted as clearance.`,
+        sourceRefIds: [...new Set(u.refs)] });
     }
     for (const [trackId, t] of tracks) {
       if (t.current.length > 0) {
