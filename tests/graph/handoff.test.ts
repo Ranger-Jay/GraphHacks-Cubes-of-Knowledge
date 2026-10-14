@@ -2,11 +2,17 @@
 // Run from the repository root: node --import tsx --test tests/graph/*.test.ts
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
+import { mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { FalkorDB } from 'falkordb';
-import { configFromEnv, getHandoff, GraphClient, handoffInbox, saveHandoff, seedGraph } from '../../packages/graph/src/index.ts';
+import { configFromEnv, evidenceKeyFromEnv, getHandoff, GraphClient, handoffInbox, ledgerFromEnv, saveHandoff, seedGraph, witnessedWrite } from '../../packages/graph/src/index.ts';
 import type { SaveHandoffInput } from '../../packages/graph/src/index.ts';
 
 process.env['GRAPH_EVIDENCE_KEY'] ??= 'test-only-evidence-key-not-a-secret-0123456789';
+process.env['GRAPH_WITNESS_DIR'] ??= mkdtempSync(join(tmpdir(), 'cubes-witness-'));
+/** Evidence changes go through the witnessed writer (D-020). */
+const ww = (q: string) => witnessedWrite(client, ledgerFromEnv(evidenceKeyFromEnv()), 't-wad', 'test-mutation', () => client.write(q));
 const cfg = { ...configFromEnv(), graphName: `${configFromEnv().graphName}__handoff` };
 let client = new GraphClient(cfg);
 const roy = { tenantId: 't-wad', agentId: 'roy' as const };
@@ -18,7 +24,7 @@ const req = (over: Partial<SaveHandoffInput> = {}): SaveHandoffInput => ({
   expectedRevision: 'rel-wad@r1', idempotencyKey: `idem-handoff-${String(++n).padStart(4, '0')}`, ...over
 });
 
-before(async () => { await seedGraph(client, process.cwd()); });
+before(async () => { await seedGraph(client, process.cwd(), { initWitness: true }); });
 after(async () => {
   await client.close();
   const db = await FalkorDB.connect({ socket: { host: cfg.host, port: cfg.port } });
@@ -74,7 +80,7 @@ test('scope: identity from context; non-members, self-handoffs, unverified sourc
   assert.equal((await saveHandoff(client, { tenantId: 't-other', agentId: 'roy' }, req())).status, 'FORBIDDEN');
   assert.equal((await saveHandoff(client, roy, { ...req(), fromAgentId: 'ava' } as never)).status, 'INVALID');
   assert.equal((await saveHandoff(client, roy, req({ sourceRefIds: ['ref-does-not-exist'] }))).status, 'INVALID');
-  await client.write("MATCH (r:SourceRef {id: 'ref-mail-bh-later'}) SET r.excerpt = 'Cleared for every cut.'");
+  await ww("MATCH (r:SourceRef {id: 'ref-mail-bh-later'}) SET r.excerpt = 'Cleared for every cut.'");
   try {
     assert.equal((await saveHandoff(client, roy, req({ sourceRefIds: ['ref-mail-bh-later'] }))).status, 'INVALID');
   } finally {
@@ -102,7 +108,7 @@ test('integrity: tampered, forged or unsigned records are refused; no key means 
 test('a handoff saved at r1 reads back as stale once the release revision moves', async () => {
   const s = await saveHandoff(client, roy, req());
   assert.ok(s.status === 'CREATED');
-  await client.write("MATCH (r:Release {id: 'rel-wad'}) SET r.revision = 'rel-wad@r2'");
+  await ww("MATCH (r:Release {id: 'rel-wad'}) SET r.revision = 'rel-wad@r2'");
   try {
     const got = await getHandoff(client, ava, s.handoff.id);
     assert.ok(got.status === 'FOUND' && got.stale === true && got.currentRevision === 'rel-wad@r2');
