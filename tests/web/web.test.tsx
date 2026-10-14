@@ -4,7 +4,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { AnalysisView } from '../../apps/web/src/components/AnalysisView';
 import { HealthPanel } from '../../apps/web/src/components/HealthPanel';
 import { SceneMount, toSceneData, type SceneProps } from '../../apps/web/src/components/SceneMount';
-import { Shell, IDENTITY, SEEDED_RELEASE_ID } from '../../apps/web/src/App';
+import { Shell, IDENTITY, SEEDED_RELEASE_ID, loadAll } from '../../apps/web/src/App';
 import { getAnalysis, getGraphStatus, getHealth, type Fetcher } from '../../apps/web/src/api';
 import { parseRoute, nextRoute } from '../../apps/web/src/route';
 import { available, unavailable, graphDown, jsonResponse } from './fixtures';
@@ -122,4 +122,28 @@ test('P2-B: home links to the seeded release rel-wad, not a track name', () => {
   assert.ok(html.includes('href="#/releases/rel-wad"'));
   assert.ok(!html.includes('night-drive'));
   assert.deepEqual(parseRoute('#/releases/rel-wad'), { name: 'release', releaseId: 'rel-wad' });
+});
+
+test('P2-C: Re-query refetches in place after outage; nothing cached while unavailable', async () => {
+  let down = true; let calls = 0;
+  const f: Fetcher = async u => { calls++;
+    if (u === '/api/health') return jsonResponse(200, { status: 'OK', ready: !down });
+    if (u === '/api/graph/status') return jsonResponse(down ? 503 : 200, down ? graphDown : { ...graphDown, status: 'AVAILABLE', ready: true, reason: undefined });
+    return down ? jsonResponse(503, unavailable('CONNECTION_FAILED')) : jsonResponse(200, available('GAP')); };
+  const log: string[] = []; let a: unknown = 'unset';
+  const sinks = { setHealth: () => {}, setGraph: () => {}, setSelected: () => {},
+    setAnalysis: (v: unknown) => { a = v; log.push(v === null ? 'clear' : (v as { kind: string }).kind); } };
+  const route = parseRoute('#/releases/rel-wad');
+  loadAll(route, f, sinks); await loadAll.last;
+  assert.equal((a as { kind: string }).kind, 'unavailable');
+  down = false;
+  loadAll(route, f, sinks); await loadAll.last;
+  assert.deepEqual(log, ['clear', 'unavailable', 'clear', 'ok']);
+  assert.equal(calls, 6);
+  const stale: string[] = [];
+  const cancel = loadAll(route, f, { ...sinks, setAnalysis: v => stale.push(v === null ? 'clear' : 'late') }); cancel(); await loadAll.last;
+  assert.deepEqual(stale, ['clear']);
+  const html = renderToStaticMarkup(<Shell route={route} health={{ state: 'loading' }} graph={{ state: 'loading' }}
+    analysis={null} Scene={null} reducedMotion={false} selected={null} onSelect={() => {}} onRequery={() => {}} />);
+  assert.ok(html.includes('>Re-query</button>'));
 });

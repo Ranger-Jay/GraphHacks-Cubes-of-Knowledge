@@ -11,10 +11,10 @@ export const SEEDED_RELEASE_ID = 'rel-wad';
 
 export const IDENTITY = 'Cubes of Knowledge: A company brain built on FalkorDB, with traceable decisions and persistent agent memory.';
 
-export function Shell({ route, health, graph, analysis, Scene, reducedMotion, selected, onSelect }: {
+export function Shell({ route, health, graph, analysis, Scene, reducedMotion, selected, onSelect, onRequery }: {
   route: Route; health: Loadable<HealthResponse>; graph: Loadable<GraphStatusResponse>;
   analysis: ApiResult<AnalysisResponse> | null; Scene: ComponentType<SceneProps> | null;
-  reducedMotion: boolean; selected: string | null; onSelect: (id: string) => void;
+  reducedMotion: boolean; selected: string | null; onSelect: (id: string) => void; onRequery?: () => void;
 }) {
   const current = analysis && (analysis.kind === 'ok' || analysis.kind === 'unavailable') ? analysis.data : null;
   return (
@@ -23,6 +23,7 @@ export function Shell({ route, health, graph, analysis, Scene, reducedMotion, se
       <header><h1><a href="#/">Cubes of Knowledge</a></h1><p>{IDENTITY}</p></header>
       <main id="main" tabIndex={-1}>
         <HealthPanel health={health} graph={graph} />
+        {onRequery && <p><button type="button" className="requery" onClick={onRequery}>Re-query</button> <span className="muted">Clears shown results and asks the API again.</span></p>}
         {route.name === 'home' && (
           <section className="panel" aria-labelledby="rel-h"><h2 id="rel-h">Releases</h2>
             <p>Open a release analysis: <a href={`#/releases/${SEEDED_RELEASE_ID}`}>{SEEDED_RELEASE_ID}</a>. Results come only from the API.</p></section>)}
@@ -36,6 +37,25 @@ export function Shell({ route, health, graph, analysis, Scene, reducedMotion, se
     </>
   );
 }
+
+export type Sinks = {
+  setHealth: (v: Loadable<HealthResponse>) => void; setGraph: (v: Loadable<GraphStatusResponse>) => void;
+  setAnalysis: (v: ApiResult<AnalysisResponse> | null) => void; setSelected: (v: string | null) => void;
+};
+/** Fresh load from the API. Clears every shown result first; nothing is cached between calls. Returns a cancel fn. */
+export function loadAll(route: Route, fetcher: Fetcher | undefined, s: Sinks): () => void {
+  let live = true;
+  s.setHealth({ state: 'loading' }); s.setGraph({ state: 'loading' });
+  s.setAnalysis(null); s.setSelected(null);
+  const ps: Promise<unknown>[] = [
+    getHealth(fetcher).then(result => { if (live) s.setHealth({ state: 'done', result }); }),
+    getGraphStatus(fetcher).then(result => { if (live) s.setGraph({ state: 'done', result }); })
+  ];
+  if (route.name === 'release') ps.push(getAnalysis(route.releaseId, fetcher).then(r => { if (live) s.setAnalysis(r); }));
+  loadAll.last = Promise.all(ps);
+  return () => { live = false; };
+}
+loadAll.last = Promise.resolve() as Promise<unknown>;
 
 function useReducedMotion(): boolean {
   const q = typeof window !== 'undefined' && window.matchMedia ? window.matchMedia('(prefers-reduced-motion: reduce)') : null;
@@ -53,18 +73,9 @@ export function App({ Scene, fetcher }: { Scene: ComponentType<SceneProps> | nul
   const reducedMotion = useReducedMotion();
 
   useEffect(() => { const h = () => setRoute(prev => nextRoute(prev, window.location.hash)); window.addEventListener('hashchange', h); return () => window.removeEventListener('hashchange', h); }, []);
-  useEffect(() => {
-    void getHealth(fetcher).then(result => setHealth({ state: 'done', result }));
-    void getGraphStatus(fetcher).then(result => setGraph({ state: 'done', result }));
-  }, [fetcher]);
-  useEffect(() => {
-    setAnalysis(null); setSelected(null); // clear current evidence before each request
-    if (route.name !== 'release') return;
-    let live = true;
-    void getAnalysis(route.releaseId, fetcher).then(r => { if (live) setAnalysis(r); });
-    return () => { live = false; };
-  }, [route, fetcher]);
+  const [nonce, setNonce] = useState(0);
+  useEffect(() => loadAll(route, fetcher, { setHealth, setGraph, setAnalysis, setSelected }), [route, fetcher, nonce]);
 
   return <Shell route={route} health={health} graph={graph} analysis={analysis} Scene={Scene}
-    reducedMotion={reducedMotion} selected={selected} onSelect={setSelected} />;
+    reducedMotion={reducedMotion} selected={selected} onSelect={setSelected} onRequery={() => setNonce(n => n + 1)} />;
 }
