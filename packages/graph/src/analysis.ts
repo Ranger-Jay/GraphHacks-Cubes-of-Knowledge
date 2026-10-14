@@ -7,18 +7,19 @@ import { GraphUnavailableError, type GraphClient } from './client.js';
 import { QUERIES } from './queries.js';
 import { SourceFiles } from './verify.js';
 import { cueEntryOf, parseCueSheet, scopeOf, subjectOf } from './witness.js';
+import { bindingHolds, evidenceKeyFromEnv } from './evidence-key.js';
 
 interface CurrentCutRow {
   releaseId: string; releaseTitle: string; revision: string; currentCutEdgeId: string; currentCutRefs: string[] | null;
   cutId: string; cutVersion: number; cutLabel: string;
   cueSheetId: string | null; cueSheetPath: string | null; cueSheetSha256: string | null;
-  listedInEdgeId: string | null; listedInRefs: string[] | null;
+  listedInEdgeId: string | null; listedInRefs: string[] | null; listedInSig: string | null;
 }
 interface TrackRow {
   trackId: string; trackTitle: string; usesEdgeId: string; usesRefs: string[] | null;
   licenseId: string | null; licenseLabel: string | null; coversEdgeId: string | null; coversRefs: string[] | null;
   validCutId: string | null; validCutLabel: string | null; validCutVersion: number | null; validForEdgeId: string | null; validForRefs: string[] | null;
-  licenseSourceId: string | null; licenseSourcePath: string | null; evidencedByEdgeId: string | null;
+  licenseSourceId: string | null; licenseSourcePath: string | null; licenseSourceSha256: string | null; evidencedByEdgeId: string | null; evidenceSig: string | null;
 }
 interface RefRow { id: string; sourceId: string; path: string; sha256: string; excerpt: string; startOffset: number; endOffset: number }
 
@@ -26,6 +27,8 @@ export interface AnalyzeOptions {
   requestId?: string;
   /** Directory containing graph/seed/sources (the trusted source files). Default: process.cwd(). */
   sourceRoot?: string;
+  /** Server evidence key (verifies binding HMACs). Default: GRAPH_EVIDENCE_KEY. Absent → nothing verifies. */
+  evidenceKey?: Buffer | null;
 }
 
 export function unavailable(reason: UnavailableAnalysis['reason'], message: string, requestId: string = randomUUID()): UnavailableAnalysis {
@@ -53,6 +56,7 @@ export async function analyzeRelease(client: GraphClient, tenantId: string, rele
   const o: AnalyzeOptions = typeof opts === 'string' ? { requestId: opts } : opts;
   const requestId: string = o.requestId ?? randomUUID();
   const files = new SourceFiles(o.sourceRoot);
+  const key = o.evidenceKey !== undefined ? o.evidenceKey : evidenceKeyFromEnv();
   try {
     const head = (await client.read<CurrentCutRow>(QUERIES.READ_RELEASE_CURRENT_CUT, { tenantId, releaseId }))[0];
     if (!head) return null;
@@ -69,7 +73,9 @@ export async function analyzeRelease(client: GraphClient, tenantId: string, rele
     const fromFile = (ids: string[], path: string | null) => ok(ids).map(id => verified.get(id)!).filter(r => path !== null && r.path === path);
 
     // Coverage from the verified cue-sheet file itself.
-    const sheetText = await files.text(head.cueSheetPath, head.cueSheetSha256);
+    // The cue-sheet binding must be signed by the server evidence key for this tenant, cut, path and hash.
+    const sheetBound = bindingHolds(key, head.listedInSig, 'LISTED_IN', tenantId, head.cutId, head.cueSheetPath, head.cueSheetSha256);
+    const sheetText = sheetBound ? await files.text(head.cueSheetPath, head.cueSheetSha256) : null;
     const sheet = sheetText === null ? null : parseCueSheet(sheetText);
     const sheetValid = sheet !== null && sheet.complete && sheet.cutVersion === head.cutVersion;
     const cutName = sheetValid && sheet.cutLabel ? sheet.cutLabel : head.cutLabel;
@@ -91,6 +97,7 @@ export async function analyzeRelease(client: GraphClient, tenantId: string, rele
     type T = { title: string; usesRefs: string[]; current: string[]; stale: string[]; staleCuts: Set<string> };
     const tracks = new Map<string, T>();
     const unsupportedCurrent: { edgeId: string; license: string; title: string; refs: string[]; scopes: number[] }[] = [];
+    const unboundLicenses = new Set<string>();
     for (const r of rows) {
       let t = tracks.get(r.trackId);
       if (!t) {
@@ -108,8 +115,11 @@ export async function analyzeRelease(client: GraphClient, tenantId: string, rele
         addNode(r.licenseSourceId, 'License evidence', 'Source');
         addEdge(r.evidencedByEdgeId, r.licenseId, r.licenseSourceId, 'EVIDENCED_BY', []);
       }
-      const covText = fromFile(refs(r.coversRefs), r.licenseSourcePath);
-      const vfText = fromFile(refs(r.validForRefs), r.licenseSourcePath);
+      // The license -> evidence-file binding must be signed for this tenant, license, path and hash.
+      const bound = bindingHolds(key, r.evidenceSig, 'EVIDENCED_BY', tenantId, r.licenseId, r.licenseSourcePath, r.licenseSourceSha256);
+      if (!bound) unboundLicenses.add(r.licenseLabel ?? r.licenseId);
+      const covText = bound ? fromFile(refs(r.coversRefs), r.licenseSourcePath) : [];
+      const vfText = bound ? fromFile(refs(r.validForRefs), r.licenseSourcePath) : [];
       const coversOk = covText.some(x => subjectOf(x.excerpt) === t!.title || scopeOf(x.excerpt)?.title === t!.title);
       const scopes = vfText.map(x => scopeOf(x.excerpt)).filter(x => x !== null);
       const scopeOk = scopes.some(sc => sc.cutVersion === r.validCutVersion && (sc.title === t!.title || (sc.title === null && coversOk)));
@@ -145,6 +155,7 @@ export async function analyzeRelease(client: GraphClient, tenantId: string, rele
     if (!coverageComplete) {
       const parts: string[] = [];
       if (!head.cueSheetId) parts.push(`no cue sheet is linked to ${cutName}`);
+      else if (!sheetBound) parts.push(key ? 'the cue-sheet binding is not signed by the evidence key' : 'no evidence key is configured, so no binding can be verified');
       else if (sheet === null) parts.push('the linked cue-sheet file is missing or does not match its recorded hash');
       else if (!sheet.complete) parts.push('the cue-sheet file is not a complete, consistent listing');
       else if (sheet.cutVersion !== head.cutVersion) parts.push(`the cue-sheet file is for Cut v${sheet.cutVersion}, not this cut`);
@@ -158,6 +169,10 @@ export async function analyzeRelease(client: GraphClient, tenantId: string, rele
       integrity.push({ id: `ev-unsupported-${u.edgeId}`, status: 'UNKNOWN',
         statement: `"${u.license}" is linked to ${cutName} for "${u.title}", but ${scope}. The link is not counted as clearance.`,
         sourceRefIds: [...new Set(u.refs)] });
+    }
+    if (unboundLicenses.size > 0) {
+      integrity.push({ id: `ev-unbound-licenses-${head.cutId}`, status: 'UNKNOWN',
+        statement: `${key ? 'Evidence binding is not signed by the evidence key' : 'No evidence key is configured'} for: ${[...unboundLicenses].sort().map(l => `"${l}"`).join(', ')}. Their sources were not used.`, sourceRefIds: [] });
     }
     if (failedRefs.length > 0) {
       integrity.push({ id: `ev-unverified-refs-${head.cutId}`, status: 'UNKNOWN',

@@ -7,3 +7,4 @@ export { analyzeRelease, graphHealth, unavailable } from './analysis.js';
 export type { GraphHealth } from './analysis.js';
 export { seedGraph, locateExcerpt, SEED_VERSION } from './seed.js';
 export type { SeedResult } from './seed.js';
+export { evidenceKeyFromEnv, bindingSig } from './evidence-key.js';
