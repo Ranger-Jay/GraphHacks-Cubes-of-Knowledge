@@ -1,0 +1,23 @@
+name: Bootstrap checks
+on: [push, pull_request]
+permissions:
+  contents: read
+concurrency:
+  group: bootstrap-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  bootstrap:
+    strategy:
+      matrix:
+        node: [22, 24]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+      - run: npm ci
+      - run: npm run verify
+      - name: Record scope
+        run: echo "Bootstrap checks only. Real graph, auth, agent and browser acceptance remain separate gates."
