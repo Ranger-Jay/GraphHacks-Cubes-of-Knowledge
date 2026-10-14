@@ -28,6 +28,11 @@ RETURN t.id AS trackId, t.title AS trackTitle, u.id AS usesEdgeId, u.sourceRefId
        eb.rev AS evidenceRev, eb.tracks AS evidenceTracks, eb.cuts AS evidenceCuts
 ORDER BY trackId, licenseId, validCutId`,
 
+  /** Agent membership in a tenant (tool authorization). */
+  READ_AGENT_MEMBERSHIP: `
+MATCH (p:Principal {id: $agentId, kind: 'agent'})-[m:MEMBER_OF]->(t:Tenant {id: $tenantId})
+RETURN m.role AS role`,
+
   /** Exact stored excerpts for the given reference IDs, with their immutable source record. */
   READ_SOURCE_REFS: `
 MATCH (sr:SourceRef {tenantId: $tenantId})-[:EXCERPT_OF]->(s:Source {tenantId: $tenantId})
