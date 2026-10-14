@@ -7,10 +7,9 @@ import { createHmac, timingSafeEqual } from 'node:crypto';
  * SHA-256, the release revision it was recorded at, and the tracks and cuts it speaks for. The key
  * never enters the graph.
  *
- * Limit (accepted MVP residual): signed bindings never expire and Release.revision is unsigned. A
- * signed record copied back into the graph holds at its own revision and at every later one, even after
- * the key holder removed it: revocation is not enforced. No claim the key holder never signed verifies.
- * Revocation and rollback protection need a ledger outside the graph.
+ * On their own, signed bindings never expire and Release.revision is unsigned, so a once-valid record
+ * copied back would verify. The evidence state witness (state-ledger.ts, D-020) closes that: analysis
+ * refuses any graph whose evidence state is not the committed witness head.
  */
 export type BindingKind = 'EVIDENCED_BY' | 'LISTED_IN';
 
