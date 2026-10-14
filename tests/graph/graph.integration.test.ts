@@ -9,6 +9,9 @@ import { FalkorDB } from 'falkordb';
 import { analyzeRelease, configFromEnv, graphHealth, GraphClient, seedGraph } from '../../packages/graph/src/index.ts';
 import { parseCueSheet, refWitness } from '../../packages/graph/src/seed.ts';
 
+// Test-only evidence key (not a secret). Real deployments set GRAPH_EVIDENCE_KEY server-side.
+process.env['GRAPH_EVIDENCE_KEY'] ??= 'test-only-evidence-key-not-a-secret-0123456789';
+
 const client = new GraphClient(configFromEnv());
 const count = async (cypher: string) => (await client.read<{ n: number }>(cypher))[0]?.n ?? -1;
 
@@ -239,6 +242,99 @@ test('tenant boundary: another tenant\'s license, source and excerpt cannot clea
     assert.equal(statusOf(a, 'ev-trk-basement-hum'), 'STALE');
     assert.ok(!a.nodes.some(n => n.id === 'lic-foreign') && !a.edges.some(e => e.id.startsWith('e-foreign')), 'foreign records are not returned');
   });
+});
+
+// --- Signed evidence bindings (#10) ---
+const V4_FILE = 'graph/seed/sources/license-basement-hum-v4.txt';
+async function v4Excerpt(text: string) {
+  const body = (await readFile(V4_FILE)).toString('utf8');
+  const at = body.indexOf(text);
+  const start = Array.from(body.slice(0, at)).length;
+  return { start, end: start + Array.from(text).length };
+}
+
+test('#10 negative: re-pointing a license\'s Source at the v4 file (review repro) cannot clear', async () => {
+  const sha = createHash('sha256').update(await readFile(V4_FILE)).digest('hex');
+  const grant = 'Grant: Synchronization rights for the motion picture WAD, Cut v4 (current distribution cut).';
+  const subj = 'Composition: "Basement Hum"';
+  const g = await v4Excerpt(grant); const sj = await v4Excerpt(subj);
+  await withVariant('rebind', null, async c => {
+    await c.write("MATCH (s:Source {id: 'src-mail-basement-hum'}) SET s.path = $p, s.sha256 = $sha, s.kind = 'license'", { p: V4_FILE, sha });
+    await c.write("MATCH (r:SourceRef {id: 'ref-mail-bh-scope'}) SET r.excerpt = $x, r.startOffset = $a, r.endOffset = $b", { x: grant, a: g.start, b: g.end });
+    await c.write("MATCH (r:SourceRef {id: 'ref-mail-bh-later'}) DETACH DELETE r");
+    await c.write("MATCH (:License {id: 'lic-basement-hum-v3'})-[e:VALID_FOR]->(:Cut {id: 'cut-wad-v3'}) DELETE e");
+    await c.write("MATCH (s:Source {id: 'src-mail-basement-hum'}) CREATE (:SourceRef {id: 'ref-atk-subj', tenantId: 't-wad', excerpt: $x, startOffset: $a, endOffset: $b})-[:EXCERPT_OF]->(s)", { x: subj, a: sj.start, b: sj.end });
+    await c.write("MATCH (:License {id: 'lic-basement-hum-v3'})-[e:COVERS]->() SET e.sourceRefIds = ['ref-atk-subj']");
+    await c.write("MATCH (l:License {id: 'lic-basement-hum-v3'}), (k:Cut {id: 'cut-wad-v4'}) CREATE (l)-[:VALID_FOR {id: 'e-rebind', sourceRefIds: ['ref-mail-bh-scope']}]->(k)");
+    const a = await analyzeRelease(c, 't-wad', 'rel-wad');
+    assert.ok(a && a.status === 'AVAILABLE');
+    assert.notEqual(a.clearance, 'ESTABLISHED');
+    assert.equal(statusOf(a, 'ev-unbound-licenses-cut-wad-v4'), 'UNKNOWN');
+    assert.notEqual(statusOf(a, 'ev-trk-basement-hum'), 'VERIFIED');
+  });
+});
+
+test('#10 negative: a new License bound to the real v4 file without a signature cannot clear', async () => {
+  const sha = createHash('sha256').update(await readFile(V4_FILE)).digest('hex');
+  const g = await v4Excerpt('Grant: Synchronization rights for the motion picture WAD, Cut v4 (current distribution cut).');
+  const sj = await v4Excerpt('Composition: "Basement Hum"');
+  await withVariant('unsigned', `
+    MATCH (t:Track {id: 'trk-basement-hum'}), (k:Cut {id: 'cut-wad-v4'})
+    CREATE (s:Source {id: 'src-forged', tenantId: 't-wad', kind: 'license', path: '${V4_FILE}', sha256: '${sha}'}),
+           (r1:SourceRef {id: 'ref-forged-subj', tenantId: 't-wad', excerpt: 'Composition: "Basement Hum"', startOffset: ${sj.start}, endOffset: ${sj.end}})-[:EXCERPT_OF]->(s),
+           (r2:SourceRef {id: 'ref-forged-grant', tenantId: 't-wad', excerpt: 'Grant: Synchronization rights for the motion picture WAD, Cut v4 (current distribution cut).', startOffset: ${g.start}, endOffset: ${g.end}})-[:EXCERPT_OF]->(s),
+           (l:License {id: 'lic-forged', tenantId: 't-wad', label: 'Forged license'})-[:EVIDENCED_BY {id: 'e-forged-ev', sig: '${'a'.repeat(64)}'}]->(s),
+           (l)-[:COVERS {id: 'e-forged-cov', sourceRefIds: ['ref-forged-subj']}]->(t),
+           (l)-[:VALID_FOR {id: 'e-forged-vf', sourceRefIds: ['ref-forged-grant']}]->(k)`, async c => {
+    const a = await analyzeRelease(c, 't-wad', 'rel-wad');
+    assert.ok(a && a.status === 'AVAILABLE');
+    assert.equal(a.clearance, 'GAP');
+    assert.equal(statusOf(a, 'ev-trk-basement-hum'), 'STALE');
+    assert.equal(statusOf(a, 'ev-unbound-licenses-cut-wad-v4'), 'UNKNOWN');
+  });
+});
+
+test('#10 negative: copying a valid signature onto another license binding does not verify', async () => {
+  await withVariant('sigcopy', `
+    MATCH (:License {id: 'lic-basement-hum-v4'})-[good:EVIDENCED_BY]->(s:Source)
+    MATCH (old:License {id: 'lic-basement-hum-v3'})-[bad:EVIDENCED_BY]->()
+    DELETE bad
+    WITH good, s, old
+    CREATE (old)-[:EVIDENCED_BY {id: 'e-copied', sig: good.sig}]->(s)
+    WITH old MATCH (k:Cut {id: 'cut-wad-v4'}), (t:Track {id: 'trk-basement-hum'})
+    MATCH (old)-[c:COVERS]->(t) SET c.sourceRefIds = ['ref-lic-bh4-composition']
+    CREATE (old)-[:VALID_FOR {id: 'e-copied-vf', sourceRefIds: ['ref-lic-bh4-grant']}]->(k)`, async c => {
+    const a = await analyzeRelease(c, 't-wad', 'rel-wad');
+    assert.ok(a && a.status === 'AVAILABLE');
+    assert.equal(statusOf(a, 'ev-unbound-licenses-cut-wad-v4'), 'UNKNOWN', 'a signature is bound to its own license id');
+  }, ['basement-hum-v4-license']);
+});
+
+test('#10 negative: re-pointing the current cut at another cut\'s signed cue sheet leaves coverage UNKNOWN', async () => {
+  await withVariant('sheetswap', "MATCH (k:Cut {id: 'cut-wad-v4'})-[e:LISTED_IN]->() MATCH (:Cut {id: 'cut-wad-v3'})-[v3:LISTED_IN]->(s3) CREATE (k)-[:LISTED_IN {id: 'e-swap', sig: v3.sig, sourceRefIds: v3.sourceRefIds}]->(s3) DELETE e", async c => {
+    const a = await analyzeRelease(c, 't-wad', 'rel-wad');
+    assert.ok(a && a.status === 'AVAILABLE');
+    assert.equal(a.clearance, 'UNKNOWN');
+    assert.match(a.evidence.find(e => e.id === 'ev-coverage-cut-wad-v4')!.statement, /not signed/);
+  });
+});
+
+test('#10 fail-closed: with no key or the wrong key, even genuine evidence never clears', async () => {
+  await withVariant('nokey', null, async c => {
+    const none = await analyzeRelease(c, 't-wad', 'rel-wad', { evidenceKey: null });
+    assert.ok(none && none.status === 'AVAILABLE');
+    assert.equal(none.clearance, 'UNKNOWN');
+    const wrong = await analyzeRelease(c, 't-wad', 'rel-wad', { evidenceKey: Buffer.from('wrong-key-wrong-key-wrong-key-wrong-key') });
+    assert.ok(wrong && wrong.status === 'AVAILABLE');
+    assert.equal(wrong.clearance, 'UNKNOWN');
+    const right = await analyzeRelease(c, 't-wad', 'rel-wad');
+    assert.ok(right && right.status === 'AVAILABLE');
+    assert.equal(right.clearance, 'ESTABLISHED');
+  }, ['basement-hum-v4-license']);
+});
+
+test('#10 seed refuses to run without an evidence key', async () => {
+  await assert.rejects(seedGraph(client, process.cwd(), { evidenceKey: null }), /GRAPH_EVIDENCE_KEY/);
 });
 
 test('witness grammar: incomplete or inconsistent cue sheets are not complete; malformed excerpts are refused', () => {
