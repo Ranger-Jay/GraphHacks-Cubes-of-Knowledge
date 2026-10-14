@@ -5,6 +5,7 @@ import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
+import { FalkorDB } from 'falkordb';
 import { analyzeRelease, configFromEnv, graphHealth, GraphClient, seedGraph } from '../../packages/graph/src/index.ts';
 
 const client = new GraphClient(configFromEnv());
@@ -23,7 +24,7 @@ test('seed is idempotent: a second run adds no nodes or edges', async () => {
 
 test('health is a real read of seeded releases', async () => {
   const h = await graphHealth(client);
-  assert.equal(h.ok, true);
+  assert.ok(h.ok && h.releases > 0);
 });
 
 test('current cut v4 has a GAP: Basement Hum is cleared only for the old cut; Night Drive is verified', async () => {
@@ -70,4 +71,52 @@ test('unreachable graph yields UNAVAILABLE with no evidence, paths, sources or a
   } finally {
     await dead.close();
   }
+});
+
+// Variant graphs: a separate, freshly seeded graph per case, deleted afterwards. The main graph is untouched.
+async function withVariant(name: string, mutate: string, check: (c: GraphClient) => Promise<void>) {
+  const c = new GraphClient({ ...configFromEnv(), graphName: `${configFromEnv().graphName}__variant_${name}` });
+  try {
+    await seedGraph(c, process.cwd());
+    await c.write(mutate);
+    await check(c);
+  } finally {
+    await c.close();
+    // Remove the whole variant graph key (test-only; the adapter exposes no delete operation).
+    const cfg = configFromEnv();
+    const db = await FalkorDB.connect({ socket: { host: cfg.host, port: cfg.port, ...(cfg.tls ? { tls: true as const } : {}) }, ...(cfg.username ? { username: cfg.username } : {}), ...(cfg.password ? { password: cfg.password } : {}) });
+    await db.selectGraph(c.config.graphName).delete().catch(() => undefined);
+    await db.close();
+  }
+}
+
+test('MISSING: a current-cut track with no covering license is a GAP with a clearance action', async () => {
+  await withVariant('missing', "MATCH (:License {id: 'lic-night-drive-v4'})-[e:COVERS]->() DELETE e", async c => {
+    const a = await analyzeRelease(c, 't-wad', 'rel-wad');
+    assert.ok(a && a.status === 'AVAILABLE');
+    assert.equal(a.clearance, 'GAP');
+    const nd = a.evidence.find(e => e.id === 'ev-trk-night-drive');
+    assert.equal(nd?.status, 'MISSING');
+    assert.ok(a.proposedActions.some(p => p.id === 'act-clear-trk-night-drive-cut-wad-v4'));
+  });
+});
+
+test('UNKNOWN: without complete cue-sheet coverage, absence is not asserted and no action is proposed', async () => {
+  await withVariant('unknown', "MATCH (s:Source {id: 'src-cue-v4'}) SET s.complete = false", async c => {
+    const a = await analyzeRelease(c, 't-wad', 'rel-wad');
+    assert.ok(a && a.status === 'AVAILABLE');
+    assert.equal(a.clearance, 'UNKNOWN');
+    assert.equal(a.evidence.find(e => e.id === 'ev-trk-basement-hum')?.status, 'UNKNOWN');
+    assert.equal(a.evidence.find(e => e.id === 'ev-trk-night-drive')?.status, 'VERIFIED');
+    assert.deepEqual(a.proposedActions, []);
+  });
+});
+
+test('ESTABLISHED: current-cut license evidence for every track clears the cut', async () => {
+  await withVariant('established', "MATCH (l:License {id: 'lic-basement-hum-v3'}), (c:Cut {id: 'cut-wad-v4'}) CREATE (l)-[:VALID_FOR {id: 'e-variant', sourceRefIds: ['ref-mail-bh-scope']}]->(c)", async c => {
+    const a = await analyzeRelease(c, 't-wad', 'rel-wad');
+    assert.ok(a && a.status === 'AVAILABLE');
+    assert.equal(a.clearance, 'ESTABLISHED');
+    assert.deepEqual(a.proposedActions, []);
+  });
 });
