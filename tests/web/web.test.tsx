@@ -4,7 +4,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { AnalysisView } from '../../apps/web/src/components/AnalysisView';
 import { HealthPanel } from '../../apps/web/src/components/HealthPanel';
 import { SceneMount, toSceneData, type SceneProps } from '../../apps/web/src/components/SceneMount';
-import { Shell, IDENTITY } from '../../apps/web/src/App';
+import { Shell, IDENTITY, SEEDED_RELEASE_ID } from '../../apps/web/src/App';
 import { getAnalysis, getGraphStatus, getHealth, type Fetcher } from '../../apps/web/src/api';
 import { parseRoute, nextRoute } from '../../apps/web/src/route';
 import { available, unavailable, graphDown, jsonResponse } from './fixtures';
@@ -113,4 +113,13 @@ test('P2-A: clicking a cited source keeps the release view (no 404)', () => {
     assert.ok(html.includes(`id="${decodeURIComponent(m[1]!.slice(1))}"`), `target exists for ${m[1]}`);
     assert.deepEqual(nextRoute(rel, m[1]!), rel);
   }
+});
+
+test('P2-B: home links to the seeded release rel-wad, not a track name', () => {
+  const html = renderToStaticMarkup(<Shell route={parseRoute('#/')} health={{ state: 'loading' }} graph={{ state: 'loading' }}
+    analysis={null} Scene={null} reducedMotion={false} selected={null} onSelect={() => {}} />);
+  assert.equal(SEEDED_RELEASE_ID, 'rel-wad');
+  assert.ok(html.includes('href="#/releases/rel-wad"'));
+  assert.ok(!html.includes('night-drive'));
+  assert.deepEqual(parseRoute('#/releases/rel-wad'), { name: 'release', releaseId: 'rel-wad' });
 });

@@ -6,6 +6,9 @@ import { AnalysisView } from './components/AnalysisView';
 import { SceneMount, toSceneData, type SceneProps } from './components/SceneMount';
 import { nextRoute, parseRoute, type Route } from './route';
 
+/** Seeded demo release (graph seed: Release rel-wad, tenant t-wad). */
+export const SEEDED_RELEASE_ID = 'rel-wad';
+
 export const IDENTITY = 'Cubes of Knowledge: A company brain built on FalkorDB, with traceable decisions and persistent agent memory.';
 
 export function Shell({ route, health, graph, analysis, Scene, reducedMotion, selected, onSelect }: {
@@ -22,7 +25,7 @@ export function Shell({ route, health, graph, analysis, Scene, reducedMotion, se
         <HealthPanel health={health} graph={graph} />
         {route.name === 'home' && (
           <section className="panel" aria-labelledby="rel-h"><h2 id="rel-h">Releases</h2>
-            <p>Open a release analysis: <a href="#/releases/night-drive">night-drive</a>. Results come only from the API.</p></section>)}
+            <p>Open a release analysis: <a href={`#/releases/${SEEDED_RELEASE_ID}`}>{SEEDED_RELEASE_ID}</a>. Results come only from the API.</p></section>)}
         {route.name === 'release' && <>
           <AnalysisView releaseId={route.releaseId} result={analysis} />
           <SceneMount Scene={Scene} data={toSceneData(current, selected)} onSelectNode={onSelect} reducedMotion={reducedMotion} />
