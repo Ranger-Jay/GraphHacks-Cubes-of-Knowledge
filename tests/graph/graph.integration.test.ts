@@ -6,7 +6,8 @@ import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { FalkorDB } from 'falkordb';
-import { analyzeRelease, configFromEnv, graphHealth, GraphClient, seedGraph } from '../../packages/graph/src/index.ts';
+import { analyzeRelease, bindingSig, configFromEnv, graphHealth, GraphClient, seedGraph } from '../../packages/graph/src/index.ts';
+import { bindingHolds } from '../../packages/graph/src/evidence-key.ts';
 import { parseCueSheet, refWitness } from '../../packages/graph/src/seed.ts';
 
 // Test-only evidence key (not a secret). Real deployments set GRAPH_EVIDENCE_KEY server-side.
@@ -331,6 +332,83 @@ test('#10 fail-closed: with no key or the wrong key, even genuine evidence never
     assert.ok(right && right.status === 'AVAILABLE');
     assert.equal(right.clearance, 'ESTABLISHED');
   }, ['basement-hum-v4-license']);
+});
+
+// --- #15: a binding signature covers the whole claim and the revision it was recorded at ---
+type Captured = { sig: string; rev: number; tracks: string[]; cuts: string[]; path: string; sha256: string };
+async function captureV4Binding(): Promise<Captured> {
+  let got: Captured | undefined;
+  await withVariant('capture', null, async c => {
+    got = (await c.read<Captured>(`MATCH (:License {id: 'lic-basement-hum-v4'})-[e:EVIDENCED_BY]->(s:Source)
+      RETURN e.sig AS sig, e.rev AS rev, e.tracks AS tracks, e.cuts AS cuts, s.path AS path, s.sha256 AS sha256`))[0];
+  }, ['basement-hum-v4-license']);
+  assert.ok(got && got.rev === 2, 'genuine v4 binding is recorded at r2');
+  return got;
+}
+// Base seed only, then: rename the v3 license to the signed id, rebind its Source to the real v4 file,
+// replay every captured binding property, and align COVERS / VALID_FOR to the v4 file text.
+async function renameReplay(cap: Captured, extra: string | null, check: (c: GraphClient) => Promise<void>) {
+  const g = await v4Excerpt('Grant: Synchronization rights for the motion picture WAD, Cut v4 (current distribution cut).');
+  const sj = await v4Excerpt('Composition: "Basement Hum"');
+  await withVariant('rename_replay', null, async c => {
+    await c.write(`MATCH (l:License {id: 'lic-basement-hum-v3'})-[eb:EVIDENCED_BY]->(s:Source)
+      SET l.id = 'lic-basement-hum-v4', s.path = $path, s.sha256 = $sha256, s.kind = 'license'
+      DELETE eb
+      WITH l, s CREATE (l)-[:EVIDENCED_BY {id: 'e-replayed', sig: $sig, rev: $rev, tracks: $tracks, cuts: $cuts}]->(s)`, cap);
+    await c.write(`MATCH (s:Source {id: 'src-mail-basement-hum'})
+      CREATE (:SourceRef {id: 'ref-rp-subj', tenantId: 't-wad', excerpt: 'Composition: "Basement Hum"', startOffset: $ss, endOffset: $se})-[:EXCERPT_OF]->(s),
+             (:SourceRef {id: 'ref-rp-grant', tenantId: 't-wad', excerpt: 'Grant: Synchronization rights for the motion picture WAD, Cut v4 (current distribution cut).', startOffset: $gs, endOffset: $ge})-[:EXCERPT_OF]->(s)`,
+      { ss: sj.start, se: sj.end, gs: g.start, ge: g.end });
+    await c.write(`MATCH (l:License {id: 'lic-basement-hum-v4'})-[cov:COVERS]->(), (l)-[vf:VALID_FOR]->(), (k:Cut {id: 'cut-wad-v4'})
+      SET cov.sourceRefIds = ['ref-rp-subj'] DELETE vf
+      WITH l, k CREATE (l)-[:VALID_FOR {id: 'e-rp-vf', sourceRefIds: ['ref-rp-grant']}]->(k)`);
+    if (extra) await c.write(extra);
+    await check(c);
+  });
+}
+
+test('#15 negative: renaming a license to a signed id and replaying its binding cannot clear (review repro)', async () => {
+  const cap = await captureV4Binding();
+  await renameReplay(cap, null, async c => {
+    const a = await analyzeRelease(c, 't-wad', 'rel-wad');
+    assert.ok(a && a.status === 'AVAILABLE');
+    assert.equal(a.revision, 'rel-wad@r1');
+    assert.notEqual(a.clearance, 'ESTABLISHED');
+    assert.notEqual(statusOf(a, 'ev-trk-basement-hum'), 'VERIFIED');
+    assert.equal(statusOf(a, 'ev-unbound-licenses-cut-wad-v4'), 'UNKNOWN', 'a binding recorded at r2 does not hold at r1');
+  });
+});
+
+test('#15 limit: replaying a complete signed record with its revision restores exactly the signed state', async () => {
+  // Documented boundary, not a fix: the graph can hold a copy of any signed record. Restoring the full
+  // record (binding + revision) reproduces what the key holder signed at r2. Revocation and rollback
+  // protection need a ledger outside the graph (see graph/schema/README.md).
+  const cap = await captureV4Binding();
+  await renameReplay(cap, "MATCH (r:Release {id: 'rel-wad'}) SET r.revision = 'rel-wad@r2'", async c => {
+    const a = await analyzeRelease(c, 't-wad', 'rel-wad');
+    assert.ok(a && a.status === 'AVAILABLE');
+    assert.equal(a.revision, 'rel-wad@r2', 'only the signed revision is reachable');
+    assert.equal(a.clearance, 'ESTABLISHED');
+  });
+});
+
+test('#15 unit: a binding holds only for its own claim, revision window, track and cut', () => {
+  const key = Buffer.from('unit-test-key-unit-test-key-unit-test-key');
+  const claim = { kind: 'EVIDENCED_BY' as const, tenantId: 't', releaseId: 'rel', subjectId: 'lic', path: 'p', sha256: 'h' };
+  const stored = { rev: 2, tracks: ['trk-a'], cuts: ['cut-4'] };
+  const sig = bindingSig(key, { ...claim, ...stored });
+  const holds = (s: object, cl: object, use: object) => bindingHolds(key, { sig, ...stored, ...s }, { ...claim, ...cl }, { currentRev: 2, trackId: 'trk-a', cutId: 'cut-4', ...use });
+  assert.equal(holds({}, {}, {}), true);
+  assert.equal(holds({}, {}, { currentRev: 3 }), true, 'still valid at a later revision');
+  assert.equal(holds({}, {}, { currentRev: 1 }), false, 'not before the revision it was recorded at');
+  assert.equal(holds({}, {}, { currentRev: null }), false, 'unparseable release revision');
+  assert.equal(holds({}, {}, { trackId: 'trk-b' }), false, 'track not named');
+  assert.equal(holds({}, {}, { cutId: 'cut-3' }), false, 'cut not named');
+  assert.equal(holds({ rev: 1 }, {}, {}), false, 'revision property edited');
+  assert.equal(holds({ tracks: ['trk-a', 'trk-b'] }, {}, { trackId: 'trk-b' }), false, 'track list widened');
+  assert.equal(holds({}, { releaseId: 'other' }, {}), false, 'other release');
+  assert.equal(holds({}, { subjectId: 'lic2' }, {}), false, 'other license');
+  assert.equal(bindingHolds(null, { sig, ...stored }, claim, { currentRev: 2 }), false, 'no key');
 });
 
 test('#10 seed refuses to run without an evidence key', async () => {
