@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import type { GraphClient, ParamValue } from './client.js';
 import { cueEntryOf, parseCueSheet, scopeOf, subjectOf } from './witness.js';
 import { bindingSig, evidenceKeyFromEnv, revisionNumber } from './evidence-key.js';
+import { ledgerFromEnv, witnessedWrite, type LedgerConfig } from './state-ledger.js';
 
 /**
  * Synthetic studio seed. Source text lives in graph/seed/sources/. Every excerpt is located in the
@@ -176,6 +177,12 @@ export interface SeedOptions {
   bundles?: string[];
   /** Server evidence key used to sign EVIDENCED_BY / LISTED_IN bindings. Default: GRAPH_EVIDENCE_KEY. */
   evidenceKey?: Buffer | null;
+  /** Evidence state witness. Default: GRAPH_WITNESS_DIR + evidence key. Required (seeding without one is refused). */
+  witness?: LedgerConfig | null;
+  /** Create a new witness chain (explicit; refused if one exists). */
+  initWitness?: boolean;
+  /** Finish this same seed after a crash left the witness PENDING. */
+  resumeWitness?: boolean;
 }
 
 export async function seedGraph(client: GraphClient, repoRoot: string, options: SeedOptions = {}): Promise<SeedResult> {
@@ -199,61 +206,66 @@ export async function seedGraph(client: GraphClient, repoRoot: string, options: 
   if (rev === null) throw new Error(`Seed release ${RELEASE} has no valid revision`);
   const key = options.evidenceKey !== undefined ? options.evidenceKey : evidenceKeyFromEnv();
   if (!key) throw new Error('GRAPH_EVIDENCE_KEY (32+ characters) is required to seed signed evidence bindings');
-  const sourceDir = join(repoRoot, 'graph', 'seed', 'sources');
-  const texts = new Map<string, string>();
-  const fileOf = new Map<string, { path: string; sha256: string }>();
-  for (const s of SOURCES_ALL) {
-    const bytes = await readFile(join(sourceDir, s.file));
-    texts.set(s.id, bytes.toString('utf8'));
-    const text = bytes.toString('utf8');
-    let witness: Record<string, ParamValue> = { complete: false };
-    if (s.kind === 'cue_sheet') {
-      const cue = parseCueSheet(text);
-      // Every cue line in the file must be cited by a cue_entry excerpt, or the seed is incomplete.
-      const cited = new Set(REFS_ALL.filter(r => r.source === s.id && r.role === 'cue_entry').map(r => r.excerpt));
-      for (const e of cue.entries) {
-        if (!cited.has(`Cue ${e.index}: "${e.title}"`)) throw new Error(`Seed manifest misses cue ${e.index} of ${s.id}`);
+  const witness = options.witness !== undefined ? options.witness : ledgerFromEnv(key);
+  const intent = `seed:${SEED_VERSION}:${(options.bundles ?? []).join('+') || 'base'}`;
+  const edges = await witnessedWrite(client, witness, TENANT, intent, async () => {
+    const sourceDir = join(repoRoot, 'graph', 'seed', 'sources');
+    const texts = new Map<string, string>();
+    const fileOf = new Map<string, { path: string; sha256: string }>();
+    for (const s of SOURCES_ALL) {
+      const bytes = await readFile(join(sourceDir, s.file));
+      texts.set(s.id, bytes.toString('utf8'));
+      const text = bytes.toString('utf8');
+      let cueWitness: Record<string, ParamValue> = { complete: false };
+      if (s.kind === 'cue_sheet') {
+        const cue = parseCueSheet(text);
+        // Every cue line in the file must be cited by a cue_entry excerpt, or the seed is incomplete.
+        const cited = new Set(REFS_ALL.filter(r => r.source === s.id && r.role === 'cue_entry').map(r => r.excerpt));
+        for (const e of cue.entries) {
+          if (!cited.has(`Cue ${e.index}: "${e.title}"`)) throw new Error(`Seed manifest misses cue ${e.index} of ${s.id}`);
+        }
+        cueWitness = { complete: cue.complete, cutVersion: cue.cutVersion, declaredCueCount: cue.declaredCueCount, cueEntryCount: cue.entries.length };
       }
-      witness = { complete: cue.complete, cutVersion: cue.cutVersion, declaredCueCount: cue.declaredCueCount, cueEntryCount: cue.entries.length };
+      const path = `graph/seed/sources/${s.file}`;
+      const sha256 = createHash('sha256').update(bytes).digest('hex');
+      fileOf.set(s.id, { path, sha256 });
+      await client.write(NODE_MERGE.Source, { id: s.id, tenantId: TENANT, props: {
+        tenantId: TENANT, kind: s.kind, path, sha256, offsetUnit: 'unicode-code-point', ...cueWitness
+      } });
     }
-    const path = `graph/seed/sources/${s.file}`;
-    const sha256 = createHash('sha256').update(bytes).digest('hex');
-    fileOf.set(s.id, { path, sha256 });
-    await client.write(NODE_MERGE.Source, { id: s.id, tenantId: TENANT, props: {
-      tenantId: TENANT, kind: s.kind, path, sha256, offsetUnit: 'unicode-code-point', ...witness
-    } });
-  }
-  for (const r of REFS_ALL) {
-    const text = texts.get(r.source);
-    if (text === undefined) throw new Error(`Unknown source ${r.source}`);
-    const { startOffset, endOffset } = locateExcerpt(text, r.excerpt);
-    await client.write(NODE_MERGE.SourceRef, { id: r.id, tenantId: TENANT, props: {
-      tenantId: TENANT, sourceId: r.source, role: r.role, excerpt: r.excerpt, startOffset, endOffset, ...refWitness(r.role, r.excerpt)
-    } });
-  }
-  for (const n of NODES_ALL) await client.write(NODE_MERGE[n.label], { id: n.id, tenantId: TENANT, props: n.props });
-  let edges = 0;
-  const all: EdgeSpec[] = [
-    ...EDGES_ALL,
-    ...REFS_ALL.map(r => ({ id: `e-${r.id}-excerpt-of`, type: 'EXCERPT_OF' as const, from: r.id, to: r.source }))
-  ];
-  for (const e of all) {
-    for (const ref of e.refs ?? []) if (!REFS_ALL.some(r => r.id === ref)) throw new Error(`Edge ${e.id} cites unknown ref ${ref}`);
-    const props: Record<string, ParamValue> = { ...(e.props ?? {}), sourceRefIds: e.refs ?? [] };
-    if (e.type === 'EVIDENCED_BY' || e.type === 'LISTED_IN') {
-      const f = fileOf.get(e.to);
-      if (!f) throw new Error(`Binding ${e.id} targets an undeclared source`);
-      // The signature covers the whole claim: what the license covers and is valid for, at this revision.
-      const tracks = e.type === 'EVIDENCED_BY' ? EDGES_ALL.filter(x => x.type === 'COVERS' && x.from === e.from).map(x => x.to).sort() : [];
-      const cuts = e.type === 'EVIDENCED_BY' ? EDGES_ALL.filter(x => x.type === 'VALID_FOR' && x.from === e.from).map(x => x.to).sort() : [e.from];
-      props['rev'] = rev;
-      props['tracks'] = tracks;
-      props['cuts'] = cuts;
-      props['sig'] = bindingSig(key, { kind: e.type, tenantId: TENANT, releaseId: RELEASE, subjectId: e.from, path: f.path, sha256: f.sha256, rev, tracks, cuts });
+    for (const r of REFS_ALL) {
+      const text = texts.get(r.source);
+      if (text === undefined) throw new Error(`Unknown source ${r.source}`);
+      const { startOffset, endOffset } = locateExcerpt(text, r.excerpt);
+      await client.write(NODE_MERGE.SourceRef, { id: r.id, tenantId: TENANT, props: {
+        tenantId: TENANT, sourceId: r.source, role: r.role, excerpt: r.excerpt, startOffset, endOffset, ...refWitness(r.role, r.excerpt)
+      } });
     }
-    const rows = await client.write<{ n: number }>(edgeMerge(labels, e.type, e.from, e.to), { id: e.id, from: e.from, to: e.to, tenantId: TENANT, props });
-    if (rows[0]?.n !== 1) throw new Error(`Edge ${e.id} endpoints missing`);
-    edges++;
-  }
+    for (const n of NODES_ALL) await client.write(NODE_MERGE[n.label], { id: n.id, tenantId: TENANT, props: n.props });
+    let edges = 0;
+    const all: EdgeSpec[] = [
+      ...EDGES_ALL,
+      ...REFS_ALL.map(r => ({ id: `e-${r.id}-excerpt-of`, type: 'EXCERPT_OF' as const, from: r.id, to: r.source }))
+    ];
+    for (const e of all) {
+      for (const ref of e.refs ?? []) if (!REFS_ALL.some(r => r.id === ref)) throw new Error(`Edge ${e.id} cites unknown ref ${ref}`);
+      const props: Record<string, ParamValue> = { ...(e.props ?? {}), sourceRefIds: e.refs ?? [] };
+      if (e.type === 'EVIDENCED_BY' || e.type === 'LISTED_IN') {
+        const f = fileOf.get(e.to);
+        if (!f) throw new Error(`Binding ${e.id} targets an undeclared source`);
+        // The signature covers the whole claim: what the license covers and is valid for, at this revision.
+        const tracks = e.type === 'EVIDENCED_BY' ? EDGES_ALL.filter(x => x.type === 'COVERS' && x.from === e.from).map(x => x.to).sort() : [];
+        const cuts = e.type === 'EVIDENCED_BY' ? EDGES_ALL.filter(x => x.type === 'VALID_FOR' && x.from === e.from).map(x => x.to).sort() : [e.from];
+        props['rev'] = rev;
+        props['tracks'] = tracks;
+        props['cuts'] = cuts;
+        props['sig'] = bindingSig(key, { kind: e.type, tenantId: TENANT, releaseId: RELEASE, subjectId: e.from, path: f.path, sha256: f.sha256, rev, tracks, cuts });
+      }
+      const rows = await client.write<{ n: number }>(edgeMerge(labels, e.type, e.from, e.to), { id: e.id, from: e.from, to: e.to, tenantId: TENANT, props });
+      if (rows[0]?.n !== 1) throw new Error(`Edge ${e.id} endpoints missing`);
+      edges++;
+    }
+    return edges;
+  }, { init: options.initWitness === true, resume: options.resumeWitness === true });
   return { seedVersion: SEED_VERSION, sources: SOURCES_ALL.length, refs: REFS_ALL.length, nodes: new Set(labels.keys()).size, edges };
 }

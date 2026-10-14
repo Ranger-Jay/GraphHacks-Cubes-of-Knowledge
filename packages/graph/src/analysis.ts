@@ -8,6 +8,7 @@ import { QUERIES } from './queries.js';
 import { SourceFiles } from './verify.js';
 import { cueEntryOf, parseCueSheet, scopeOf, subjectOf } from './witness.js';
 import { bindingHolds, evidenceKeyFromEnv, revisionNumber } from './evidence-key.js';
+import { checkWitness, ledgerFromEnv, type LedgerConfig } from './state-ledger.js';
 
 interface CurrentCutRow {
   releaseId: string; releaseTitle: string; revision: string; currentCutEdgeId: string; currentCutRefs: string[] | null;
@@ -31,6 +32,8 @@ export interface AnalyzeOptions {
   sourceRoot?: string;
   /** Server evidence key (verifies binding HMACs). Default: GRAPH_EVIDENCE_KEY. Absent → nothing verifies. */
   evidenceKey?: Buffer | null;
+  /** Evidence state witness (outside the graph). Default: GRAPH_WITNESS_DIR + evidence key. Absent → fail closed. */
+  witness?: LedgerConfig | null;
 }
 
 export function unavailable(reason: UnavailableAnalysis['reason'], message: string, requestId: string = randomUUID()): UnavailableAnalysis {
@@ -51,6 +54,8 @@ const refs = (v: string[] | null | undefined): string[] => (Array.isArray(v) ? v
  *    graph's USES_TRACK set must equal the file's cue list, each edge citing its own verified cue line.
  *  - License: COVERS needs a verified excerpt naming the track; VALID_FOR needs a verified scope excerpt
  *    naming exactly this cut number; both from the license's own evidence file.
+ *  - Witness (D-020): the graph's evidence state must equal the committed head of the outside-graph
+ *    witness chain (state-ledger.ts); otherwise clearance is UNKNOWN and no graph content is returned.
  *  - ESTABLISHED requires complete coverage, every track VERIFIED and no integrity item; GAP requires
  *    complete coverage and a STALE/MISSING track; everything else is UNKNOWN.
  */
@@ -62,6 +67,19 @@ export async function analyzeRelease(client: GraphClient, tenantId: string, rele
   try {
     const head = (await client.read<CurrentCutRow>(QUERIES.READ_RELEASE_CURRENT_CUT, { tenantId, releaseId }))[0];
     if (!head) return null;
+
+    // D-020: trust nothing in the graph unless its evidence state is the committed witness head.
+    const witness = await checkWitness(client, o.witness !== undefined ? o.witness : ledgerFromEnv(key), tenantId, releaseId);
+    if (!witness.ok) {
+      const blocked: AvailableAnalysis = {
+        status: 'AVAILABLE', requestId, releaseId: head.releaseId, cutId: head.cutId, revision: head.revision, clearance: 'UNKNOWN',
+        summary: `${head.cutLabel}: clearance cannot be established because the graph is not the witnessed evidence state.`,
+        evidence: [{ id: `ev-witness-${head.releaseId}`, status: 'UNKNOWN',
+          statement: `Graph evidence was not used: ${witness.reason}. Nothing in this graph is counted until it matches the evidence witness.`, sourceRefIds: [] }],
+        nodes: [{ id: head.releaseId, label: head.releaseTitle, kind: 'Release', sourceRefIds: [] }], edges: [], sources: [], proposedActions: []
+      };
+      return blocked;
+    }
     const rows = await client.read<TrackRow>(QUERIES.READ_CUT_TRACK_LICENSES, { cutId: head.cutId, tenantId });
 
     // Fetch and verify every excerpt the graph cites for this cut.
