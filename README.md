@@ -32,6 +32,14 @@ npm run verify
 
 On PowerShell, use `Copy-Item .env.example .env` instead of cp. Environment values are local; never commit .env. API scripts load the root .env using Node's native env-file support.
 
+Graph evidence signing requires a server-only `GRAPH_EVIDENCE_KEY` in each environment. Generate a separate key with:
+
+```sh
+node --input-type=module -e "import {randomBytes} from 'node:crypto'; console.log(randomBytes(32).toString('hex'))"
+```
+
+Store the output only in local/server secret configuration. Do not prefix it with `VITE_`, include it in the browser bundle, or reuse the disposable CI key. An unset key must fail closed; adding the variable does not establish graph integration, revocation enforcement or rollback protection. Rotation/re-signing needs the graph lane's migration procedure and independent verification.
+
 Start local Docker on a host where Docker is actually installed:
 
 ```sh
