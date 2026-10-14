@@ -6,6 +6,8 @@ Source of truth: `packages/graph/src/queries.ts`. Callers choose a name and para
 | --- | --- | --- |
 | HEALTH | none | `releases` count (ready only when > 0) |
 | READ_RELEASE_CURRENT_CUT | releaseId, tenantId | release, revision, current cut, cue-sheet coverage |
+| READ_CUE_ENTRIES | sourceId, tenantId | parsed cue entries (index, title) of one cue sheet |
+| READ_REF_WITNESSES | ids[], tenantId | role, source and parsed subject/scope of cited excerpts |
 | READ_CUT_TRACK_LICENSES | cutId, tenantId | each track with every covering license and the cuts it is valid for |
 | READ_SOURCE_REFS | ids[], tenantId | exact excerpts with path, sha256, offsets |
 
