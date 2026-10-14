@@ -1,0 +1,1335 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cubes of Knowledge • Cinematic 3D Experience</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'system-ui', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'monospace'],
+                    },
+                    colors: {
+                        cubeCyan: '#00e5ff',
+                        evidenceRed: '#ff1744',
+                        sunGold: '#ffb300',
+                        royGold: '#ffd700',
+                        avaPurple: '#b388ff',
+                        guzGreen: '#00e676',
+                        kannyOrange: '#ffb74d',
+                        serenaTeal: '#80cbc4'
+                    }
+                }
+            }
+        }
+    </script>
+    <!-- Three.js CDN -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: #02040a;
+            font-family: 'Inter', sans-serif;
+        }
+        #canvas-container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+        }
+        .hud-overlay {
+            position: absolute;
+            z-index: 10;
+            pointer-events: none;
+        }
+        .interactive {
+            pointer-events: auto;
+        }
+
+        /* Quiet-Alive Agent Rig Styling */
+        .agent-portrait-rig {
+            position: relative;
+            width: 180px;
+            height: 180px;
+            margin: 0 auto;
+            border-radius: 50%;
+            overflow: hidden;
+            box-shadow: 0 0 30px rgba(0, 229, 255, 0.25);
+            transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.4s ease;
+        }
+        .agent-portrait-img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            transform-origin: center bottom;
+        }
+
+        /* Natural Subtle Breathing */
+        @keyframes subtle-breathing {
+            0%, 100% { transform: translateY(0px) scale(1.0); }
+            50% { transform: translateY(-2px) scale(1.015); }
+        }
+        .animate-breathing {
+            animation: subtle-breathing 4s infinite ease-in-out;
+        }
+
+        /* Nods and Shakes */
+        @keyframes nod-affirmative {
+            0% { transform: translateY(0); }
+            25% { transform: translateY(6px); }
+            50% { transform: translateY(-2px); }
+            75% { transform: translateY(4px); }
+            100% { transform: translateY(0); }
+        }
+        .animate-nod {
+            animation: nod-affirmative 0.75s ease-in-out;
+        }
+
+        @keyframes shake-negative {
+            0% { transform: translateX(0); }
+            20% { transform: translateX(-6px) rotate(-1.5deg); }
+            40% { transform: translateX(6px) rotate(1.5deg); }
+            60% { transform: translateX(-4px) rotate(-1deg); }
+            80% { transform: translateX(4px) rotate(1deg); }
+            100% { transform: translateX(0); }
+        }
+        .animate-shake {
+            animation: shake-negative 0.75s ease-in-out;
+        }
+
+        /* Welcoming Smile & Head Tilt */
+        @keyframes warm-greeting {
+            0% { transform: scale(1.0) rotate(0deg); }
+            35% { transform: scale(1.025) rotate(1.5deg); }
+            70% { transform: scale(1.015) rotate(-1deg); }
+            100% { transform: scale(1.0) rotate(0deg); }
+        }
+        .animate-greeting {
+            animation: warm-greeting 1.2s ease-in-out;
+        }
+
+        /* Viseme Mouth Morph Overlay */
+        .viseme-mouth {
+            position: absolute;
+            bottom: 38px;
+            left: 50%;
+            transform: translateX(-50%);
+            border-radius: 50%;
+            transition: all 0.08s ease;
+            pointer-events: none;
+        }
+        .viseme-rest { width: 14px; height: 2px; background: rgba(40, 10, 20, 0.6); }
+        .viseme-small { width: 16px; height: 6px; background: rgba(30, 8, 16, 0.85); border: 1px solid rgba(255, 180, 190, 0.4); }
+        .viseme-medium { width: 20px; height: 11px; background: rgba(20, 5, 12, 0.9); border: 1px solid rgba(255, 180, 190, 0.5); }
+        .viseme-wide { width: 24px; height: 16px; background: rgba(15, 3, 10, 0.95); border: 1.5px solid rgba(255, 180, 190, 0.6); }
+        .viseme-smile { width: 22px; height: 7px; background: rgba(40, 10, 20, 0.7); border-bottom: 2px solid rgba(255, 200, 210, 0.8); border-radius: 0 0 12px 12px; }
+
+        /* Blinking Overlay */
+        .eyelid-overlay {
+            position: absolute;
+            top: 48px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 74px;
+            height: 12px;
+            pointer-events: none;
+            display: flex;
+            justify-content: space-between;
+        }
+        .eyelid {
+            width: 24px;
+            height: 0px;
+            background: rgba(30, 20, 45, 0.95);
+            border-radius: 50%;
+            transition: height 0.08s ease;
+        }
+        .blinking .eyelid {
+            height: 14px;
+        }
+
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar { width: 4px; }
+        ::-webkit-scrollbar-track { background: rgba(15, 23, 42, 0.6); }
+        ::-webkit-scrollbar-thumb { background: rgba(0, 229, 255, 0.4); border-radius: 2px; }
+
+        /* Reduced Motion Mode */
+        body.reduced-motion * {
+            animation: none !important;
+            transition-duration: 0.01ms !important;
+        }
+    </style>
+</head>
+<body class="bg-[#02040a] text-slate-100 select-none">
+
+    <div id="canvas-container"></div>
+
+    <!-- TOP HUD: System Telemetry & Executive Authority Bar -->
+    <header class="hud-overlay w-full top-0 left-0 p-5 flex flex-wrap justify-between items-center gap-3">
+        <!-- Title & Status -->
+        <div class="flex items-center space-x-3 interactive bg-slate-950/80 backdrop-blur-md px-4 py-2.5 rounded-xl border border-cyan-500/30 shadow-2xl">
+            <div id="db-status-dot" class="w-3 h-3 rounded-full bg-cyan-400 animate-pulse"></div>
+            <div>
+                <span class="font-mono text-sm tracking-widest text-cyan-300 font-bold block">CUBES OF KNOWLEDGE</span>
+                <span id="db-status-label" class="text-[10px] font-mono text-slate-400">FALKORDB BRAIN // STATUS: <span class="text-cyan-400 font-semibold">AVAILABLE</span></span>
+            </div>
+        </div>
+
+        <!-- Executive Authority Deck: Kanny & Serena -->
+        <div class="hidden md:flex items-center space-x-4 interactive bg-slate-950/80 backdrop-blur-md px-5 py-2 rounded-xl border border-slate-800 text-xs font-mono">
+            <!-- Kanny -->
+            <div id="kanny-pill" class="flex items-center space-x-2.5 cursor-pointer hover:bg-slate-900/80 p-1.5 rounded-lg transition-colors" title="Kanny • Human Studio Owner (Approval Authority)">
+                <img src="avatars/kanny_avatar_front.png" alt="Kanny" class="w-7 h-7 rounded-full border border-amber-400/80 object-cover">
+                <div>
+                    <div class="text-amber-300 font-bold text-[11px] flex items-center gap-1">
+                        KANNY <span class="text-[9px] bg-amber-500/20 text-amber-300 px-1 rounded">OWNER</span>
+                    </div>
+                    <div class="text-[10px] text-slate-400">Approval Authority</div>
+                </div>
+            </div>
+            <div class="text-slate-700">|</div>
+            <!-- Serena -->
+            <div id="serena-pill" class="flex items-center space-x-2.5 cursor-pointer hover:bg-slate-900/80 p-1.5 rounded-lg transition-colors" title="Serena • Human Reader (Legal Compliance & Audit)">
+                <img src="avatars/serena_avatar_front.png" alt="Serena" class="w-7 h-7 rounded-full border border-teal-400/80 object-cover">
+                <div>
+                    <div class="text-teal-300 font-bold text-[11px] flex items-center gap-1">
+                        SERENA <span class="text-[9px] bg-teal-500/20 text-teal-300 px-1 rounded">READER</span>
+                    </div>
+                    <div class="text-[10px] text-slate-400">Read-Only Compliance</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- System Controls -->
+        <div class="interactive flex items-center space-x-2">
+            <!-- Audio Toggle (Starts Muted by Default) -->
+            <button id="audio-toggle-btn" class="bg-slate-900/80 hover:bg-slate-800 text-amber-300 border border-amber-500/40 px-3 py-2 rounded-xl text-xs font-mono transition-all flex items-center space-x-1.5 shadow-lg">
+                <span id="audio-icon">🔇</span>
+                <span id="audio-label">MUTED</span>
+            </button>
+            <!-- Database State Toggle -->
+            <button id="outage-toggle-btn" class="bg-cyan-950/40 hover:bg-cyan-900/60 text-cyan-300 border border-cyan-500/40 px-3 py-2 rounded-xl text-xs font-mono transition-all">
+                SIMULATE OUTAGE
+            </button>
+            <!-- Reduced Motion -->
+            <button id="motion-toggle-btn" class="bg-slate-900/80 hover:bg-slate-800 text-slate-300 border border-slate-700 px-3 py-2 rounded-xl text-xs font-mono transition-all" title="Toggle Reduced Motion">
+                MOTION: ON
+            </button>
+            <!-- Help -->
+            <button id="help-btn" class="bg-slate-900/80 hover:bg-slate-800 text-slate-300 border border-slate-700 px-3 py-2 rounded-xl text-xs font-mono transition-all">
+                GUIDE [?]
+            </button>
+        </div>
+    </header>
+
+    <!-- FLOATING CAMERA VIEW SELECTOR (Bottom Left) -->
+    <div class="hud-overlay bottom-6 left-6 interactive flex flex-wrap items-center gap-2 bg-slate-950/80 backdrop-blur-md p-2 rounded-xl border border-slate-800 text-xs font-mono shadow-2xl">
+        <span class="text-slate-500 text-[10px] px-2 uppercase tracking-wider">Focus:</span>
+        <button id="cam-cube" class="px-3 py-1.5 bg-cyan-950/40 hover:bg-cyan-900/70 text-cyan-300 border border-cyan-500/40 rounded-lg transition-all font-semibold">
+            COMPANY CUBE
+        </button>
+        <button id="cam-roy" class="px-3 py-1.5 bg-amber-950/30 hover:bg-amber-900/60 text-amber-300 border border-amber-500/40 rounded-lg transition-all">
+            ROY [GOLD]
+        </button>
+        <button id="cam-ava" class="px-3 py-1.5 bg-purple-950/30 hover:bg-purple-900/60 text-purple-300 border border-purple-500/40 rounded-lg transition-all">
+            AVA [PURPLE]
+        </button>
+        <button id="cam-guz" class="px-3 py-1.5 bg-emerald-950/30 hover:bg-emerald-900/60 text-emerald-300 border border-emerald-500/40 rounded-lg transition-all">
+            GUZ [GREEN]
+        </button>
+        <button id="cam-reset" class="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-slate-400 border border-slate-700 rounded-lg transition-all">
+            RESET [R]
+        </button>
+    </div>
+
+    <!-- OUTAGE BANNER (Hidden until Outage) -->
+    <div id="outage-banner" class="hud-overlay top-24 left-1/2 -translate-x-1/2 w-11/12 max-w-xl hidden bg-red-950/90 border border-red-500/80 rounded-xl p-3 text-center shadow-2xl backdrop-blur-md transition-all">
+        <div class="flex items-center justify-center space-x-2 text-red-300 font-mono text-xs font-bold">
+            <span class="animate-ping w-2 h-2 rounded-full bg-red-500"></span>
+            <span>DATABASE OUTAGE: Proof paths revoked. Task execution blocked.</span>
+        </div>
+        <p class="text-[11px] text-red-200/80 font-mono mt-1">Presentation truth maintained: Graph proof queries fail closed to UNKNOWN.</p>
+    </div>
+
+    <!-- AGENT PYRAMID INTERACTION CHAMBER (Right HUD Panel) -->
+    <aside id="agent-chamber" class="hud-overlay right-6 top-1/2 -translate-y-1/2 w-84 max-w-[340px] hidden interactive bg-slate-950/90 backdrop-blur-xl border border-cyan-500/40 rounded-2xl p-5 shadow-2xl space-y-4 transition-all duration-300">
+        <!-- Chamber Header -->
+        <div class="flex justify-between items-center border-b border-slate-800 pb-3">
+            <div class="flex items-center space-x-2">
+                <div id="agent-glow-badge" class="w-3 h-3 rounded-full bg-cyan-400"></div>
+                <h3 id="agent-name-title" class="font-mono text-sm font-bold tracking-wider text-cyan-300">AGENT CHAMBER</h3>
+            </div>
+            <button id="close-chamber-btn" class="text-slate-400 hover:text-white text-xs font-mono bg-slate-900 hover:bg-slate-800 px-2 py-1 rounded">
+                [ESC]
+            </button>
+        </div>
+
+        <!-- 2.5D Quiet-Alive Layered Portrait Rig -->
+        <div class="text-center relative">
+            <div id="agent-rig-box" class="agent-portrait-rig animate-breathing border-2 border-cyan-500/50 cursor-pointer" title="Click avatar for greeting ('how may I help')">
+                <img id="agent-portrait-img" src="avatars/ava_avatar_front.png" alt="Agent Avatar" class="agent-portrait-img">
+                <!-- Eyelid overlay for natural blinking -->
+                <div id="eyelid-overlay" class="eyelid-overlay">
+                    <div class="eyelid"></div>
+                    <div class="eyelid"></div>
+                </div>
+                <!-- Morphing Viseme mouth overlay -->
+                <div id="viseme-mouth" class="viseme-mouth viseme-rest"></div>
+            </div>
+            <div class="text-[10px] font-mono text-slate-500 mt-2">Rig: 2.5D Layered Matrix Rig with Viseme Morph</div>
+        </div>
+
+        <!-- Synchronized Caption Display Box -->
+        <div class="bg-slate-900/90 border border-slate-800 p-3 rounded-xl min-h-[56px] flex flex-col justify-center">
+            <div class="text-[9px] font-mono text-cyan-400 font-bold uppercase tracking-wider mb-0.5" id="caption-speaker">AVA:</div>
+            <div id="caption-text" class="text-xs font-mono text-slate-200 leading-snug italic">“Greetings, Commander”</div>
+        </div>
+
+        <!-- Exact Brief Interactions & Triggers -->
+        <div class="space-y-2 font-mono text-xs">
+            <div class="text-[10px] text-slate-400 uppercase tracking-wider border-b border-slate-800 pb-1">Dialogue Triggers:</div>
+            <div class="grid grid-cols-2 gap-2">
+                <button id="btn-trigger-help" class="bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-200 py-1.5 px-2 rounded-lg text-left text-[11px] transition-colors">
+                    💬 "How may I help"
+                </button>
+                <button id="btn-trigger-yes" class="bg-slate-900 hover:bg-slate-800 border border-slate-700 text-emerald-300 py-1.5 px-2 rounded-lg text-left text-[11px] transition-colors">
+                    ✓ "Yes" (Nod)
+                </button>
+                <button id="btn-trigger-no" class="bg-slate-900 hover:bg-slate-800 border border-slate-700 text-rose-300 py-1.5 px-2 rounded-lg text-left text-[11px] transition-colors">
+                    ✗ "No" (Shake)
+                </button>
+                <button id="btn-trigger-ack" class="bg-slate-900 hover:bg-slate-800 border border-slate-700 text-amber-300 py-1.5 px-2 rounded-lg text-left text-[11px] transition-colors">
+                    ★ "On it."
+                </button>
+            </div>
+            <!-- Task Start Cycle Button -->
+            <button id="btn-task-start" class="w-full bg-cyan-950/60 hover:bg-cyan-900 border border-cyan-500/60 text-cyan-200 font-bold py-2 px-3 rounded-xl transition-all shadow-lg flex items-center justify-between">
+                <span>▶ START APPLICATION TASK</span>
+                <span id="task-cycle-num" class="text-[10px] text-cyan-400 bg-cyan-900/60 px-1.5 py-0.5 rounded">Cycle 1/3</span>
+            </button>
+        </div>
+    </aside>
+
+    <!-- EVIDENCE NODE INSPECTION MODAL -->
+    <div id="evidence-modal" class="hud-overlay inset-0 w-full h-full bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4 opacity-0 pointer-events-none transition-all duration-300 z-50">
+        <div class="interactive bg-slate-900/95 border border-cyan-500/50 w-full max-w-xl rounded-2xl p-6 shadow-2xl space-y-4">
+            <div class="flex justify-between items-center border-b border-slate-800 pb-3">
+                <div class="flex items-center space-x-2.5">
+                    <div class="w-3 h-3 rounded-full bg-red-500 animate-pulse"></div>
+                    <h3 id="evidence-title" class="font-mono text-sm font-bold text-slate-100">GRAPH EVIDENCE NODE</h3>
+                </div>
+                <button id="close-evidence-btn" class="text-slate-400 hover:text-white text-xs font-mono bg-slate-800 px-2 py-1 rounded">✕</button>
+            </div>
+
+            <div class="space-y-3 font-mono text-xs">
+                <div class="bg-slate-950 p-3 rounded-xl border border-slate-800 space-y-1 text-slate-300">
+                    <div><b>Node Identifier:</b> <span id="ev-id" class="text-cyan-400">lic-night-drive-v4</span></div>
+                    <div><b>Claim Type:</b> <span id="ev-type" class="text-slate-200">EVIDENCED_BY (License Agreement)</span></div>
+                    <div><b>Revision Window:</b> <span id="ev-rev" class="text-amber-300">rel-wad@r2</span></div>
+                    <div><b>Target Release:</b> <span id="ev-release" class="text-purple-300">rel-wad</span></div>
+                    <div><b>Bound File SHA-256:</b> <span id="ev-sha" class="text-slate-400 text-[10px] break-all">3a7b9e120f...</span></div>
+                </div>
+
+                <div class="bg-slate-950 p-3 rounded-xl border border-slate-800">
+                    <div class="text-[11px] text-cyan-400 font-bold mb-1">HMAC-SHA256 Cryptographic Evidence Binding:</div>
+                    <div id="ev-hmac" class="text-[10px] text-slate-400 break-all bg-slate-900 p-2 rounded border border-slate-800">
+                        HMAC-SHA256(key, [type, tenant, release, nodeId, filePath, fileSha256, rev, tracks, cuts])
+                    </div>
+                    <div class="mt-2 flex items-center justify-between text-[11px]">
+                        <span class="text-slate-400">Clearance Status:</span>
+                        <span id="ev-clearance" class="bg-emerald-500/20 text-emerald-300 font-bold px-2 py-0.5 rounded">ESTABLISHED</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- HUMAN AVATARS INFO MODAL -->
+    <div id="human-modal" class="hud-overlay inset-0 w-full h-full bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4 opacity-0 pointer-events-none transition-all duration-300 z-50">
+        <div class="interactive bg-slate-900 border border-slate-700 w-full max-w-md rounded-2xl p-6 shadow-2xl space-y-4">
+            <div class="flex justify-between items-center border-b border-slate-800 pb-3">
+                <h3 id="human-title" class="font-mono text-sm font-bold text-slate-100">HUMAN AUTHORITY</h3>
+                <button id="close-human-btn" class="text-slate-400 hover:text-white text-xs font-mono">✕</button>
+            </div>
+            <div class="flex items-center space-x-4">
+                <img id="human-img" src="avatars/kanny_avatar_front.png" alt="Human Avatar" class="w-20 h-20 rounded-xl border border-slate-700 object-cover">
+                <div>
+                    <h4 id="human-name" class="font-mono font-bold text-base text-amber-300">Kanny</h4>
+                    <p id="human-role" class="text-xs text-slate-400 font-mono mt-0.5">Studio Owner • Warnings After Dark Studios</p>
+                    <span id="human-badge" class="inline-block mt-2 text-[10px] bg-amber-500/20 text-amber-300 px-2 py-0.5 rounded font-mono font-semibold">EXCLUSIVE APPROVAL AUTHORITY</span>
+                </div>
+            </div>
+            <p id="human-desc" class="text-xs text-slate-300 font-mono leading-relaxed bg-slate-950 p-3 rounded-xl border border-slate-800">
+                Natural human skin tones, wavy salt-and-pepper hair, trimmed beard, warm brown eyes, dark charcoal studio blazer. Strictly zero cybernetics. Sole authorized decision maker for production clearances.
+            </p>
+            <div class="text-[10px] text-slate-500 font-mono">
+                Law 19 Enforced: Server tokens govern mutation authority; visual presence is illustrative.
+            </div>
+        </div>
+    </div>
+
+    <!-- SYSTEM GUIDE MODAL -->
+    <div id="guide-modal" class="hud-overlay inset-0 w-full h-full bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4 opacity-0 pointer-events-none transition-all duration-300 z-50">
+        <div class="interactive bg-slate-900 border border-slate-700 w-full max-w-lg rounded-2xl p-6 shadow-2xl space-y-4 font-mono text-xs">
+            <div class="flex justify-between items-center border-b border-slate-800 pb-3">
+                <h3 class="text-sm font-bold text-cyan-300">CUBES OF KNOWLEDGE // USER GUIDE</h3>
+                <button id="close-guide-btn" class="text-slate-400 hover:text-white text-xs">✕</button>
+            </div>
+            <ul class="space-y-2.5 text-slate-300 leading-relaxed">
+                <li class="flex items-start space-x-2"><span class="text-cyan-400 font-bold">1.</span> <span><b>Company Cube:</b> Click & drag to rotate in 3D. Scroll to zoom deep into the internal golden sun.</span></li>
+                <li class="flex items-start space-x-2"><span class="text-red-400 font-bold">2.</span> <span><b>Red Evidence Nodes:</b> Click any red glowing node to inspect its cryptographic HMAC-SHA256 claim binding.</span></li>
+                <li class="flex items-start space-x-2"><span class="text-purple-400 font-bold">3.</span> <span><b>Agent Pyramids:</b> Click Roy (Gold), Ava (Purple), or Guz (Green) pyramids in space or use bottom buttons to open their chamber.</span></li>
+                <li class="flex items-start space-x-2"><span class="text-amber-400 font-bold">4.</span> <span><b>Quiet-Alive Avatars:</b> Subtle breathing, natural blinking, eye shifts, and mouth viseme synchronization.</span></li>
+                <li class="flex items-start space-x-2"><span class="text-cyan-400 font-bold">5.</span> <span><b>Default Mute & Captions:</b> Audio starts muted. Click [MUTED] in the top bar to enable speech synthesis. Captions always show.</span></li>
+                <li class="flex items-start space-x-2"><span class="text-rose-400 font-bold">6.</span> <span><b>Presentation Truth:</b> Click [SIMULATE OUTAGE] to test database failure. Lattice fractures, proof paths disconnect, and task starts are blocked.</span></li>
+            </ul>
+            <div class="border-t border-slate-800 pt-3 text-[11px] text-slate-400">
+                <b>Keyboard Shortcuts:</b> [1] Roy, [2] Ava, [3] Guz, [C] Cube, [M] Mute toggle, [O] Outage toggle, [R] Reset view, [Esc] Close.
+            </div>
+        </div>
+    </div>
+
+    <!-- THREE.JS SCENE SCRIPT & APPLICATION LOGIC -->
+    <script>
+        // --- Application State ---
+        let scene, camera, renderer;
+        let starField, comets = [];
+        let cubeGroup, sunGroup;
+        let wireframeCube, cubePlanes = [], redEvidenceNodes = [];
+        let pyramidGroups = { roy: null, ava: null, guz: null };
+        let raycaster, mouse;
+        let isDragging = false;
+        let previousMousePosition = { x: 0, y: 0 };
+        let targetRotation = { x: 0.2, y: 0.4 };
+        let cameraTarget = new THREE.Vector3(0, 0, 0);
+        let cameraCurrentTarget = new THREE.Vector3(0, 0, 0);
+        let cameraTargetDistance = 14;
+        let cameraCurrentDistance = 14;
+
+        // Dialogue & Agent State
+        let currentAgentKey = 'ava';
+        let openedAgentsSession = new Set();
+        let audioMuted = true;
+        let taskStartCycleIndex = 0;
+        const taskStartPhrases = [
+            "I'll get right on it.",
+            "Task beginning",
+            "Underway."
+        ];
+        let isDatabaseOutage = false;
+        let reducedMotion = false;
+
+        // Agent Metadata
+        const AGENTS = {
+            roy: {
+                name: "Roy",
+                role: "Cybernetic Agent • Gold Circuitry",
+                accent: "#ffd700",
+                avatar: "avatars/roy_avatar_front.png",
+                voicePitch: 0.85,
+                voiceRate: 0.95,
+                pos: new THREE.Vector3(-7.5, 2.0, 0)
+            },
+            ava: {
+                name: "Ava",
+                role: "Cybernetic Agent • Purple Circuitry & Asymmetric Hairstyle",
+                accent: "#b388ff",
+                avatar: "avatars/ava_avatar_front.png",
+                voicePitch: 1.15,
+                voiceRate: 1.05,
+                pos: new THREE.Vector3(7.5, 1.8, 0)
+            },
+            guz: {
+                name: "Guz",
+                role: "Cybernetic Agent • Green Circuitry",
+                accent: "#00e676",
+                avatar: "avatars/guz_avatar_front.png",
+                voicePitch: 0.75,
+                voiceRate: 0.90,
+                pos: new THREE.Vector3(0, -6.5, 3.0)
+            }
+        };
+
+        // Evidence Nodes Mock Database
+        const EVIDENCE_DATA = [
+            { id: "lic-night-drive-v4", type: "EVIDENCED_BY (License Agreement)", rev: "rel-wad@r2", release: "rel-wad", track: "Night Drive", cut: "cut-v4", sha: "9f8e7d6c5b4a3210987654321fedcba09876543210abcdef0123456789abcdef", clearance: "ESTABLISHED" },
+            { id: "lic-basement-hum-v4", type: "EVIDENCED_BY (License Agreement)", rev: "rel-wad@r2", release: "rel-wad", track: "Basement Hum", cut: "cut-v4", sha: "1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b", clearance: "ESTABLISHED" },
+            { id: "cue-wad-v4", type: "LISTED_IN (Master Cue Sheet)", rev: "rel-wad@r2", release: "rel-wad", track: "All 2 Tracks", cut: "cut-v4", sha: "4f5e6d7c8b9a0123456789abcdef0123456789abcdef0123456789abcdef0123", clearance: "ESTABLISHED" },
+            { id: "rel-wad@r2", type: "Release (Studio Version)", rev: "rel-wad@r2", release: "rel-wad", track: "Full Release", cut: "v2 Production", sha: "7c8b9a0123456789abcdef0123456789abcdef0123456789abcdef0123456789", clearance: "ESTABLISHED" }
+        ];
+
+        // --- Initialization ---
+        function init() {
+            const container = document.getElementById('canvas-container');
+
+            // Scene setup
+            scene = new THREE.Scene();
+            scene.fog = new THREE.FogExp2(0x02040a, 0.025);
+
+            // Camera setup
+            camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.set(0, 0, cameraTargetDistance);
+
+            // Renderer setup
+            renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            renderer.toneMapping = THREE.ACESFilmicToneMapping;
+            container.appendChild(renderer.domElement);
+
+            raycaster = new THREE.Raycaster();
+            mouse = new THREE.Vector2();
+
+            // Build Scene Components
+            createStarField();
+            createCompanyCube();
+            createTheSun();
+            createAgentPyramids();
+            createComet();
+
+            // Event Listeners
+            window.addEventListener('resize', onWindowResize);
+            window.addEventListener('mousemove', onMouseMove);
+            window.addEventListener('mousedown', onMouseDown);
+            window.addEventListener('mouseup', onMouseUp);
+            window.addEventListener('wheel', onWheel, { passive: true });
+
+            // Touch events
+            window.addEventListener('touchstart', onTouchStart, { passive: true });
+            window.addEventListener('touchmove', onTouchMove, { passive: true });
+            window.addEventListener('touchend', onTouchEnd, { passive: true });
+
+            // Keyboard navigation
+            window.addEventListener('keydown', onKeyDown);
+
+            // UI Listeners
+            setupUI();
+
+            // Quiet-alive blinking routine
+            setupNaturalBlinking();
+
+            // Start Animation Loop
+            animate();
+        }
+
+        // --- 1. Starfield and Comets ---
+        function createStarField() {
+            const starCount = 3500;
+            const geometry = new THREE.BufferGeometry();
+            const positions = new Float32Array(starCount * 3);
+            const colors = new Float32Array(starCount * 3);
+
+            const palette = [
+                new THREE.Color(0xffffff),
+                new THREE.Color(0x80d8ff),
+                new THREE.Color(0xb388ff),
+                new THREE.Color(0xffe57f)
+            ];
+
+            for (let i = 0; i < starCount * 3; i += 3) {
+                positions[i] = (Math.random() - 0.5) * 350;
+                positions[i + 1] = (Math.random() - 0.5) * 350;
+                positions[i + 2] = (Math.random() - 0.5) * 350;
+
+                const c = palette[Math.floor(Math.random() * palette.length)];
+                colors[i] = c.r;
+                colors[i + 1] = c.g;
+                colors[i + 2] = c.b;
+            }
+
+            geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+            geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+
+            const material = new THREE.PointsMaterial({
+                size: 0.9,
+                vertexColors: true,
+                transparent: true,
+                opacity: 0.85,
+                blending: THREE.AdditiveBlending
+            });
+
+            starField = new THREE.Points(geometry, material);
+            scene.add(starField);
+        }
+
+        function createComet() {
+            if (comets.length > 3) return;
+            const cometGeo = new THREE.BufferGeometry();
+            const trailLength = 25;
+            const positions = new Float32Array(trailLength * 3);
+            
+            const startX = (Math.random() - 0.5) * 220;
+            const startY = (Math.random() - 0.5) * 220;
+            const startZ = -120 - Math.random() * 60;
+
+            for (let i = 0; i < trailLength * 3; i += 3) {
+                positions[i] = startX;
+                positions[i+1] = startY;
+                positions[i+2] = startZ + i * 1.2;
+            }
+
+            cometGeo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+            const cometMat = new THREE.LineBasicMaterial({
+                color: 0x00e5ff,
+                transparent: true,
+                opacity: 0.75,
+                blending: THREE.AdditiveBlending
+            });
+
+            const comet = new THREE.Line(cometGeo, cometMat);
+            comet.userData = {
+                velocity: new THREE.Vector3((Math.random() - 0.5) * 0.5, (Math.random() - 0.5) * 0.5, 1.8 + Math.random()),
+                life: 180
+            };
+            scene.add(comet);
+            comets.push(comet);
+        }
+
+        // --- 2. Company Cube & Red Evidence Nodes ---
+        function createCompanyCube() {
+            cubeGroup = new THREE.Group();
+            scene.add(cubeGroup);
+
+            const size = 5.2;
+            const halfSize = size / 2;
+
+            // Luminous Blue Wireframe Lattice (#00E5FF)
+            const boxGeo = new THREE.BoxGeometry(size, size, size);
+            const wireframeGeo = new THREE.WireframeGeometry(boxGeo);
+            const cubeMat = new THREE.LineBasicMaterial({
+                color: 0x00e5ff,
+                transparent: true,
+                opacity: 0.55,
+                linewidth: 2,
+                blending: THREE.AdditiveBlending
+            });
+            wireframeCube = new THREE.LineSegments(wireframeGeo, cubeMat);
+            cubeGroup.add(wireframeCube);
+
+            // Subtle Glass Face Panes
+            const planeGeo = new THREE.PlaneGeometry(size, size);
+            const faceMat = new THREE.MeshBasicMaterial({
+                color: 0x00e5ff,
+                transparent: true,
+                opacity: 0.04,
+                side: THREE.DoubleSide
+            });
+
+            const facePositions = [
+                { pos: [0, 0, halfSize], rot: [0, 0, 0] },
+                { pos: [0, 0, -halfSize], rot: [0, Math.PI, 0] },
+                { pos: [-halfSize, 0, 0], rot: [0, -Math.PI/2, 0] },
+                { pos: [halfSize, 0, 0], rot: [0, Math.PI/2, 0] },
+                { pos: [0, halfSize, 0], rot: [-Math.PI/2, 0, 0] },
+                { pos: [0, -halfSize, 0], rot: [Math.PI/2, 0, 0] }
+            ];
+
+            facePositions.forEach(cfg => {
+                const p = new THREE.Mesh(planeGeo, faceMat);
+                p.position.set(...cfg.pos);
+                p.rotation.set(...cfg.rot);
+                cubeGroup.add(p);
+                cubePlanes.push(p);
+            });
+
+            // Grid Lines & Red Evidence Nodes (#FF1744)
+            const gridSteps = 4;
+            const stepSize = size / gridSteps;
+            const gridMat = new THREE.LineBasicMaterial({
+                color: 0x00b0ff,
+                transparent: true,
+                opacity: 0.28,
+                blending: THREE.AdditiveBlending
+            });
+
+            // Populate on faces
+            let evidenceIndex = 0;
+            facePositions.forEach((cfg, faceIdx) => {
+                const faceLines = [];
+                for (let i = 0; i <= gridSteps; i++) {
+                    const c = -halfSize + i * stepSize;
+                    // Coordinate offsets
+                    faceLines.push(new THREE.Vector3(-halfSize, c, 0.01));
+                    faceLines.push(new THREE.Vector3(halfSize, c, 0.01));
+                    faceLines.push(new THREE.Vector3(c, -halfSize, 0.01));
+                    faceLines.push(new THREE.Vector3(c, halfSize, 0.01));
+
+                    // Place Red Evidence Nodes on select intersections
+                    if (i > 0 && i < gridSteps && (i + faceIdx) % 2 === 0) {
+                        const data = EVIDENCE_DATA[evidenceIndex % EVIDENCE_DATA.length];
+                        evidenceIndex++;
+
+                        const nodeSphereGeo = new THREE.SphereGeometry(0.12, 16, 16);
+                        const nodeSphereMat = new THREE.MeshBasicMaterial({
+                            color: 0xff1744,
+                            transparent: true,
+                            opacity: 0.95
+                        });
+                        const redBall = new THREE.Mesh(nodeSphereGeo, nodeSphereMat);
+                        redBall.position.set(c, -halfSize + (gridSteps - i) * stepSize, 0.03);
+                        redBall.userData = { isEvidenceNode: true, data: data, initialPos: redBall.position.clone() };
+                        
+                        // Face group rotation wrapper
+                        const faceWrap = new THREE.Group();
+                        faceWrap.position.set(...cfg.pos);
+                        faceWrap.rotation.set(...cfg.rot);
+                        faceWrap.add(redBall);
+                        cubeGroup.add(faceWrap);
+                        redEvidenceNodes.push(redBall);
+                    }
+                }
+                const lineGeo = new THREE.BufferGeometry().setFromPoints(faceLines);
+                const lineSegments = new THREE.LineSegments(lineGeo, gridMat);
+                const wrap = new THREE.Group();
+                wrap.position.set(...cfg.pos);
+                wrap.rotation.set(...cfg.rot);
+                wrap.add(lineSegments);
+                cubeGroup.add(wrap);
+            });
+        }
+
+        // --- 3. The Central Golden Sun (#FFB300) ---
+        function createTheSun() {
+            sunGroup = new THREE.Group();
+            cubeGroup.add(sunGroup);
+
+            // Radiant Central Star Plasma Sphere
+            const sunGeo = new THREE.SphereGeometry(1.2, 32, 32);
+            const sunMat = new THREE.MeshBasicMaterial({
+                color: 0xffb300,
+                wireframe: true,
+                transparent: true,
+                opacity: 0.75,
+                blending: THREE.AdditiveBlending
+            });
+            const sunSphere = new THREE.Mesh(sunGeo, sunMat);
+            sunGroup.add(sunSphere);
+
+            // Dense inner glowing sun core
+            const innerSunGeo = new THREE.SphereGeometry(0.85, 32, 32);
+            const innerSunMat = new THREE.MeshBasicMaterial({
+                color: 0xffd54f,
+                transparent: true,
+                opacity: 0.9,
+                blending: THREE.AdditiveBlending
+            });
+            const innerSun = new THREE.Mesh(innerSunGeo, innerSunMat);
+            sunGroup.add(innerSun);
+
+            // Restrained ambient point light
+            const sunLight = new THREE.PointLight(0xffb300, 1.2, 25);
+            sunGroup.add(sunLight);
+        }
+
+        // --- 4. Three Floating Agent Pyramids ---
+        function createAgentPyramids() {
+            Object.keys(AGENTS).forEach(key => {
+                const agent = AGENTS[key];
+                const pyrGroup = new THREE.Group();
+                pyrGroup.position.copy(agent.pos);
+                pyrGroup.userData = { isPyramid: true, agentKey: key };
+
+                // 4-sided pyramid / cone (radius 1.1, height 1.8, segments 4)
+                const pyrGeo = new THREE.ConeGeometry(1.2, 2.0, 4);
+                const pyrWireGeo = new THREE.WireframeGeometry(pyrGeo);
+                const colorHex = parseInt(agent.accent.replace('#', '0x'));
+
+                // Wireframe edges
+                const wireMat = new THREE.LineBasicMaterial({
+                    color: colorHex,
+                    transparent: true,
+                    opacity: 0.8,
+                    blending: THREE.AdditiveBlending
+                });
+                const pyrWire = new THREE.LineSegments(pyrWireGeo, wireMat);
+                pyrWire.position.y = 0.2;
+                pyrGroup.add(pyrWire);
+
+                // Translucent crystal faces
+                const faceMat = new THREE.MeshBasicMaterial({
+                    color: colorHex,
+                    transparent: true,
+                    opacity: 0.25,
+                    blending: THREE.AdditiveBlending,
+                    side: THREE.DoubleSide
+                });
+                const pyrMesh = new THREE.Mesh(pyrGeo, faceMat);
+                pyrMesh.position.y = 0.2;
+                pyrMesh.userData = { isPyramid: true, agentKey: key };
+                pyrGroup.add(pyrMesh);
+
+                // Base energy halo ring
+                const ringGeo = new THREE.RingGeometry(1.3, 1.45, 32);
+                const ringMat = new THREE.MeshBasicMaterial({
+                    color: colorHex,
+                    transparent: true,
+                    opacity: 0.5,
+                    side: THREE.DoubleSide,
+                    blending: THREE.AdditiveBlending
+                });
+                const ring = new THREE.Mesh(ringGeo, ringMat);
+                ring.rotation.x = Math.PI / 2;
+                ring.position.y = -0.8;
+                pyrGroup.add(ring);
+
+                scene.add(pyrGroup);
+                pyramidGroups[key] = pyrGroup;
+            });
+        }
+
+        // --- 5. Natural Blinking & Viseme Rig Routines ---
+        function setupNaturalBlinking() {
+            function triggerBlink() {
+                const eyelidOverlay = document.getElementById('eyelid-overlay');
+                if (eyelidOverlay && !reducedMotion) {
+                    eyelidOverlay.classList.add('blinking');
+                    setTimeout(() => eyelidOverlay.classList.remove('blinking'), 140);
+                }
+                // Random interval between 4.0 and 7.5 seconds
+                const nextBlink = 4000 + Math.random() * 3500;
+                setTimeout(triggerBlink, nextBlink);
+            }
+            setTimeout(triggerBlink, 3000);
+        }
+
+        function setVisemeShape(shape) {
+            const mouth = document.getElementById('viseme-mouth');
+            if (!mouth) return;
+            mouth.className = 'viseme-mouth viseme-' + shape;
+        }
+
+        // --- 6. Dialogue & Speech Synthesis Controller ---
+        function speakPhrase(phrase, onComplete) {
+            const agent = AGENTS[currentAgentKey];
+            const captionSpeaker = document.getElementById('caption-speaker');
+            const captionText = document.getElementById('caption-text');
+            const rigBox = document.getElementById('agent-rig-box');
+
+            // Update caption
+            captionSpeaker.textContent = agent.name.toUpperCase() + ":";
+            captionText.textContent = `“${phrase}”`;
+
+            // If audio muted, animate expression and visemes purely visually
+            if (audioMuted || !('speechSynthesis' in window)) {
+                animateMouthVisemesVisualOnly(phrase, onComplete);
+                return;
+            }
+
+            window.speechSynthesis.cancel();
+            const utterance = new SpeechSynthesisUtterance(phrase);
+            utterance.pitch = agent.voicePitch;
+            utterance.rate = agent.voiceRate;
+
+            // Viseme synchronization on speech boundary
+            utterance.onboundary = function(event) {
+                if (event.name === 'word') {
+                    const randomVisemes = ['small', 'medium', 'wide', 'medium'];
+                    const shape = randomVisemes[Math.floor(Math.random() * randomVisemes.length)];
+                    setVisemeShape(shape);
+                }
+            };
+
+            utterance.onend = function() {
+                setVisemeShape('rest');
+                if (onComplete) onComplete();
+            };
+
+            utterance.onerror = function() {
+                setVisemeShape('rest');
+                if (onComplete) onComplete();
+            };
+
+            window.speechSynthesis.speak(utterance);
+        }
+
+        function animateMouthVisemesVisualOnly(phrase, onComplete) {
+            const duration = Math.max(900, phrase.length * 55);
+            const intervals = 8;
+            const step = duration / intervals;
+            let currentStep = 0;
+
+            const visemeCycle = ['small', 'medium', 'wide', 'medium', 'small', 'medium', 'wide', 'rest'];
+            const timer = setInterval(() => {
+                setVisemeShape(visemeCycle[currentStep % visemeCycle.length]);
+                currentStep++;
+                if (currentStep >= intervals) {
+                    clearInterval(timer);
+                    setVisemeShape('rest');
+                    if (onComplete) onComplete();
+                }
+            }, step);
+        }
+
+        // --- 7. Agent Chamber Interactions ---
+        function openAgentChamber(agentKey) {
+            currentAgentKey = agentKey;
+            const agent = AGENTS[agentKey];
+            const chamber = document.getElementById('agent-chamber');
+            const title = document.getElementById('agent-name-title');
+            const glowDot = document.getElementById('agent-glow-badge');
+            const portraitImg = document.getElementById('agent-portrait-img');
+            const rigBox = document.getElementById('agent-rig-box');
+
+            title.textContent = `${agent.name.toUpperCase()} // ${agent.role.toUpperCase()}`;
+            title.style.color = agent.accent;
+            glowDot.style.backgroundColor = agent.accent;
+            portraitImg.src = agent.avatar;
+            rigBox.style.borderColor = agent.accent;
+            rigBox.style.boxShadow = `0 0 30px ${agent.accent}44`;
+
+            chamber.classList.remove('hidden');
+
+            // Move camera smoothly to agent pyramid
+            cameraTarget.copy(agent.pos);
+            cameraTargetDistance = 5.5;
+
+            // Trigger 1: First opening in session -> "Greetings, Commander"
+            if (!openedAgentsSession.has(agentKey)) {
+                openedAgentsSession.add(agentKey);
+                rigBox.classList.add('animate-greeting');
+                setVisemeShape('smile');
+                setTimeout(() => {
+                    speakPhrase("Greetings, Commander", () => {
+                        rigBox.classList.remove('animate-greeting');
+                    });
+                }, 300);
+            }
+        }
+
+        function closeAgentChamber() {
+            const chamber = document.getElementById('agent-chamber');
+            chamber.classList.add('hidden');
+            window.speechSynthesis.cancel();
+            setVisemeShape('rest');
+            cameraTarget.set(0, 0, 0);
+            cameraTargetDistance = 14;
+        }
+
+        // --- 8. Event Handlers & Interactions ---
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        function onMouseMove(event) {
+            mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+            mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+
+            if (isDragging && !reducedMotion) {
+                const deltaX = event.clientX - previousMousePosition.x;
+                const deltaY = event.clientY - previousMousePosition.y;
+
+                targetRotation.y += deltaX * 0.007;
+                targetRotation.x += deltaY * 0.007;
+
+                previousMousePosition = { x: event.clientX, y: event.clientY };
+            }
+
+            // Starfield parallax
+            if (starField && !reducedMotion) {
+                starField.rotation.y = mouse.x * 0.04;
+                starField.rotation.x = -mouse.y * 0.04;
+            }
+        }
+
+        function onMouseDown(event) {
+            if (event.target.closest('.interactive')) return;
+
+            isDragging = true;
+            previousMousePosition = { x: event.clientX, y: event.clientY };
+
+            // Raycasting for Pyramids & Red Evidence Nodes
+            raycaster.setFromCamera(mouse, camera);
+            const intersects = raycaster.intersectObjects(scene.children, true);
+
+            if (intersects.length > 0) {
+                for (let hit of intersects) {
+                    const obj = hit.object;
+                    // Check if Evidence Node
+                    if (obj.userData && obj.userData.isEvidenceNode) {
+                        openEvidenceModal(obj.userData.data);
+                        return;
+                    }
+                    // Check if Agent Pyramid
+                    if (obj.userData && obj.userData.isPyramid) {
+                        openAgentChamber(obj.userData.agentKey);
+                        return;
+                    }
+                }
+            }
+        }
+
+        function onMouseUp() {
+            isDragging = false;
+        }
+
+        function onWheel(event) {
+            cameraTargetDistance += event.deltaY * 0.005;
+            cameraTargetDistance = Math.max(3.8, Math.min(24, cameraTargetDistance));
+        }
+
+        let touchStartX = 0, touchStartY = 0;
+        function onTouchStart(event) {
+            if (event.target.closest('.interactive')) return;
+            if (event.touches.length === 1) {
+                isDragging = true;
+                touchStartX = event.touches[0].clientX;
+                touchStartY = event.touches[0].clientY;
+                previousMousePosition = { x: touchStartX, y: touchStartY };
+            }
+        }
+
+        function onTouchMove(event) {
+            if (isDragging && event.touches.length === 1 && !reducedMotion) {
+                const deltaX = event.touches[0].clientX - previousMousePosition.x;
+                const deltaY = event.touches[0].clientY - previousMousePosition.y;
+                targetRotation.y += deltaX * 0.007;
+                targetRotation.x += deltaY * 0.007;
+                previousMousePosition = { x: event.touches[0].clientX, y: event.touches[0].clientY };
+            }
+        }
+
+        function onTouchEnd() {
+            isDragging = false;
+        }
+
+        function onKeyDown(e) {
+            if (e.key === 'Escape') {
+                closeAgentChamber();
+                closeModals();
+            } else if (e.key === '1') {
+                openAgentChamber('roy');
+            } else if (e.key === '2') {
+                openAgentChamber('ava');
+            } else if (e.key === '3') {
+                openAgentChamber('guz');
+            } else if (e.key === 'c' || e.key === 'C') {
+                closeAgentChamber();
+            } else if (e.key === 'm' || e.key === 'M') {
+                toggleAudio();
+            } else if (e.key === 'o' || e.key === 'O') {
+                toggleOutage();
+            } else if (e.key === 'r' || e.key === 'R') {
+                targetRotation.x = 0.2;
+                targetRotation.y = 0.4;
+                cameraTarget.set(0, 0, 0);
+                cameraTargetDistance = 14;
+            }
+        }
+
+        // --- 9. Modals & UI Binding ---
+        function openEvidenceModal(data) {
+            const modal = document.getElementById('evidence-modal');
+            document.getElementById('ev-id').textContent = data.id;
+            document.getElementById('ev-type').textContent = data.type;
+            document.getElementById('ev-rev').textContent = data.rev;
+            document.getElementById('ev-release').textContent = data.release;
+            document.getElementById('ev-sha').textContent = data.sha;
+            
+            const clearanceSpan = document.getElementById('ev-clearance');
+            if (isDatabaseOutage) {
+                clearanceSpan.textContent = 'UNKNOWN (OUTAGE)';
+                clearanceSpan.className = 'bg-red-500/20 text-red-300 font-bold px-2 py-0.5 rounded';
+            } else {
+                clearanceSpan.textContent = data.clearance;
+                clearanceSpan.className = 'bg-emerald-500/20 text-emerald-300 font-bold px-2 py-0.5 rounded';
+            }
+
+            modal.classList.remove('opacity-0', 'pointer-events-none');
+        }
+
+        function closeModals() {
+            ['evidence-modal', 'human-modal', 'guide-modal'].forEach(id => {
+                const el = document.getElementById(id);
+                if (el) el.classList.add('opacity-0', 'pointer-events-none');
+            });
+        }
+
+        function toggleAudio() {
+            audioMuted = !audioMuted;
+            const icon = document.getElementById('audio-icon');
+            const label = document.getElementById('audio-label');
+            const btn = document.getElementById('audio-toggle-btn');
+
+            if (audioMuted) {
+                icon.textContent = '🔇';
+                label.textContent = 'MUTED';
+                btn.className = 'bg-slate-900/80 hover:bg-slate-800 text-amber-300 border border-amber-500/40 px-3 py-2 rounded-xl text-xs font-mono transition-all flex items-center space-x-1.5 shadow-lg';
+            } else {
+                icon.textContent = '🔊';
+                label.textContent = 'UNMUTED';
+                btn.className = 'bg-emerald-950/80 hover:bg-emerald-900 text-emerald-300 border border-emerald-500/60 px-3 py-2 rounded-xl text-xs font-mono transition-all flex items-center space-x-1.5 shadow-lg';
+                // Play gentle test tone or acknowledgment
+                speakPhrase("Audio enabled.");
+            }
+        }
+
+        function toggleOutage() {
+            isDatabaseOutage = !isDatabaseOutage;
+            const btn = document.getElementById('outage-toggle-btn');
+            const statusDot = document.getElementById('db-status-dot');
+            const statusLabel = document.getElementById('db-status-label');
+            const outageBanner = document.getElementById('outage-banner');
+
+            if (isDatabaseOutage) {
+                btn.textContent = 'RESTORE DATABASE';
+                btn.className = 'bg-red-950/80 hover:bg-red-900 text-red-200 border border-red-500/80 px-3 py-2 rounded-xl text-xs font-mono transition-all font-bold';
+                statusDot.className = 'w-3 h-3 rounded-full bg-red-500 animate-ping';
+                statusLabel.innerHTML = 'FALKORDB BRAIN // STATUS: <span class="text-red-400 font-bold">UNAVAILABLE (OUTAGE)</span>';
+                outageBanner.classList.remove('hidden');
+
+                // Fracture cube visually
+                if (wireframeCube) {
+                    wireframeCube.material.color.setHex(0xff1744);
+                    wireframeCube.material.opacity = 0.25;
+                }
+                redEvidenceNodes.forEach(node => {
+                    node.material.color.setHex(0x555555);
+                    node.material.opacity = 0.35;
+                });
+            } else {
+                btn.textContent = 'SIMULATE OUTAGE';
+                btn.className = 'bg-cyan-950/40 hover:bg-cyan-900/60 text-cyan-300 border border-cyan-500/40 px-3 py-2 rounded-xl text-xs font-mono transition-all';
+                statusDot.className = 'w-3 h-3 rounded-full bg-cyan-400 animate-pulse';
+                statusLabel.innerHTML = 'FALKORDB BRAIN // STATUS: <span class="text-cyan-400 font-semibold">AVAILABLE</span>';
+                outageBanner.classList.add('hidden');
+
+                // Restore cube visually
+                if (wireframeCube) {
+                    wireframeCube.material.color.setHex(0x00e5ff);
+                    wireframeCube.material.opacity = 0.55;
+                }
+                redEvidenceNodes.forEach(node => {
+                    node.material.color.setHex(0xff1744);
+                    node.material.opacity = 0.95;
+                });
+            }
+        }
+
+        function setupUI() {
+            // Audio toggle
+            document.getElementById('audio-toggle-btn').addEventListener('click', toggleAudio);
+
+            // Outage toggle
+            document.getElementById('outage-toggle-btn').addEventListener('click', toggleOutage);
+
+            // Reduced motion toggle
+            const motionBtn = document.getElementById('motion-toggle-btn');
+            motionBtn.addEventListener('click', () => {
+                reducedMotion = !reducedMotion;
+                document.body.classList.toggle('reduced-motion', reducedMotion);
+                motionBtn.textContent = reducedMotion ? 'MOTION: REDUCED' : 'MOTION: ON';
+            });
+
+            // Camera View Buttons
+            document.getElementById('cam-cube').addEventListener('click', () => {
+                closeAgentChamber();
+                cameraTarget.set(0, 0, 0);
+                cameraTargetDistance = 14;
+            });
+            document.getElementById('cam-roy').addEventListener('click', () => openAgentChamber('roy'));
+            document.getElementById('cam-ava').addEventListener('click', () => openAgentChamber('ava'));
+            document.getElementById('cam-guz').addEventListener('click', () => openAgentChamber('guz'));
+            document.getElementById('cam-reset').addEventListener('click', () => {
+                closeAgentChamber();
+                targetRotation.x = 0.2;
+                targetRotation.y = 0.4;
+                cameraTarget.set(0, 0, 0);
+                cameraTargetDistance = 14;
+            });
+
+            // Chamber triggers
+            const rigBox = document.getElementById('agent-rig-box');
+            rigBox.addEventListener('click', () => {
+                rigBox.classList.remove('animate-greeting', 'animate-nod', 'animate-shake');
+                void rigBox.offsetWidth; // reflow
+                rigBox.classList.add('animate-greeting');
+                speakPhrase("how may I help", () => rigBox.classList.remove('animate-greeting'));
+            });
+
+            document.getElementById('btn-trigger-help').addEventListener('click', () => {
+                rigBox.classList.add('animate-greeting');
+                speakPhrase("how may I help", () => rigBox.classList.remove('animate-greeting'));
+            });
+
+            document.getElementById('btn-trigger-yes').addEventListener('click', () => {
+                rigBox.classList.add('animate-nod');
+                speakPhrase("yes", () => rigBox.classList.remove('animate-nod'));
+            });
+
+            document.getElementById('btn-trigger-no').addEventListener('click', () => {
+                rigBox.classList.add('animate-shake');
+                speakPhrase("no", () => rigBox.classList.remove('animate-shake'));
+            });
+
+            document.getElementById('btn-trigger-ack').addEventListener('click', () => {
+                rigBox.classList.add('animate-greeting');
+                speakPhrase("On it.", () => rigBox.classList.remove('animate-greeting'));
+            });
+
+            // Task Start Cycle
+            const taskStartBtn = document.getElementById('btn-task-start');
+            const taskCycleNum = document.getElementById('task-cycle-num');
+            taskStartBtn.addEventListener('click', () => {
+                // Check Presentation Truth: On database outage, Task Start is BLOCKED!
+                if (isDatabaseOutage) {
+                    const captionText = document.getElementById('caption-text');
+                    captionText.innerHTML = '<span class="text-red-400 font-bold">TASK EXECUTION BLOCKED: Database Outage in effect.</span>';
+                    rigBox.classList.add('animate-shake');
+                    setTimeout(() => rigBox.classList.remove('animate-shake'), 750);
+                    return;
+                }
+
+                const phrase = taskStartPhrases[taskStartCycleIndex % taskStartPhrases.length];
+                taskStartCycleIndex++;
+                taskCycleNum.textContent = `Cycle ${(taskStartCycleIndex % taskStartPhrases.length) + 1}/3`;
+
+                rigBox.classList.add('animate-nod');
+                speakPhrase(phrase, () => rigBox.classList.remove('animate-nod'));
+            });
+
+            document.getElementById('close-chamber-btn').addEventListener('click', closeAgentChamber);
+
+            // Evidence modal
+            document.getElementById('close-evidence-btn').addEventListener('click', closeModals);
+            document.getElementById('evidence-modal').addEventListener('click', (e) => {
+                if (e.target.id === 'evidence-modal') closeModals();
+            });
+
+            // Guide modal
+            document.getElementById('help-btn').addEventListener('click', () => {
+                document.getElementById('guide-modal').classList.remove('opacity-0', 'pointer-events-none');
+            });
+            document.getElementById('close-guide-btn').addEventListener('click', closeModals);
+            document.getElementById('guide-modal').addEventListener('click', (e) => {
+                if (e.target.id === 'guide-modal') closeModals();
+            });
+
+            // Human Executive Pill Modals
+            const kannyPill = document.getElementById('kanny-pill');
+            const serenaPill = document.getElementById('serena-pill');
+            const humanModal = document.getElementById('human-modal');
+            const humanTitle = document.getElementById('human-title');
+            const humanImg = document.getElementById('human-img');
+            const humanName = document.getElementById('human-name');
+            const humanRole = document.getElementById('human-role');
+            const humanBadge = document.getElementById('human-badge');
+            const humanDesc = document.getElementById('human-desc');
+
+            kannyPill.addEventListener('click', () => {
+                humanTitle.textContent = "HUMAN STUDIO OWNER";
+                humanImg.src = "avatars/kanny_avatar_front.png";
+                humanName.textContent = "Kanny";
+                humanRole.textContent = "Human Studio Owner • Warnings After Dark Studios";
+                humanBadge.textContent = "EXCLUSIVE APPROVAL AUTHORITY";
+                humanBadge.className = "inline-block mt-2 text-[10px] bg-amber-500/20 text-amber-300 px-2 py-0.5 rounded font-mono font-semibold";
+                humanDesc.textContent = "Natural human skin tones, wavy salt-and-pepper hair, trimmed beard, warm brown eyes, dark charcoal studio blazer over ivory crewneck. Strictly zero cybernetics or circuitry. Sole authorized decision maker for studio clearance mutation execution.";
+                humanModal.classList.remove('opacity-0', 'pointer-events-none');
+            });
+
+            serenaPill.addEventListener('click', () => {
+                humanTitle.textContent = "HUMAN LEGAL READER";
+                humanImg.src = "avatars/serena_avatar_front.png";
+                humanName.textContent = "Serena";
+                humanRole.textContent = "Human Reader & Legal Compliance • Independent Audit";
+                humanBadge.textContent = "READ-ONLY AUDIT AUTHORITY";
+                humanBadge.className = "inline-block mt-2 text-[10px] bg-teal-500/20 text-teal-300 px-2 py-0.5 rounded font-mono font-semibold";
+                humanDesc.textContent = "Natural human skin tones, shoulder-length curly dark brunette hair, attentive hazel-brown eyes, tailored charcoal blazer over dark teal blouse. Strictly zero cybernetics. Reviews evidence citations and legal clearance proofs with read-only integrity.";
+                humanModal.classList.remove('opacity-0', 'pointer-events-none');
+            });
+
+            document.getElementById('close-human-btn').addEventListener('click', closeModals);
+            humanModal.addEventListener('click', (e) => {
+                if (e.target.id === 'human-modal') closeModals();
+            });
+        }
+
+        // --- 10. Animation Loop & Render Pipeline ---
+        let clock = new THREE.Clock();
+
+        function animate() {
+            requestAnimationFrame(animate);
+
+            const elapsedTime = clock.getElapsedTime();
+
+            if (!reducedMotion) {
+                // Smooth cube group rotation damping
+                if (cubeGroup) {
+                    cubeGroup.rotation.y += (targetRotation.y - cubeGroup.rotation.y) * 0.05;
+                    cubeGroup.rotation.x += (targetRotation.x - cubeGroup.rotation.x) * 0.05;
+
+                    if (!isDragging) {
+                        cubeGroup.rotation.y += 0.0018;
+                        cubeGroup.rotation.x += 0.0008;
+                    }
+                }
+
+                // Smooth Camera Orbit and Pan toward Target
+                cameraCurrentTarget.lerp(cameraTarget, 0.06);
+                cameraCurrentDistance += (cameraTargetDistance - cameraCurrentDistance) * 0.06;
+
+                camera.position.x = cameraCurrentTarget.x + Math.sin(targetRotation.y * 0.5) * 1.5;
+                camera.position.y = cameraCurrentTarget.y + Math.sin(targetRotation.x * 0.5) * 1.5;
+                camera.position.z = cameraCurrentDistance;
+                camera.lookAt(cameraCurrentTarget);
+
+                // Central Sun Pulsing
+                if (sunGroup) {
+                    const sunScale = 1 + Math.sin(elapsedTime * 2.5) * 0.06;
+                    sunGroup.scale.set(sunScale, sunScale, sunScale);
+                    sunGroup.rotation.y += 0.008;
+                    sunGroup.rotation.z += 0.004;
+                }
+
+                // Red Evidence Nodes gentle pulsing
+                if (redEvidenceNodes.length > 0 && !isDatabaseOutage) {
+                    redEvidenceNodes.forEach((node, i) => {
+                        const p = 1 + Math.sin(elapsedTime * 3.5 + i * 0.8) * 0.22;
+                        node.scale.set(p, p, p);
+                    });
+                }
+
+                // Pyramids gentle orbit & rotation
+                Object.keys(pyramidGroups).forEach((k, idx) => {
+                    const pyr = pyramidGroups[k];
+                    if (pyr) {
+                        pyr.rotation.y += 0.012 * (idx % 2 === 0 ? 1 : -1);
+                        pyr.position.y += Math.sin(elapsedTime * 1.8 + idx * 2.0) * 0.004;
+                    }
+                });
+
+                // Periodic comet spawning & motion
+                if (Math.random() < 0.012 && comets.length < 3) {
+                    createComet();
+                }
+
+                for (let i = comets.length - 1; i >= 0; i--) {
+                    const comet = comets[i];
+                    comet.position.add(comet.userData.velocity);
+                    comet.userData.life--;
+                    if (comet.userData.life <= 0) {
+                        scene.remove(comet);
+                        comets.splice(i, 1);
+                    }
+                }
+            }
+
+            renderer.render(scene, camera);
+        }
+
+        window.onload = init;
+    </script>
+</body>
+</html>
