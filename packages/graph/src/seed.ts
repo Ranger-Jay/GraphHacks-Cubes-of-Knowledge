@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { GraphClient, ParamValue } from './client.js';
 import { cueEntryOf, parseCueSheet, scopeOf, subjectOf } from './witness.js';
-import { bindingSig, evidenceKeyFromEnv } from './evidence-key.js';
+import { bindingSig, evidenceKeyFromEnv, revisionNumber } from './evidence-key.js';
 
 /**
  * Synthetic studio seed. Source text lives in graph/seed/sources/. Every excerpt is located in the
@@ -21,8 +21,9 @@ interface RefSpec { id: string; source: string; role: RefRole; excerpt: string }
 interface NodeSpec { label: Exclude<Label, 'Source' | 'SourceRef'>; id: string; props: Record<string, ParamValue> }
 interface EdgeSpec { id: string; type: RelType; from: string; to: string; refs?: string[]; props?: Record<string, ParamValue> }
 
-export const SEED_VERSION = 'wad-studio-seed@5';
+export const SEED_VERSION = 'wad-studio-seed@6';
 const TENANT = 't-wad';
+const RELEASE = 'rel-wad';
 
 const SOURCES: SourceSpec[] = [
   { id: 'src-cue-v3', file: 'cue-sheet-cut-v3.txt', kind: 'cue_sheet' },
@@ -192,6 +193,10 @@ export async function seedGraph(client: GraphClient, repoRoot: string, options: 
     ...SOURCES_ALL.map(x => [x.id, 'Source'] as [string, AnyLabel]),
     ...REFS_ALL.map(r => [r.id, 'SourceRef'] as [string, AnyLabel])
   ]);
+  // Bindings are recorded at the release revision this seed (with its bundles) produces.
+  const releaseRevision = [...NODES_ALL].reverse().find(n => n.label === 'Release' && n.id === RELEASE)?.props['revision'];
+  const rev = revisionNumber(RELEASE, releaseRevision);
+  if (rev === null) throw new Error(`Seed release ${RELEASE} has no valid revision`);
   const key = options.evidenceKey !== undefined ? options.evidenceKey : evidenceKeyFromEnv();
   if (!key) throw new Error('GRAPH_EVIDENCE_KEY (32+ characters) is required to seed signed evidence bindings');
   const sourceDir = join(repoRoot, 'graph', 'seed', 'sources');
@@ -238,7 +243,13 @@ export async function seedGraph(client: GraphClient, repoRoot: string, options: 
     if (e.type === 'EVIDENCED_BY' || e.type === 'LISTED_IN') {
       const f = fileOf.get(e.to);
       if (!f) throw new Error(`Binding ${e.id} targets an undeclared source`);
-      props['sig'] = bindingSig(key, e.type, TENANT, e.from, f.path, f.sha256);
+      // The signature covers the whole claim: what the license covers and is valid for, at this revision.
+      const tracks = e.type === 'EVIDENCED_BY' ? EDGES_ALL.filter(x => x.type === 'COVERS' && x.from === e.from).map(x => x.to).sort() : [];
+      const cuts = e.type === 'EVIDENCED_BY' ? EDGES_ALL.filter(x => x.type === 'VALID_FOR' && x.from === e.from).map(x => x.to).sort() : [e.from];
+      props['rev'] = rev;
+      props['tracks'] = tracks;
+      props['cuts'] = cuts;
+      props['sig'] = bindingSig(key, { kind: e.type, tenantId: TENANT, releaseId: RELEASE, subjectId: e.from, path: f.path, sha256: f.sha256, rev, tracks, cuts });
     }
     const rows = await client.write<{ n: number }>(edgeMerge(labels, e.type, e.from, e.to), { id: e.id, from: e.from, to: e.to, tenantId: TENANT, props });
     if (rows[0]?.n !== 1) throw new Error(`Edge ${e.id} endpoints missing`);
