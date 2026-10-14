@@ -7,8 +7,9 @@ import { createHmac, timingSafeEqual } from 'node:crypto';
  * SHA-256, the release revision it was recorded at, and the tracks and cuts it speaks for. The key
  * never enters the graph.
  *
- * Limit: the graph can hold a copy of any signed record. Replaying a complete signed record together
- * with its revision restores exactly the state the key holder signed (a rollback, not a forgery).
+ * Limit (accepted MVP residual): signed bindings never expire and Release.revision is unsigned. A
+ * signed record copied back into the graph holds at its own revision and at every later one, even after
+ * the key holder removed it: revocation is not enforced. No claim the key holder never signed verifies.
  * Revocation and rollback protection need a ledger outside the graph.
  */
 export type BindingKind = 'EVIDENCED_BY' | 'LISTED_IN';
