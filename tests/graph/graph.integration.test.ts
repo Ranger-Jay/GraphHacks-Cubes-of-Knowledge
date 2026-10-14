@@ -379,17 +379,21 @@ test('#15 negative: renaming a license to a signed id and replaying its binding 
   });
 });
 
-test('#15 limit: replaying a complete signed record with its revision restores exactly the signed state', async () => {
-  // Documented boundary, not a fix: the graph can hold a copy of any signed record. Restoring the full
-  // record (binding + revision) reproduces what the key holder signed at r2. Revocation and rollback
-  // protection need a ledger outside the graph (see graph/schema/README.md).
+test('#15 limit: signed bindings never expire; a replayed record holds at any later revision (no revocation)', async () => {
+  // Accepted MVP residual (D-020), not a fix. Release.revision is unsigned and a binding holds at any
+  // revision >= the one it was recorded at. So a once-signed record replayed into the graph holds at its
+  // own revision and at every later one, including after the key holder deleted it (revocation is not
+  // enforced). No tuple the key holder never signed can verify. Closing this needs a ledger or
+  // revocation list outside the graph (see graph/schema/README.md).
   const cap = await captureV4Binding();
-  await renameReplay(cap, "MATCH (r:Release {id: 'rel-wad'}) SET r.revision = 'rel-wad@r2'", async c => {
-    const a = await analyzeRelease(c, 't-wad', 'rel-wad');
-    assert.ok(a && a.status === 'AVAILABLE');
-    assert.equal(a.revision, 'rel-wad@r2', 'only the signed revision is reachable');
-    assert.equal(a.clearance, 'ESTABLISHED');
-  });
+  for (const rev of ['rel-wad@r2', 'rel-wad@r3', 'rel-wad@r99']) {
+    await renameReplay(cap, `MATCH (r:Release {id: 'rel-wad'}) SET r.revision = '${rev}'`, async c => {
+      const a = await analyzeRelease(c, 't-wad', 'rel-wad');
+      assert.ok(a && a.status === 'AVAILABLE');
+      assert.equal(a.revision, rev);
+      assert.equal(a.clearance, 'ESTABLISHED', `replayed r2 binding still holds at ${rev}`);
+    });
+  }
 });
 
 test('#15 unit: a binding holds only for its own claim, revision window, track and cut', () => {
