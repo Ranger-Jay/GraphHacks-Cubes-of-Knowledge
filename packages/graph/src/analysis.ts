@@ -36,7 +36,7 @@ export async function analyzeRelease(client: GraphClient, tenantId: string, rele
   try {
     const head = (await client.read<CurrentCutRow>(QUERIES.READ_RELEASE_CURRENT_CUT, { tenantId, releaseId }))[0];
     if (!head) return null;
-    const rows = await client.read<TrackRow>(QUERIES.READ_CUT_TRACK_LICENSES, { cutId: head.cutId });
+    const rows = await client.read<TrackRow>(QUERIES.READ_CUT_TRACK_LICENSES, { cutId: head.cutId, tenantId });
 
     const nodes = new Map<string, GraphNode>();
     const edges = new Map<string, GraphEdge>();
@@ -108,7 +108,7 @@ export async function analyzeRelease(client: GraphClient, tenantId: string, rele
     const allRefIds = new Set<string>();
     for (const e of evidence) e.sourceRefIds.forEach(id => allRefIds.add(id));
     for (const e of edges.values()) e.sourceRefIds.forEach(id => allRefIds.add(id));
-    const sources: SourceRef[] = allRefIds.size === 0 ? [] : (await client.read<RefRow>(QUERIES.READ_SOURCE_REFS, { ids: [...allRefIds] }))
+    const sources: SourceRef[] = allRefIds.size === 0 ? [] : (await client.read<RefRow>(QUERIES.READ_SOURCE_REFS, { ids: [...allRefIds], tenantId }))
       .map(r => ({ id: r.id, path: r.path, sha256: r.sha256, excerpt: r.excerpt, startOffset: r.startOffset, endOffset: r.endOffset }));
     const missingRefs = [...allRefIds].filter(id => !sources.some(s => s.id === id));
     if (missingRefs.length > 0) return unavailable('QUERY_FAILED', 'Cited source references are missing from the graph', requestId);

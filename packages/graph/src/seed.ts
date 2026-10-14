@@ -102,9 +102,19 @@ const NODE_MERGE: Record<NodeSpec['label'] | 'Source' | 'SourceRef', string> = {
   Principal: 'MERGE (n:Principal {id: $id}) SET n += $props'
 };
 
-function edgeMerge(type: RelType): string {
-  // type comes from the RelType allowlist above, never from input.
-  return `MATCH (a {id: $from}), (b {id: $to}) MERGE (a)-[e:${type} {id: $id}]->(b) SET e += $props RETURN count(e) AS n`;
+type AnyLabel = NodeSpec['label'] | 'Source' | 'SourceRef';
+const LABEL_OF = new Map<string, AnyLabel>([
+  ...NODES.map(n => [n.id, n.label] as [string, AnyLabel]),
+  ...SOURCES.map(s => [s.id, 'Source'] as [string, AnyLabel]),
+  ...REFS.map(r => [r.id, 'SourceRef'] as [string, AnyLabel])
+]);
+
+function edgeMerge(type: RelType, from: string, to: string): string {
+  // Labels and type come from the fixed allowlists above, never from input; endpoints matched by label + id.
+  const la = LABEL_OF.get(from);
+  const lb = LABEL_OF.get(to);
+  if (!la || !lb) throw new Error(`Edge endpoint not declared in seed: ${!la ? from : to}`);
+  return `MATCH (a:${la} {id: $from}), (b:${lb} {id: $to}) MERGE (a)-[e:${type} {id: $id}]->(b) SET e += $props RETURN count(e) AS n`;
 }
 
 export interface SeedResult { seedVersion: string; sources: number; refs: number; nodes: number; edges: number }
@@ -134,7 +144,7 @@ export async function seedGraph(client: GraphClient, repoRoot: string): Promise<
   ];
   for (const e of all) {
     for (const ref of e.refs ?? []) if (!REFS.some(r => r.id === ref)) throw new Error(`Edge ${e.id} cites unknown ref ${ref}`);
-    const rows = await client.write<{ n: number }>(edgeMerge(e.type), { id: e.id, from: e.from, to: e.to, props: { ...(e.props ?? {}), sourceRefIds: e.refs ?? [] } });
+    const rows = await client.write<{ n: number }>(edgeMerge(e.type, e.from, e.to), { id: e.id, from: e.from, to: e.to, props: { ...(e.props ?? {}), sourceRefIds: e.refs ?? [] } });
     if (rows[0]?.n !== 1) throw new Error(`Edge ${e.id} endpoints missing`);
     edges++;
   }
