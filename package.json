@@ -1,0 +1,25 @@
+{
+  "name": "graphhacks-cubes-of-knowledge",
+  "version": "2.0.0",
+  "private": true,
+  "type": "module",
+  "engines": {"node": ">=22.12.0"},
+  "workspaces": ["apps/*", "packages/*"],
+  "scripts": {
+    "check": "npm run check --workspaces --if-present",
+    "build": "npm run build -w @cubes/contracts && npm run build -w @cubes/graph && npm run build -w @cubes/api && npm run build -w @cubes/web",
+    "test": "npm run build -w @cubes/api && node --test tests/bootstrap/*.test.mjs",
+    "test:integration": "node scripts/integration-required.mjs",
+    "dev:api": "node --env-file-if-exists=.env --import tsx apps/api/src/server.ts",
+    "dev:web": "npm run dev -w @cubes/web",
+    "graph:up": "docker compose -f infra/falkordb/compose.yaml up -d",
+    "graph:down": "docker compose -f infra/falkordb/compose.yaml stop",
+    "graph:logs": "docker compose -f infra/falkordb/compose.yaml logs --tail 50",
+    "verify": "npm run check && npm test && npm run build"
+  },
+  "devDependencies": {
+    "typescript": "7.0.2",
+    "tsx": "4.23.15",
+    "@types/node": "26.6.5"
+  }
+}

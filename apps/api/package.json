@@ -1,0 +1,8 @@
+{
+  "name": "@cubes/api",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {"check": "tsc --noEmit", "build": "tsc", "start": "node dist/server.js"},
+  "dependencies": {"@cubes/contracts": "*", "@cubes/graph": "*", "falkordb": "6.8.0"}
+}
