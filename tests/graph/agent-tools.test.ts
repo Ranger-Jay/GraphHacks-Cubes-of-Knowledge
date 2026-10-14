@@ -2,16 +2,20 @@
 // Run from the repository root: node --import tsx --test tests/graph/*.test.ts
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
+import { mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { FalkorDB } from 'falkordb';
 import { configFromEnv, GraphClient, runTool, seedGraph, TOOL_DEFINITIONS } from '../../packages/graph/src/index.ts';
 
 process.env['GRAPH_EVIDENCE_KEY'] ??= 'test-only-evidence-key-not-a-secret-0123456789';
+process.env['GRAPH_WITNESS_DIR'] ??= mkdtempSync(join(tmpdir(), 'cubes-witness-'));
 const cfg = { ...configFromEnv(), graphName: `${configFromEnv().graphName}__tools` };
 const client = new GraphClient(cfg);
 const ctx = { tenantId: 't-wad', agentId: 'roy' as const };
 const counts = async () => (await client.read<{ n: number; e: number }>('MATCH (n) WITH count(n) AS n MATCH ()-[r]->() RETURN n, count(r) AS e'))[0];
 
-before(async () => { await seedGraph(client, process.cwd()); });
+before(async () => { await seedGraph(client, process.cwd(), { initWitness: true }); });
 after(async () => {
   await client.close();
   const db = await FalkorDB.connect({ socket: { host: cfg.host, port: cfg.port } });
@@ -39,13 +43,15 @@ test('source_excerpt returns a verified excerpt and refuses a tampered one', asy
   const ok = await runTool(client, ctx, 'source_excerpt', { refId: 'ref-mail-bh-scope' });
   assert.equal(ok.status, 'OK');
   assert.match(ok.summary, /Cut v3 \(festival screener\) only/);
+  const original = (await client.read<{ x: string }>("MATCH (r:SourceRef {id: 'ref-mail-bh-later'}) RETURN r.excerpt AS x"))[0]!.x;
   await client.write("MATCH (r:SourceRef {id: 'ref-mail-bh-later'}) SET r.excerpt = 'Cleared for every cut.'");
   try {
     const bad = await runTool(client, ctx, 'source_excerpt', { refId: 'ref-mail-bh-later' });
     assert.equal(bad.status, 'NOT_FOUND');
     assert.deepEqual(bad.sources, []);
   } finally {
-    await seedGraph(client, process.cwd()); // restore the seeded excerpt
+    // Restore the exact excerpt (a raw graph write; the witnessed seed refuses to write over a tampered graph).
+    await client.write("MATCH (r:SourceRef {id: 'ref-mail-bh-later'}) SET r.excerpt = $x", { x: original });
   }
 });
 
