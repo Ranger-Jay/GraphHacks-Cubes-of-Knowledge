@@ -77,3 +77,23 @@ test('speech: ordinary phrases are spoken only in READY; GRAPH_UNAVAILABLE speak
     if (prev.window === undefined) delete w.window;
   }
 });
+
+test('caption: "Systems ready" is only for READY; a caption written under another phase never lingers', async () => {
+  const { resolveCaption, SYSTEM_CAPTIONS } = await import('../../apps/web/src/scene/index');
+  for (const phase of PHASES) {
+    const html = scene({ phase });
+    assert.equal(html.includes('Systems ready. Standing by for command.'), phase === 'READY', `initial caption in ${phase}`);
+    assert.ok(html.includes(SYSTEM_CAPTIONS[phase]), `System caption text for ${phase}`);
+    assert.ok(html.includes('[System]:'));
+  }
+  const spoken = { text: 'Greetings, Commander', speaker: 'Ava', phase: 'READY' as const };
+  assert.equal(resolveCaption(spoken, 'READY').speaker, 'Ava');
+  for (const phase of PHASES.filter(p => p !== 'READY')) {
+    const c = resolveCaption(spoken, phase);
+    assert.deepEqual(c, { text: SYSTEM_CAPTIONS[phase], speaker: 'System' }, `READY line is replaced in ${phase}`);
+    assert.ok(!/disconnect|sever/i.test(c.text));
+  }
+  const notice = { text: GRAPH_OUTAGE_NOTICES.ava, speaker: 'Ava', phase: 'GRAPH_UNAVAILABLE' as const };
+  assert.equal(resolveCaption(notice, 'READY').text, SYSTEM_CAPTIONS.READY, 'an outage notice does not outlive the outage');
+  assert.equal(resolveCaption(null, 'READY').speaker, 'System');
+});
