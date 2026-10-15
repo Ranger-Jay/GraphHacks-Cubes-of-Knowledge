@@ -13,3 +13,5 @@ export { witnessedWrite, recoverWitness, revokeEvidence, checkWitness, witnessed
 export type { LedgerConfig, LedgerRecord, ChainState, WitnessCheck } from './state-ledger.js';
 export { seedStudio, studioOverview, parseCrew, parseDepartments, STUDIO_SEED_VERSION } from './studio.js';
 export type { StudioOverview, StudioNodeOut, StudioEdgeOut, StudioIntegrityItem, StudioSeedResult, CrewRow, DepartmentRow } from './studio.js';
+export { loadIdeaManifest, seedIdeaverse, importIdea, importStatus, ideaverseOverview, IDEAVERSE_SEED_VERSION, WORKSPACE_ID } from './ideaverse.js';
+export type { IdeaManifest, IdeaManifestEntry, IdeaverseSeedResult, IdeaverseOverview, IdeaverseIdea, ImportRequest, ImportResult, ImportReceipt } from './ideaverse.js';
