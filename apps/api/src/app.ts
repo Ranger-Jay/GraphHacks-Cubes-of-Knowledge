@@ -31,6 +31,12 @@ export interface ReleaseReader {
   analyze(releaseId: string, requestId: string): Promise<AnalysisResponse | null>;
 }
 
+/** Real graph read. Absent means the route stays NOT_IMPLEMENTED. */
+export interface GraphStatusProbe {
+  graphName: string;
+  check(): Promise<{ state: 'available' } | { state: 'unavailable'; reason: 'CONNECTION_FAILED' | 'QUERY_FAILED' }>;
+}
+
 export interface ApprovalGraph {
   currentRevision(releaseId: string, cutId: string): Promise<GraphRevision>;
   storedFingerprint(idempotencyKey: string): Promise<string | null>;
@@ -68,17 +74,18 @@ interface ApprovalBody {
   evidenceSourceIds: string[];
 }
 
-export function createApiServer(options?: { sessions?: SessionStore; graph?: ApprovalGraph; analysis?: ReleaseReader }): Server {
+export function createApiServer(options?: { sessions?: SessionStore; graph?: ApprovalGraph; analysis?: ReleaseReader; status?: GraphStatusProbe }): Server {
   const sessions = options?.sessions ?? denyAllSessions;
   const graph = options?.graph ?? unavailableGraph;
   const analysis = options?.analysis ?? unconfiguredAnalysis;
+  const status = options?.status;
   return createServer((request, response) => {
-    void route(request, response, sessions, graph, analysis);
+    void route(request, response, sessions, graph, analysis, status);
   });
 }
 
 async function route(
-  request: IncomingMessage, response: ServerResponse, sessions: SessionStore, graph: ApprovalGraph, analysis: ReleaseReader,
+  request: IncomingMessage, response: ServerResponse, sessions: SessionStore, graph: ApprovalGraph, analysis: ReleaseReader, status?: GraphStatusProbe,
 ): Promise<void> {
   const requestId = randomUUID();
   response.setHeader('Content-Type', 'application/json; charset=utf-8');
@@ -89,11 +96,7 @@ async function route(
       return;
     }
     if (request.method === 'GET' && request.url === '/api/graph/status') {
-      const body: GraphStatusResponse = {
-        status: 'UNAVAILABLE', ready: false, reason: 'NOT_IMPLEMENTED',
-        requestId, graphName: process.env['FALKORDB_GRAPH'] ?? 'wad_studio', checkedAt: new Date().toISOString(),
-      };
-      send(response, 503, body);
+      await getGraphStatus(response, requestId, status);
       return;
     }
     const releaseId = releaseIdFrom(request);
@@ -108,6 +111,40 @@ async function route(
     sendError(response, 404, 'NOT_FOUND', 'Route not implemented.', requestId);
   } catch {
     sendError(response, 503, 'GRAPH_UNAVAILABLE', 'Approval was not recorded. The request failed closed.', requestId);
+  }
+}
+
+async function getGraphStatus(response: ServerResponse, requestId: string, status?: GraphStatusProbe): Promise<void> {
+  const checkedAt = new Date().toISOString();
+  if (status === undefined) {
+    const body: GraphStatusResponse = {
+      status: 'UNAVAILABLE', ready: false, reason: 'NOT_IMPLEMENTED',
+      requestId, graphName: process.env['FALKORDB_GRAPH'] ?? 'wad_studio', checkedAt,
+    };
+    send(response, 503, body);
+    return;
+  }
+  try {
+    const result = await status.check();
+    if (result.state === 'available') {
+      const body: GraphStatusResponse = {
+        status: 'AVAILABLE', ready: true, reason: null,
+        requestId, graphName: status.graphName, checkedAt,
+      };
+      send(response, 200, body);
+      return;
+    }
+    const body: GraphStatusResponse = {
+      status: 'UNAVAILABLE', ready: false, reason: result.reason,
+      requestId, graphName: status.graphName, checkedAt,
+    };
+    send(response, 503, body);
+  } catch {
+    const body: GraphStatusResponse = {
+      status: 'UNAVAILABLE', ready: false, reason: 'QUERY_FAILED',
+      requestId, graphName: status.graphName, checkedAt,
+    };
+    send(response, 503, body);
   }
 }
 

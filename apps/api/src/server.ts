@@ -1,6 +1,6 @@
 import { timingSafeEqual } from 'node:crypto';
 import { FalkorDB } from 'falkordb';
-import { analyzeRelease, configFromEnv, GraphClient } from '@cubes/graph';
+import { analyzeRelease, configFromEnv, GraphClient, graphHealth } from '@cubes/graph';
 import { createApiServer, type Principal, type ReleaseReader, type SessionStore } from './app.js';
 
 // A dropped socket emits `error`, and closing that client emits it again with no listener.
@@ -48,13 +48,21 @@ export function sessionsFromEnv(env: NodeJS.ProcessEnv = process.env): SessionSt
 }
 
 const tenantId = process.env['API_TENANT_ID'];
-const graphClient = new GraphClient(configFromEnv());
+const graphConfig = configFromEnv();
+const graphClient = new GraphClient(graphConfig);
 const analysis: ReleaseReader | undefined = typeof tenantId === 'string' && /^[A-Za-z0-9._~-]{1,128}$/.test(tenantId)
   ? { analyze: (releaseId, requestId) => analyzeRelease(graphClient, tenantId, releaseId, { requestId }) }
   : undefined;
 const sessions = sessionsFromEnv();
+const status = {
+  graphName: graphConfig.graphName,
+  async check() {
+    const health = await graphHealth(graphClient);
+    return health.ok ? { state: 'available' as const } : { state: 'unavailable' as const, reason: health.reason };
+  },
+};
 
-const server = createApiServer({ sessions, ...(analysis === undefined ? {} : { analysis }) });
+const server = createApiServer({ sessions, status, ...(analysis === undefined ? {} : { analysis }) });
 server.listen(port, host, () => console.log(`Bootstrap API: http://${host}:${port}; product readiness=false`));
 for (const signal of ['SIGINT', 'SIGTERM'] as const) {
   process.on(signal, () => server.close(error => {
