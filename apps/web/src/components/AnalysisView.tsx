@@ -1,4 +1,4 @@
-import type { AnalysisResponse, AvailableAnalysis, SourceRef } from '@cubes/contracts';
+import type { AnalysisResponse, AvailableAnalysis, ScenePhase, SourceRef } from '@cubes/contracts';
 import type { ApiResult } from '../api';
 import { StatusBadge } from './StatusBadge';
 
@@ -54,7 +54,19 @@ function Available({ a }: { a: AvailableAnalysis }) {
   );
 }
 
-export function AnalysisView({ releaseId, result }: { releaseId: string; result: ApiResult<AnalysisResponse> | null }) {
+/**
+ * `phase` (from sceneState.ts) gates proof: evidence and paths render only in READY. When a graph failure was
+ * observed in the same generation, an 'ok' read is not current proof and the panel stays empty.
+ * Without `phase` the view renders the result as given (legacy callers/tests).
+ */
+export function AnalysisView({ releaseId, result, phase }: { releaseId: string; result: ApiResult<AnalysisResponse> | null; phase?: ScenePhase | null }) {
+  if (phase !== undefined && phase !== 'READY' && result?.kind === 'ok') {
+    return (
+      <section aria-labelledby="analysis-h" className="panel" aria-busy="false">
+        <h2 id="analysis-h">Release analysis: {releaseId}</h2>
+        <p role="status" data-proof="empty">No current authorized result. Evidence and paths are not shown.</p>
+      </section>);
+  }
   return (
     <section aria-labelledby="analysis-h" className="panel" aria-busy={result === null}>
       <h2 id="analysis-h">Release analysis: {releaseId}</h2>

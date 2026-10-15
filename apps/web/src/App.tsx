@@ -4,6 +4,7 @@ import { getAnalysis, getGraphStatus, getHealth, type ApiResult, type Fetcher, t
 import { HealthPanel, type Loadable } from './components/HealthPanel';
 import { AnalysisView } from './components/AnalysisView';
 import { SceneMount, toSceneData, type SceneProps } from './components/SceneMount';
+import { currentAnalysis, deriveScenePhase, toRuntimeContext } from './sceneState';
 import { nextRoute, parseRoute, type Route } from './route';
 
 /** Seeded demo release (graph seed: Release rel-wad, tenant t-wad). */
@@ -16,7 +17,9 @@ export function Shell({ route, health, graph, analysis, Scene, reducedMotion, se
   analysis: ApiResult<AnalysisResponse> | null; Scene: ComponentType<SceneProps> | null;
   reducedMotion: boolean; selected: string | null; onSelect: (id: string) => void; onRequery?: () => void;
 }) {
-  const current = analysis && (analysis.kind === 'ok' || analysis.kind === 'unavailable') ? analysis.data : null;
+  // Phase first: proof reaches the scene only in READY (authorized AVAILABLE read + healthy probe, same generation).
+  const phase = route.name === 'release' ? deriveScenePhase(graph, analysis) : null;
+  const current = currentAnalysis(phase, analysis);
   return (
     <>
       <a className="skip" href="#main">Skip to content</a>
@@ -28,8 +31,8 @@ export function Shell({ route, health, graph, analysis, Scene, reducedMotion, se
           <section className="panel" aria-labelledby="rel-h"><h2 id="rel-h">Releases</h2>
             <p>Open a release analysis: <a href={`#/releases/${SEEDED_RELEASE_ID}`}>{SEEDED_RELEASE_ID}</a>. Results come only from the API.</p></section>)}
         {route.name === 'release' && <>
-          <AnalysisView releaseId={route.releaseId} result={analysis} />
-          <SceneMount Scene={Scene} data={toSceneData(current, selected)} onSelectNode={onSelect} reducedMotion={reducedMotion} />
+          <AnalysisView releaseId={route.releaseId} result={analysis} phase={phase} />
+          <SceneMount Scene={Scene} data={toSceneData(current, selected)} onSelectNode={onSelect} reducedMotion={reducedMotion} runtime={toRuntimeContext(phase ?? 'CHECKING')} />
         </>}
         {route.name === 'not_found' && (
           <section className="panel" role="alert"><h2>404: page not found</h2><p>No view for <code>{route.path}</code>. <a href="#/">Home</a></p></section>)}
