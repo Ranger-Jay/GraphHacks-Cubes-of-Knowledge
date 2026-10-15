@@ -120,6 +120,17 @@
   border-radius: 6px;
   position: relative;
   overflow: hidden;
+  transition: border-color 0.4s ease, box-shadow 0.4s ease;
+}
+
+.company-cube-stage.cube-available {
+  border-color: rgba(0, 229, 255, 0.25);
+  box-shadow: 0 0 20px rgba(0, 229, 255, 0.06);
+}
+
+.company-cube-stage.damaged-cube {
+  border-color: #8a1020;
+  box-shadow: 0 0 18px rgba(138, 16, 32, 0.35);
 }
 
 .company-cube-svg {

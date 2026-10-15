@@ -11,21 +11,25 @@ function Line({ name, value }: { name: string; value: Loadable<unknown> }) {
   return null;
 }
 
+/** Compact status strip. The graph is named neutrally; internal graph name, check time and request id sit in collapsed details. */
 export function HealthPanel({ health, graph }: { health: Loadable<HealthResponse>; graph: Loadable<GraphStatusResponse> }) {
+  const graphOk = graph.state === 'done' && (graph.result.kind === 'ok' || graph.result.kind === 'unavailable') ? graph.result.data : null;
   return (
-    <section aria-labelledby="health-h" className="panel">
-      <h2 id="health-h">System status</h2>
-      <ul className="plain">
+    <section aria-labelledby="health-h" className="panel health-strip">
+      <h2 id="health-h" className="strip-title">System status</h2>
+      <ul className="plain strip-list">
         {health.state === 'done' && (health.result.kind === 'ok' || health.result.kind === 'unavailable')
           ? <li>API process: <StatusBadge value={health.result.data.status} /> ready={String(health.result.data.ready)}
-              <span className="muted"> — liveness only, not graph readiness.</span></li>
+              <span className="muted"> — liveness only.</span></li>
           : <Line name="API process" value={health} />}
-        {graph.state === 'done' && (graph.result.kind === 'ok' || graph.result.kind === 'unavailable')
-          ? <li>Graph ({graph.result.data.graphName}): <StatusBadge value={graph.result.data.status} />
-              {graph.result.data.reason && <> <StatusBadge value={graph.result.data.reason} label="reason" /></>}
-              <span className="muted"> checked {graph.result.data.checkedAt}, request {graph.result.data.requestId}</span></li>
+        {graphOk
+          ? <li>Graph: <StatusBadge value={graphOk.status} />
+              {graphOk.reason && <> <StatusBadge value={graphOk.reason} label="reason" /></>}</li>
           : <Line name="Graph" value={graph} />}
       </ul>
+      {graphOk && (
+        <details className="tech-details"><summary>Technical details</summary>
+          <p className="muted">API process status is liveness only, not graph readiness. Graph {graphOk.graphName}, checked {graphOk.checkedAt}, request {graphOk.requestId}</p></details>)}
     </section>
   );
 }

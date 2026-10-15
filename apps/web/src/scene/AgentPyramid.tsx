@@ -1,16 +1,19 @@
 import React, { useState, useEffect, useRef } from 'react';
-import type { AgentId, SceneData } from '@cubes/contracts';
+import type { AgentId, SceneData, ScenePhase, SceneRuntimeContext } from '@cubes/contracts';
 import type { AgentVisualConfig, ExpressionId, VisemeId } from './types';
 import {
   PHRASE_GREETING,
   PHRASE_HELP,
   PHRASE_AFFIRMATIVE,
   PHRASE_NEGATIVE,
-  getNextTaskStartPhrase,
+  blockedStatusCaption,
   findVisemeAtTime,
+  getNextTaskStartPhrase,
+  isApprovedOutageNotice,
+  normalSpeechAllowed,
 } from './dialogue';
 import { AgentPortrait } from './AgentPortrait';
-import { speakPhrase, cancelSpeech } from './audio';
+import { speakAuthorizedPhrase, cancelSpeech } from './audio';
 
 // Module-level session greeting set (persists across remounts within the same session)
 const SESSION_GREETED_AGENTS = new Set<AgentId>();
@@ -24,12 +27,36 @@ export function resetSessionGreetings(): void {
  * that an application task handler is bound, that no concurrent task is in flight,
  * and that the handler resolves strictly true before any acknowledgment phrase can play.
  */
+export function taskButtonLabel(
+  status: SceneData['status'],
+  phase: ScenePhase | undefined,
+  bound: boolean,
+  inFlight: boolean
+): string {
+  if (inFlight) return 'Starting...';
+  const resolved = phase ?? 'CHECKING';
+  // A settled blocked phase is named even when no task handler is bound (the shell binds none today), so the button
+  // never reads like an unbound feature while the real reason is an outage, a denial or a missing release.
+  if (resolved === 'GRAPH_UNAVAILABLE') return 'Task Blocked (Outage)';
+  if (resolved === 'ACCESS_DENIED') return 'Task Blocked (Access)';
+  if (resolved === 'NOT_FOUND') return 'Task Blocked (Not Found)';
+  if (resolved === 'UNAVAILABLE') return 'Task Blocked (Unavailable)';
+  if (!bound) return 'Task Unbound';
+  if (resolved !== 'READY') return 'Task Blocked (Checking)';
+  if (status !== 'AVAILABLE') return 'Task Blocked (Unverified)';
+  return 'Start Task';
+}
+
 export async function executeAgentTaskStart(
   agentId: AgentId,
   status: SceneData['status'],
   onAgentTaskStart?: ((agentId: AgentId) => Promise<boolean> | boolean) | undefined,
-  inFlight = false
+  inFlight = false,
+  phase?: ScenePhase
 ): Promise<boolean> {
+  if (phase !== undefined && phase !== 'READY') {
+    return false;
+  }
   if (status !== 'AVAILABLE' || !onAgentTaskStart || inFlight) {
     return false;
   }
@@ -50,6 +77,8 @@ interface AgentPyramidProps {
   onSetCaption: (caption: string, agentName: string) => void;
   onAgentTaskStart?: ((agentId: AgentId) => Promise<boolean> | boolean) | undefined;
   onTaskClickHandlerCapture?: ((handler: (e?: { stopPropagation?: () => void }) => Promise<void>) => void) | undefined;
+  /** Absent context fails closed to CHECKING. It does not mean the database is down. */
+  runtime?: SceneRuntimeContext | undefined;
 }
 
 export const AgentPyramid: React.FC<AgentPyramidProps> = ({
@@ -62,7 +91,11 @@ export const AgentPyramid: React.FC<AgentPyramidProps> = ({
   onSetCaption,
   onAgentTaskStart,
   onTaskClickHandlerCapture,
+  runtime,
 }) => {
+  const phase: ScenePhase = runtime?.phase ?? 'CHECKING';
+  const phaseRef = useRef(phase);
+  phaseRef.current = phase;
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [viseme, setViseme] = useState<VisemeId>('rest');
   const [expression, setExpression] = useState<ExpressionId>('idle');
@@ -94,14 +127,19 @@ export const AgentPyramid: React.FC<AgentPyramidProps> = ({
     phraseDef: typeof PHRASE_GREETING,
     onFinish?: () => void
   ) => {
+    const current = phaseRef.current;
+    const outageLine = isApprovedOutageNotice(phraseDef.phrase);
+    if (!normalSpeechAllowed(current) && !(current === 'GRAPH_UNAVAILABLE' && outageLine)) {
+      return;
+    }
     stopActiveSpeech(); // Prevent audio queue buildup
 
     setIsSpeaking(true);
     setExpression(phraseDef.expression);
     onSetCaption(phraseDef.phrase, agent.name);
 
-    // Speak via audio manager (respects muted state)
-    speechCancelRef.current = speakPhrase(phraseDef.phrase, agent, () => {
+    // Speak via audio manager (respects muted state and the phase gate)
+    speechCancelRef.current = speakAuthorizedPhrase(phraseDef.phrase, agent, current, () => {
       // Audio finished
     });
 
@@ -118,19 +156,39 @@ export const AgentPyramid: React.FC<AgentPyramidProps> = ({
     }, 40);
   };
 
-  // Trigger 1: First opening an agent's pyramid in the session (persists across component remounts)
+  const showBlockedCaption = () => {
+    const current = phaseRef.current;
+    if (normalSpeechAllowed(current)) return;
+    stopActiveSpeech();
+    const caption = blockedStatusCaption(agent.id, current);
+    if (!caption) return;
+    onSetCaption(caption, agent.name);
+    if (current === 'GRAPH_UNAVAILABLE') {
+      speechCancelRef.current = speakAuthorizedPhrase(caption, agent, current);
+    }
+  };
+
+  // Trigger 1: First opening an agent's pyramid in the session, only while READY.
   useEffect(() => {
-    if (isOpen && !SESSION_GREETED_AGENTS.has(agent.id)) {
+    if (!isOpen) {
+      stopActiveSpeech();
+      return;
+    }
+    if (!normalSpeechAllowed(phase)) return;
+    if (!SESSION_GREETED_AGENTS.has(agent.id)) {
       SESSION_GREETED_AGENTS.add(agent.id);
       playPhrase(PHRASE_GREETING);
-    } else if (!isOpen) {
-      stopActiveSpeech();
     }
-    // Cleanup on unmount or close
     return () => {
       if (!isOpen) stopActiveSpeech();
     };
-  }, [isOpen, agent.id]);
+  }, [isOpen, agent.id, phase]);
+
+  // Leave READY: cancel stale speech. Graph loss shows only the approved notice.
+  useEffect(() => {
+    if (!isOpen || normalSpeechAllowed(phase)) return;
+    showBlockedCaption();
+  }, [isOpen, phase, agent.id]);
 
   // Clean up on component unmount
   useEffect(() => {
@@ -143,33 +201,57 @@ export const AgentPyramid: React.FC<AgentPyramidProps> = ({
   const handleAvatarClick = (e: React.MouseEvent) => {
     e.stopPropagation(); // Prevent pyramid toggle
     if (!isOpen) return;
+    if (!normalSpeechAllowed(phaseRef.current)) {
+      showBlockedCaption();
+      return;
+    }
     playPhrase(PHRASE_HELP);
   };
 
   // Trigger 3: Confirmed affirmative
   const handleAffirmative = (e: React.MouseEvent) => {
     e.stopPropagation();
+    if (!normalSpeechAllowed(phaseRef.current)) {
+      showBlockedCaption();
+      return;
+    }
     playPhrase(PHRASE_AFFIRMATIVE);
   };
 
   // Trigger 4: Confirmed negative
   const handleNegative = (e: React.MouseEvent) => {
     e.stopPropagation();
+    if (!normalSpeechAllowed(phaseRef.current)) {
+      showBlockedCaption();
+      return;
+    }
     playPhrase(PHRASE_NEGATIVE);
   };
 
   // Trigger 5: Actual task start (strictly guarded by application truth with synchronous in-flight lock)
   const handleTaskStart = async (e?: { stopPropagation?: () => void }) => {
     e?.stopPropagation?.();
-    if (isTaskStartingRef.current || isTaskStarting || sceneData.status !== 'AVAILABLE' || !onAgentTaskStart) {
+    if (
+      phaseRef.current !== 'READY' ||
+      isTaskStartingRef.current ||
+      isTaskStarting ||
+      sceneData.status !== 'AVAILABLE' ||
+      !onAgentTaskStart
+    ) {
       // Presentation truth & concurrency lock: ignore rapid synchronous clicks and unverified states
       return;
     }
     isTaskStartingRef.current = true;
     setIsTaskStarting(true);
     try {
-      const started = await executeAgentTaskStart(agent.id, sceneData.status, onAgentTaskStart, false);
-      if (started) {
+      const started = await executeAgentTaskStart(
+        agent.id,
+        sceneData.status,
+        onAgentTaskStart,
+        false,
+        phaseRef.current
+      );
+      if (started && phaseRef.current === 'READY') {
         const { phraseDef, nextIndex } = getNextTaskStartPhrase(taskCycleIndex);
         setTaskCycleIndex(nextIndex);
         playPhrase(phraseDef);
@@ -265,24 +347,16 @@ export const AgentPyramid: React.FC<AgentPyramidProps> = ({
               type="button"
               className="pyramid-btn-task"
               onClick={handleTaskStart}
-              disabled={sceneData.status !== 'AVAILABLE' || !onAgentTaskStart || isTaskStarting || isTaskStartingRef.current}
-              title={
-                sceneData.status !== 'AVAILABLE'
-                  ? 'Task start blocked: database offline or unverified'
-                  : !onAgentTaskStart
-                  ? 'Task start disabled: no application task handler configured'
-                  : isTaskStarting || isTaskStartingRef.current
-                  ? 'Task execution in flight...'
-                  : 'Trigger verified task start cycle'
+              disabled={
+                phase !== 'READY' ||
+                sceneData.status !== 'AVAILABLE' ||
+                !onAgentTaskStart ||
+                isTaskStarting ||
+                isTaskStartingRef.current
               }
+              title={taskButtonLabel(sceneData.status, phase, Boolean(onAgentTaskStart), isTaskStarting)}
             >
-              {sceneData.status !== 'AVAILABLE'
-                ? 'Task Blocked (Outage)'
-                : !onAgentTaskStart
-                ? 'Task Unbound'
-                : isTaskStarting || isTaskStartingRef.current
-                ? 'Starting...'
-                : 'Start Task'}
+              {taskButtonLabel(sceneData.status, phase, Boolean(onAgentTaskStart), isTaskStarting)}
             </button>
           </div>
         </div>

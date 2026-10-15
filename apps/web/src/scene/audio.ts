@@ -1,4 +1,6 @@
+import type { ScenePhase } from '@cubes/contracts';
 import type { AgentVisualConfig } from './types';
+import { isApprovedOutageNotice } from './dialogue';
 
 let audioMuted = true;
 
@@ -21,6 +23,18 @@ export function cancelSpeech(): void {
       // Ignore synthesis cancellation failure in headless or unsupported environments
     }
   }
+}
+
+/** Ready speech, or the approved graph-outage line. Every other phrase is refused. */
+export function speakAuthorizedPhrase(
+  phrase: string,
+  agent: AgentVisualConfig,
+  phase: ScenePhase | undefined,
+  onEnd?: () => void
+): () => void {
+  const allowed = phase === 'READY' || (phase === 'GRAPH_UNAVAILABLE' && isApprovedOutageNotice(phrase));
+  if (!allowed) return () => {};
+  return speakPhrase(phrase, agent, onEnd);
 }
 
 export function speakPhrase(

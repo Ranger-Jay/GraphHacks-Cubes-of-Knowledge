@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import type { AgentId, SceneData } from '@cubes/contracts';
+import React, { useRef, useState } from 'react';
+import type { AgentId, SceneData, ScenePhase, SceneRuntimeContext } from '@cubes/contracts';
 import { AGENT_CONFIGS } from './dialogue';
 import { AgentPyramid } from './AgentPyramid';
 import { CompanyCube } from './CompanyCube';
@@ -12,6 +12,32 @@ export interface SceneProps {
   onSelectNode: (id: string) => void;
   reducedMotion: boolean;
   onAgentTaskStart?: ((agentId: AgentId) => Promise<boolean> | boolean) | undefined;
+  /**
+   * Derived by the web shell from the current probe + read. Absent fails closed to CHECKING (docs/scene-state-v019.md):
+   * no ordinary speech, no proof, and no claim that the database is down.
+   */
+  runtime?: SceneRuntimeContext | undefined;
+}
+
+/**
+ * System caption per phase. Used whenever the caption on screen was written under a different phase, so a line spoken
+ * in READY (or an outage notice) never lingers after the phase changes, and "Systems ready" is shown only in READY.
+ * ACCESS_DENIED and NOT_FOUND reuse PR #31's blocked-phase captions. CHECKING, UNAVAILABLE and GRAPH_UNAVAILABLE are
+ * PROPOSED COPY pending Buddy's ruling (v021.07); neutral wording, never "disconnected" or "severed".
+ */
+export const SYSTEM_CAPTIONS: Record<ScenePhase, string> = {
+  READY: 'Systems ready. Standing by for command.',
+  CHECKING: 'Checking the graph...',
+  ACCESS_DENIED: 'Access denied.',
+  NOT_FOUND: 'The requested release is missing.',
+  UNAVAILABLE: 'Graph status unavailable.',
+  GRAPH_UNAVAILABLE: 'Graph unavailable. Answers and proof are unavailable.',
+};
+export interface SceneCaption { text: string; speaker: string; phase: ScenePhase }
+/** A caption is shown only under the phase that wrote it; otherwise the neutral System caption for the current phase. */
+export function resolveCaption(caption: SceneCaption | null, phase: ScenePhase): { text: string; speaker: string } {
+  if (caption && caption.phase === phase) return { text: caption.text, speaker: caption.speaker };
+  return { text: SYSTEM_CAPTIONS[phase], speaker: 'System' };
 }
 
 export const CompanyCubeScene: React.FC<SceneProps> = ({
@@ -19,7 +45,10 @@ export const CompanyCubeScene: React.FC<SceneProps> = ({
   onSelectNode,
   reducedMotion,
   onAgentTaskStart,
+  runtime,
 }) => {
+  // One resolved context for every child, so the cube and the pyramids can never disagree about the phase.
+  const sceneRuntime: SceneRuntimeContext = runtime ?? { phase: 'CHECKING' };
   // Agent pyramid open/close states (Ava open by default for immediate interaction)
   const [openPyramids, setOpenPyramids] = useState<Record<AgentId, boolean>>({
     ava: true,
@@ -31,10 +60,16 @@ export const CompanyCubeScene: React.FC<SceneProps> = ({
   const [muted, setMutedState] = useState<boolean>(() => isAudioMuted());
 
   // Live accessible caption state
-  const [caption, setCaption] = useState<{ text: string; speaker: string }>({
-    text: 'Systems ready. Standing by for command.',
-    speaker: 'System',
-  });
+  const [rawCaption, setRawCaption] = useState<SceneCaption | null>(null);
+  // A phase change drops the old caption during render, so a READY line cannot come back after an outage and recovery.
+  const [seenPhase, setSeenPhase] = useState<ScenePhase>(sceneRuntime.phase);
+  if (seenPhase !== sceneRuntime.phase) {
+    setSeenPhase(sceneRuntime.phase);
+    setRawCaption(null);
+  }
+  const phaseRef = useRef<ScenePhase>(sceneRuntime.phase);
+  phaseRef.current = sceneRuntime.phase;
+  const caption = resolveCaption(rawCaption, sceneRuntime.phase);
 
   const togglePyramid = (id: AgentId) => {
     setOpenPyramids((prev) => ({
@@ -50,7 +85,7 @@ export const CompanyCubeScene: React.FC<SceneProps> = ({
   };
 
   const handleSetCaption = (text: string, speaker: string) => {
-    setCaption({ text, speaker });
+    setRawCaption({ text, speaker, phase: phaseRef.current });
   };
 
   const agentsList: AgentId[] = ['ava', 'roy', 'guz'];
@@ -107,6 +142,7 @@ export const CompanyCubeScene: React.FC<SceneProps> = ({
             data={data}
             onSelectNode={onSelectNode}
             reducedMotion={reducedMotion}
+            runtime={sceneRuntime}
           />
         </div>
 
@@ -125,6 +161,7 @@ export const CompanyCubeScene: React.FC<SceneProps> = ({
                 staggerIndex={index}
                 onSetCaption={handleSetCaption}
                 onAgentTaskStart={onAgentTaskStart}
+                runtime={sceneRuntime}
               />
             );
           })}

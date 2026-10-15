@@ -1,20 +1,27 @@
 import React from 'react';
-import type { GraphNode, GraphEdge, SceneData } from '@cubes/contracts';
+import type { GraphNode, GraphEdge, SceneData, SceneRuntimeContext } from '@cubes/contracts';
 
 interface CompanyCubeProps {
   data: SceneData;
   onSelectNode: (id: string) => void;
   reducedMotion: boolean;
+  runtime?: SceneRuntimeContext;
 }
 
 export const CompanyCube: React.FC<CompanyCubeProps> = ({
   data,
   onSelectNode,
   reducedMotion,
+  runtime,
 }) => {
-  const isAvailable = data.status === 'AVAILABLE';
-  const nodes = isAvailable ? data.nodes : [];
-  const edges = isAvailable ? data.edges : [];
+  // Derive phase truthfully: use runtime.phase if provided, otherwise fallback to data.status
+  const phase = runtime?.phase ?? (data.status === 'AVAILABLE' ? 'READY' : 'GRAPH_UNAVAILABLE');
+  const isReady = phase === 'READY';
+  const isAvailable = isReady;
+  // Only a proven graph failure gets the outage visual; UNAVAILABLE means "cannot be determined" (docs/scene-phase-matrix.md).
+  const isGraphUnavailable = phase === 'GRAPH_UNAVAILABLE';
+  const nodes = isReady ? data.nodes : [];
+  const edges = isReady ? data.edges : [];
 
   // Isometric 3D Projection coordinates for graph nodes
   // Arrange nodes inside the luminous lattice space
@@ -35,10 +42,11 @@ export const CompanyCube: React.FC<CompanyCubeProps> = ({
 
   return (
     <div
-      className={`company-cube-stage ${isAvailable ? 'cube-available' : 'cube-unavailable'} ${
-        reducedMotion ? 'reduced-motion' : ''
-      }`}
+      className={`company-cube-stage ${isReady ? 'cube-available' : 'cube-unavailable'} ${
+        isGraphUnavailable ? 'damaged-cube' : ''
+      } ${reducedMotion ? 'reduced-motion' : ''}`}
       data-testid="company-cube-view"
+      data-phase={phase}
     >
       <svg
         viewBox="0 0 400 300"
@@ -53,11 +61,18 @@ export const CompanyCube: React.FC<CompanyCubeProps> = ({
             <stop offset="100%" stopColor="#04060A" stopOpacity="0" />
           </radialGradient>
 
-          {/* Restrained Sun Accent Reference */}
+          {/* Radiant Golden Sun Accent Reference */}
           <radialGradient id="restrained-sun" cx="80%" cy="20%" r="40%">
             <stop offset="0%" stopColor="#FFF3E0" stopOpacity="0.65" />
             <stop offset="40%" stopColor="#FFB300" stopOpacity="0.3" />
             <stop offset="100%" stopColor="#04060A" stopOpacity="0" />
+          </radialGradient>
+
+          {/* Dying Grey-Black Collapsed Sun Core (Used during GRAPH_UNAVAILABLE) */}
+          <radialGradient id="collapsed-sun-core" cx="80%" cy="20%" r="40%">
+            <stop offset="0%" stopColor="#333842" stopOpacity="0.35" />
+            <stop offset="50%" stopColor="#1E2029" stopOpacity="0.75" />
+            <stop offset="100%" stopColor="#04060A" stopOpacity="0.95" />
           </radialGradient>
 
           {/* Red Graph Evidence Node Glow (#FF1744) */}
@@ -73,12 +88,19 @@ export const CompanyCube: React.FC<CompanyCubeProps> = ({
           </linearGradient>
         </defs>
 
-        {/* Cinematic Backdrop: Restrained Sun & Starfield */}
+        {/* Cinematic Backdrop: Radiant Sun or Dying Collapsed Core */}
         <rect width="400" height="300" fill="#060911" />
-        <circle cx="330" cy="55" r="75" fill="url(#restrained-sun)" aria-hidden="true" />
+        <circle
+          cx="330"
+          cy="55"
+          r="75"
+          fill={isGraphUnavailable ? 'url(#collapsed-sun-core)' : 'url(#restrained-sun)'}
+          opacity={isGraphUnavailable ? 0.35 : 1}
+          aria-hidden="true"
+        />
 
         {/* Decorative Distinguishable Background Stars */}
-        <g className={reducedMotion ? '' : 'decorative-stars'} opacity="0.35" aria-hidden="true">
+        <g className={reducedMotion ? '' : 'decorative-stars'} opacity={isGraphUnavailable ? "0.15" : "0.35"} aria-hidden="true">
           <circle cx="45" cy="40" r="1" fill="#FFFFFF" />
           <circle cx="85" cy="110" r="1.2" fill="#80D8FF" />
           <circle cx="160" cy="35" r="0.8" fill="#FFFFFF" />
@@ -88,15 +110,15 @@ export const CompanyCube: React.FC<CompanyCubeProps> = ({
           <circle cx="320" cy="260" r="1" fill="#FFFFFF" />
         </g>
 
-        {/* Central Luminous Blue Lattice Cube Frame */}
+        {/* Central Luminous Blue Lattice Cube Frame (or Damaged Crimson Lattice) */}
         <g
           className={`cube-lattice-frame ${reducedMotion ? '' : 'cube-rotate-subtle'}`}
           style={{ transformOrigin: '200px 150px' }}
         >
           {/* Ambient Glow */}
-          <circle cx="200" cy="150" r="110" fill="url(#lattice-glow)" />
+          <circle cx="200" cy="150" r="110" fill="url(#lattice-glow)" opacity={isGraphUnavailable ? 0.08 : 1} />
 
-          {/* Isometric Cube Wireframe (Luminous Cyan #00E5FF) */}
+          {/* Isometric Cube Wireframe */}
           <path
             d="
               M 200 65 L 290 115 L 290 215 L 200 265 L 110 215 L 110 115 Z
@@ -104,10 +126,10 @@ export const CompanyCube: React.FC<CompanyCubeProps> = ({
               M 200 165 L 110 215
             "
             fill="none"
-            stroke={isAvailable ? '#00E5FF' : '#37474F'}
+            stroke={isReady ? '#00E5FF' : isGraphUnavailable ? '#8A1020' : '#37474F'}
             strokeWidth="1.8"
-            strokeDasharray={isAvailable ? 'none' : '4,4'}
-            opacity={isAvailable ? 0.8 : 0.4}
+            strokeDasharray={isReady ? 'none' : '4,4'}
+            opacity={isReady ? 0.8 : 0.5}
           />
 
           {/* Internal Grid Lattice Lines */}
@@ -116,30 +138,62 @@ export const CompanyCube: React.FC<CompanyCubeProps> = ({
             y1="90"
             x2="245"
             y2="240"
-            stroke="#00E5FF"
+            stroke={isReady ? '#00E5FF' : isGraphUnavailable ? '#8A1020' : '#37474F'}
             strokeWidth="0.8"
-            opacity={isAvailable ? 0.35 : 0.1}
+            opacity={isReady ? 0.35 : 0.1}
           />
           <line
             x1="245"
             y1="90"
             x2="155"
             y2="240"
-            stroke="#00E5FF"
+            stroke={isReady ? '#00E5FF' : isGraphUnavailable ? '#8A1020' : '#37474F'}
             strokeWidth="0.8"
-            opacity={isAvailable ? 0.35 : 0.1}
+            opacity={isReady ? 0.35 : 0.1}
           />
         </g>
 
-        {/* OUTAGE STATE: Disconnected & Fractured */}
-        {!isAvailable && (
+        {/* NON-READY / OUTAGE STATE: Disconnected & Fractured */}
+        {!isReady && (
           <g className="cube-outage-overlay">
-            <rect x="70" y="115" width="260" height="70" rx="8" fill="url(#outage-fracture)" stroke="#FF5252" strokeWidth="1.5" />
-            <text x="200" y="145" textAnchor="middle" fill="#FF8A80" fontSize="13" fontWeight="bold">
-              GRAPH UNAVAILABLE
+            <rect
+              x="60"
+              y="115"
+              width="280"
+              height="70"
+              rx="8"
+              fill="url(#outage-fracture)"
+              stroke={isGraphUnavailable ? '#FF5252' : '#78909C'}
+              strokeWidth="1.5"
+            />
+            <text
+              x="200"
+              y="143"
+              textAnchor="middle"
+              fill={isGraphUnavailable ? '#FF8A80' : '#B0BEC5'}
+              fontSize="12"
+              fontWeight="bold"
+            >
+              {isGraphUnavailable
+                ? 'GRAPH UNAVAILABLE'
+                : phase === 'ACCESS_DENIED'
+                ? 'ACCESS DENIED'
+                : phase === 'NOT_FOUND'
+                ? 'RELEASE NOT FOUND'
+                : phase === 'CHECKING'
+                ? 'CHECKING THE GRAPH...'
+                : 'GRAPH STATUS UNAVAILABLE'}
             </text>
-            <text x="200" y="165" textAnchor="middle" fill="#ECEFF1" fontSize="11">
-              Evidence severed. Zero proof displayed.
+            <text x="200" y="163" textAnchor="middle" fill="#ECEFF1" fontSize="10.5">
+              {isGraphUnavailable
+                ? 'Evidence unavailable. No proof is shown.'
+                : phase === 'ACCESS_DENIED'
+                ? 'Analysis unauthorized. Verify credentials.'
+                : phase === 'NOT_FOUND'
+                ? 'No matching release found in ledger.'
+                : phase === 'CHECKING'
+                ? 'No proof is shown until the checks finish.'
+                : 'The current state could not be determined.'}
             </text>
           </g>
         )}

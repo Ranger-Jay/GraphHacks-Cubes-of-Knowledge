@@ -1,5 +1,5 @@
 :root { font-family: system-ui, sans-serif; color: #e8ecf1; background: #11151c; line-height: 1.5; }
-body { margin: 0; } header, main { max-width: 60rem; margin: 0 auto; padding: 1rem; }
+body { margin: 0; }
 a { color: #8cc8ff; } a:focus-visible, button:focus-visible { outline: 3px solid #ffd166; outline-offset: 2px; }
 .skip { position: absolute; left: -999px; } .skip:focus { left: 1rem; top: 1rem; background: #000; padding: .5rem; }
 .panel { border: 1px solid #2c3442; border-radius: 8px; padding: 1rem; margin-bottom: 1rem; }
@@ -11,3 +11,73 @@ a { color: #8cc8ff; } a:focus-visible, button:focus-visible { outline: 3px solid
 .approval { color: #ffd166; font-weight: 600; }
 blockquote { border-left: 3px solid #2c3442; margin: .25rem 0; padding-left: .75rem; white-space: pre-wrap; }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; } }
+
+/* ---- v016 shell layout: scene, agents and the current-cut result on one screen. Outer shell only. ---- */
+.app-shell { min-height: 100dvh; display: flex; flex-direction: column; box-sizing: border-box; padding: .5rem 1rem; gap: .5rem; }
+.topbar { display: flex; flex-wrap: wrap; align-items: center; gap: .25rem 1.25rem; }
+.topbar .brand { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 .75rem; flex: 1 1 24rem; min-width: 0; }
+.topbar h1 { font-size: 1.15rem; margin: 0; } .topbar h1 a { text-decoration: none; }
+.identity { margin: 0; font-size: .8rem; color: #a5afbd; }
+.health-strip { display: flex; flex-wrap: wrap; align-items: center; gap: 0 .75rem; padding: .25rem .6rem; margin: 0; font-size: .85rem; }
+.strip-title { font-size: .8rem; margin: 0; color: #a5afbd; font-weight: 600; }
+.strip-list { display: flex; flex-wrap: wrap; gap: 0 1rem; margin: 0; }
+.tech-details { display: inline-block; } .tech-details summary { cursor: pointer; font-size: .8rem; color: #a5afbd; } .tech-details p { margin: .25rem 0; font-size: .75rem; }
+.requery-box { display: flex; align-items: center; gap: .5rem; font-size: .8rem; }
+.requery { font: inherit; padding: .2rem .7rem; white-space: nowrap; }
+.requery-box { flex: none; }
+.stage { flex: 1 1 auto; min-height: 0; outline: none; }
+.stage .panel { margin: 0; padding: .6rem .8rem; }
+.stage-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: .75rem; align-items: start; justify-content: center; }
+.scene-pane, .result-pane { min-width: 0; }
+.side-col { display: flex; flex-direction: column; gap: .5rem; min-width: 0; }
+.scene-pane h2, .result-pane h2 { font-size: 1rem; margin: 0 0 .35rem; }
+.sr-only, .scene-pane h2 { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.result-pane h3 { font-size: .9rem; margin: .6rem 0 .2rem; }
+.result-pane p { margin: .25rem 0; }
+.detail { border-top: 1px solid #2c3442; margin-top: .4rem; padding-top: .3rem; }
+.detail summary { cursor: pointer; font-weight: 600; font-size: .9rem; }
+.detail:focus-within { outline: none; }
+.result-pane .evidence, .result-pane .actions, .result-pane .edges, .result-pane .source-records { margin: .25rem 0; padding-left: 1.1rem; }
+.result-pane .sources { margin: 0; padding-left: 1rem; font-size: .8rem; }
+@media (min-width: 1100px) {
+  .stage-grid { grid-template-columns: minmax(0, 62rem) minmax(20rem, 30rem); }
+  .side-col { max-height: calc(100dvh - 5.5rem); overflow-y: auto; }
+}
+/* Short screens (e.g. 1280x800): tighten the outer chrome and the embedded scene's spacing so all three stay in view.
+   Selectors below reach into the scene's class names; scene/ itself is untouched. */
+@media (min-width: 1100px) and (max-height: 1000px) {
+  .app-shell { padding: .25rem .75rem; gap: .25rem; }
+  .topbar { flex-wrap: nowrap; gap: .75rem; } .topbar .brand { flex: 0 1 21.5rem; display: block; } .topbar .brand h1 { float: left; margin-right: .5rem; line-height: 1.2; } .identity { display: block; } .topbar h1 { white-space: nowrap; } .identity { font-size: .66rem; line-height: 1.15; }
+  .health-strip { flex: 1 1 auto; font-size: .78rem; } .health-strip .muted { font-size: .7rem; } .health-strip .badge { border-width: 1px; padding: 0 .35em; } .health-strip .strip-title { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+  .health-strip .strip-list { gap: 0 .75rem; } .health-strip .tech-details { margin-left: auto; }
+  .health-strip { padding: .15rem .5rem; } .requery-box .muted { display: none; }
+  .stage-grid { grid-template-columns: minmax(0, 1fr) minmax(19rem, 24rem); gap: .5rem; }
+  .scene-pane { padding: .25rem .5rem; position: relative; }
+  .scene-pane .company-cube-scene-root { gap: .3rem; padding: .35rem .6rem; }
+  .scene-pane .scene-top-bar { padding-bottom: .25rem; gap: .4rem; } .scene-pane .scene-top-bar h3 { font-size: 1rem; }
+  .scene-pane .scene-top-bar .muted { display: none; }
+  .scene-pane .scene-caption-banner { min-height: 0; padding: .25rem .6rem; font-size: .85rem; }
+  .scene-pane .scene-layout-grid { gap: .6rem; }
+  .scene-pane .human-avatars-panel { padding-top: 0; }
+  .scene-pane .human-roles-title, .scene-pane .human-roles-subtext { display: none; }
+  .scene-pane .scene-text-fallback { font-size: .78rem; padding: .3rem .5rem; }
+  .scene-pane nav[aria-label="Graph nodes (text alternative)"] { margin-top: .1rem; } .scene-pane .detail { margin-top: .1rem; padding-top: .1rem; }
+  .side-col { max-height: calc(100dvh - 4.5rem); }
+}
+
+/* Status area: text-first, one place for loading / denied / missing release / unavailable / outage / recovery. */
+.status-area { border: 2px solid #a5afbd; border-radius: 8px; padding: .5rem .7rem; background: #151b25; }
+.status-area .status-label { font-size: 1rem; margin: 0 0 .15rem; }
+.status-tag { display: inline-block; padding: 0 .5em; border: 2px solid; border-radius: 4px; font-weight: 700; }
+.status-text, .status-detail { margin: .2rem 0; font-size: .9rem; } .status-detail { font-size: .8rem; }
+.status-area[data-phase="READY"] { border-color: #3fb27f; }
+.status-area[data-phase="CHECKING"] { border-color: #a5afbd; border-style: dotted; }
+.status-area[data-phase="GRAPH_UNAVAILABLE"] { border-color: #c77dff; border-style: double; border-width: 4px; }
+.status-area[data-phase="ACCESS_DENIED"] { border-color: #ffd166; border-style: dashed; }
+.status-area[data-phase="NOT_FOUND"] { border-color: #8cc8ff; border-style: dashed; }
+.status-area[data-phase="UNAVAILABLE"] { border-color: #ff6b6b; border-style: double; }
+
+/* Cited source record after a source-link jump: outline + tint + text label, so it is not colour alone.
+   Padding exists only on the cited record and the negative margin cancels it, so unmarked records and the cited text do not move. */
+.source-records li[data-cited] { padding: .25rem .5rem; margin: -.25rem -.5rem; outline: 3px solid #ffd166; outline-offset: 2px; background: #2a2616; }
+.source-records li[data-cited]::before { content: "Cited source"; display: block; font-weight: 600; color: #ffd166; }
