@@ -14,3 +14,5 @@ export type { LedgerConfig, LedgerRecord, ChainState, WitnessCheck } from './sta
 export { runTool, TOOL_DEFINITIONS } from './agent-tools.js';
 export type { ToolName, ToolContext, ToolResult, ToolStatus } from './agent-tools.js';
 export type { AnalyzeOptions } from './analysis.js';
+export { saveHandoff, getHandoff, handoffInbox, approvableStep } from './handoff.js';
+export type { HandoffContext, SaveHandoffInput, HandoffOutcome, ScopedHandoff } from './handoff.js';
