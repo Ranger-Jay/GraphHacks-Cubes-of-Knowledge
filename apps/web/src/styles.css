@@ -82,7 +82,7 @@ blockquote { border-left: 3px solid #2c3442; margin: .25rem 0; padding-left: .75
    That is false outside a proven outage, so the shell hides it unless its own phase says GRAPH_UNAVAILABLE.
    Reaches the scene only through its class name; scene/ is untouched. */
 .app-shell:not([data-phase="GRAPH_UNAVAILABLE"]) .cube-outage-overlay { display: none; }
-/* Cited source record after a source-link jump: outline + tint + text label, so it is not colour alone. */
-.source-records li { padding: .25rem .5rem; }
-.source-records li[data-cited] { outline: 3px solid #ffd166; outline-offset: 2px; background: #2a2616; }
+/* Cited source record after a source-link jump: outline + tint + text label, so it is not colour alone.
+   Padding exists only on the cited record and the negative margin cancels it, so unmarked records and the cited text do not move. */
+.source-records li[data-cited] { padding: .25rem .5rem; margin: -.25rem -.5rem; outline: 3px solid #ffd166; outline-offset: 2px; background: #2a2616; }
 .source-records li[data-cited]::before { content: "Cited source"; display: block; font-weight: 600; color: #ffd166; }

@@ -84,3 +84,13 @@ test('listeners do not accumulate: repeated jumps leave one pair, and Escape or 
   assert.equal(listenerCount(doc), 0, 'blur detaches both listeners');
   assert.deepEqual(cited(doc), []);
 });
+
+test('padding is scoped to the cited record and cancelled by margin: no other source record changes layout', () => {
+  const css = readFileSync(new URL('../../apps/web/src/styles.css', import.meta.url), 'utf8');
+  const rules = [...css.matchAll(/([^{}]+)\{([^}]*)\}/g)].map(m => ({ sel: (m[1] ?? '').trim(), body: m[2] ?? '' }));
+  const unscoped = rules.filter(r => /\.source-records\s+li\s*$/.test(r.sel) && /(^|[;\s])(padding|margin)\s*:/.test(r.body));
+  assert.deepEqual(unscoped.map(r => r.sel), [], 'no padding or margin on every source record');
+  const cited = rules.find(r => /\.source-records li\[data-cited\]\s*$/.test(r.sel))?.body ?? '';
+  const pad = /padding:\s*\.25rem \.5rem/.test(cited); const neg = /margin:\s*-\.25rem -\.5rem/.test(cited);
+  assert.ok(pad && neg, 'cited record: padding with a cancelling negative margin');
+});
