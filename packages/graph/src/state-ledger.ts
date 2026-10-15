@@ -320,7 +320,9 @@ export async function recoverWitness(client: GraphClient, cfg: LedgerConfig, ten
 }
 
 export type WitnessCheck = { ok: true } | { ok: false; reason: string };
-export type WitnessedSnapshot = { ok: true; snapshot: EvidenceSnapshot } | { ok: false; reason: string };
+/** On failure, `reason` holds fixed text and ledger values only (never graph text); `listsRelease` says whether the
+ * committed witness head knows the release (so a release deleted out of band is reported, not hidden as 404). */
+export type WitnessedSnapshot = { ok: true; snapshot: EvidenceSnapshot } | { ok: false; reason: string; listsRelease: boolean };
 
 /**
  * Read-side gate. Reads ONE snapshot and returns it only if it equals the committed witness head (and,
@@ -328,27 +330,30 @@ export type WitnessedSnapshot = { ok: true; snapshot: EvidenceSnapshot } | { ok:
  * snapshot, never from a separate query, so no write can slip between the check and the read.
  */
 export async function witnessedSnapshot(client: GraphClient, cfg: LedgerConfig | null, tenantId: string, releaseId?: string): Promise<WitnessedSnapshot> {
-  if (!cfg) return { ok: false, reason: 'no evidence witness is configured' };
+  if (!cfg) return { ok: false, reason: 'no evidence witness is configured', listsRelease: false };
   let chain: ChainState;
-  try { chain = await readChain(cfg, client.config.graphName, tenantId); } catch { return { ok: false, reason: 'the evidence witness could not be read' }; }
-  if (chain.status === 'MISSING') return { ok: false, reason: 'no evidence witness exists for this graph' };
-  if (chain.status === 'CORRUPT') return { ok: false, reason: `the evidence witness is corrupt (${chain.reason})` };
-  if (chain.status === 'PENDING') return { ok: false, reason: 'an evidence write is in progress or did not finish' };
+  try { chain = await readChain(cfg, client.config.graphName, tenantId); } catch { return { ok: false, reason: 'the evidence witness could not be read', listsRelease: false }; }
+  if (chain.status === 'MISSING') return { ok: false, reason: 'no evidence witness exists for this graph', listsRelease: false };
+  if (chain.status === 'CORRUPT') return { ok: false, reason: `the evidence witness is corrupt (${chain.reason})`, listsRelease: false };
+  const known = (h: LedgerRecord) => releaseId !== undefined && Object.hasOwn(h.revisions, releaseId);
+  if (chain.status === 'PENDING') return { ok: false, reason: 'an evidence write is in progress or did not finish', listsRelease: known(chain.committed) };
+  const listsRelease = known(chain.head);
   const snapshot = await readEvidenceSnapshot(client, tenantId);
   if (releaseId !== undefined) {
     const want = chain.head.revisions[releaseId];
     if (want === undefined || snapshot.revisions[releaseId] !== want) {
-      return { ok: false, reason: `the graph revision (${snapshot.revisions[releaseId] ?? 'none'}) is not the witnessed revision (${want ?? 'none'})` };
+      // Only the witnessed (ledger) value is echoed; the graph's own value is attacker-writable text.
+      return { ok: false, reason: `the graph revision is not the witnessed revision (${want ?? 'none'})`, listsRelease };
     }
   }
-  if (snapshot.stateHash !== chain.head.stateHash) return { ok: false, reason: 'the graph evidence differs from the witnessed state at this revision' };
+  if (snapshot.stateHash !== chain.head.stateHash) return { ok: false, reason: 'the graph evidence differs from the witnessed state at this revision', listsRelease };
   return { ok: true, snapshot };
 }
 
 /** Witness check without the snapshot (callers that do not read evidence afterwards). */
 export async function checkWitness(client: GraphClient, cfg: LedgerConfig | null, tenantId: string, releaseId?: string): Promise<WitnessCheck> {
   const w = await witnessedSnapshot(client, cfg, tenantId, releaseId);
-  return w.ok ? { ok: true } : w;
+  return w.ok ? { ok: true } : { ok: false, reason: w.reason };
 }
 
 /** Test/ops helper: whether a chain file exists. */

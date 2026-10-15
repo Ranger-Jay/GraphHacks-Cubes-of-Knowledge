@@ -66,24 +66,28 @@ export async function analyzeRelease(client: GraphClient, tenantId: string, rele
   const files = new SourceFiles(o.sourceRoot);
   const key = o.evidenceKey !== undefined ? o.evidenceKey : evidenceKeyFromEnv();
   try {
-    const probe = (await client.read<CurrentCutRow>(QUERIES.READ_RELEASE_CURRENT_CUT, { tenantId, releaseId }))[0];
-    if (!probe) return null;
-
-    // D-020: trust nothing in the graph unless its evidence state is the committed witness head. Every
-    // row below comes from that one witnessed snapshot, never from a later query (#20).
+    // D-020: trust nothing in the graph unless its evidence state is the committed witness head. The
+    // witness is checked FIRST, and every row below comes from that one witnessed snapshot (#20).
     const witness = await witnessedSnapshot(client, o.witness !== undefined ? o.witness : ledgerFromEnv(key), tenantId, releaseId);
-    const head: CurrentCutRow | undefined = witness.ok ? new SnapshotView(witness.snapshot).currentCut(releaseId)[0] : probe;
-    if (!head) return null;
     if (!witness.ok) {
+      // 404 only when neither the witness nor the graph knows the release; existence is all the probe decides.
+      if (!witness.listsRelease) {
+        const exists = (await client.read<CurrentCutRow>(QUERIES.READ_RELEASE_CURRENT_CUT, { tenantId, releaseId })).length > 0;
+        if (!exists) return null;
+      }
+      // Blocked answer: fixed text, the requested releaseId and ledger values only. No graph-derived title,
+      // label, cut id or revision (attacker-writable when the graph is not the witnessed state).
       const blocked: AvailableAnalysis = {
-        status: 'AVAILABLE', requestId, releaseId: head.releaseId, cutId: head.cutId, revision: head.revision, clearance: 'UNKNOWN',
-        summary: `${head.cutLabel}: clearance cannot be established because the graph is not the witnessed evidence state.`,
-        evidence: [{ id: `ev-witness-${head.releaseId}`, status: 'UNKNOWN',
+        status: 'AVAILABLE', requestId, releaseId, cutId: '', revision: '', clearance: 'UNKNOWN',
+        summary: 'Clearance cannot be established: the graph is not the witnessed evidence state.',
+        evidence: [{ id: `ev-witness-${releaseId}`, status: 'UNKNOWN',
           statement: `Graph evidence was not used: ${witness.reason}. Nothing in this graph is counted until it matches the evidence witness.`, sourceRefIds: [] }],
-        nodes: [{ id: head.releaseId, label: head.releaseTitle, kind: 'Release', sourceRefIds: [] }], edges: [], sources: [], proposedActions: []
+        nodes: [], edges: [], sources: [], proposedActions: []
       };
       return blocked;
     }
+    const head: CurrentCutRow | undefined = new SnapshotView(witness.snapshot).currentCut(releaseId)[0];
+    if (!head) return null;
     const view = new SnapshotView(witness.snapshot);
     const rows: TrackRow[] = view.trackLicenses(head.cutId);
 
