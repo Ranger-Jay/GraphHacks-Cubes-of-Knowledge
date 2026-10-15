@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import type { AgentId, SceneData } from '@cubes/contracts';
+import type { AgentId, SceneData, SceneRuntimeContext } from '@cubes/contracts';
 import { AGENT_CONFIGS } from './dialogue';
 import { AgentPyramid } from './AgentPyramid';
 import { CompanyCube } from './CompanyCube';
@@ -12,6 +12,11 @@ export interface SceneProps {
   onSelectNode: (id: string) => void;
   reducedMotion: boolean;
   onAgentTaskStart?: ((agentId: AgentId) => Promise<boolean> | boolean) | undefined;
+  /**
+   * Derived by the web shell from the current probe + read. Absent fails closed to CHECKING (docs/scene-state-v019.md):
+   * no ordinary speech, no proof, and no claim that the database is down.
+   */
+  runtime?: SceneRuntimeContext | undefined;
 }
 
 export const CompanyCubeScene: React.FC<SceneProps> = ({
@@ -19,7 +24,10 @@ export const CompanyCubeScene: React.FC<SceneProps> = ({
   onSelectNode,
   reducedMotion,
   onAgentTaskStart,
+  runtime,
 }) => {
+  // One resolved context for every child, so the cube and the pyramids can never disagree about the phase.
+  const sceneRuntime: SceneRuntimeContext = runtime ?? { phase: 'CHECKING' };
   // Agent pyramid open/close states (Ava open by default for immediate interaction)
   const [openPyramids, setOpenPyramids] = useState<Record<AgentId, boolean>>({
     ava: true,
@@ -107,6 +115,7 @@ export const CompanyCubeScene: React.FC<SceneProps> = ({
             data={data}
             onSelectNode={onSelectNode}
             reducedMotion={reducedMotion}
+            runtime={sceneRuntime}
           />
         </div>
 
@@ -125,6 +134,7 @@ export const CompanyCubeScene: React.FC<SceneProps> = ({
                 staggerIndex={index}
                 onSetCaption={handleSetCaption}
                 onAgentTaskStart={onAgentTaskStart}
+                runtime={sceneRuntime}
               />
             );
           })}
