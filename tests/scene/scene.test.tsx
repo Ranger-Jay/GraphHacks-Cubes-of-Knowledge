@@ -88,9 +88,9 @@ test('2. Dialogue trigger phrases and visemes match the exact brief specificatio
 
   // Predictable task start cycle
   assert.equal(TASK_START_CYCLE.length, 3);
-  assert.equal(TASK_START_CYCLE[0].phrase, "I'll get right on it.");
-  assert.equal(TASK_START_CYCLE[1].phrase, 'Task beginning');
-  assert.equal(TASK_START_CYCLE[2].phrase, 'Underway.');
+  assert.equal(TASK_START_CYCLE[0]!.phrase, "I'll get right on it.");
+  assert.equal(TASK_START_CYCLE[1]!.phrase, 'Task beginning');
+  assert.equal(TASK_START_CYCLE[2]!.phrase, 'Underway.');
 
   // Cycle sequence step
   const step0 = getNextTaskStartPhrase(0);
