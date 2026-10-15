@@ -5,17 +5,20 @@ import { AgentPyramid } from './AgentPyramid';
 import { CompanyCube } from './CompanyCube';
 import { HumanAvatars } from './HumanAvatars';
 import { isAudioMuted, setAudioMuted } from './audio';
+import './scene.css';
 
 export interface SceneProps {
   data: SceneData;
   onSelectNode: (id: string) => void;
   reducedMotion: boolean;
+  onAgentTaskStart?: ((agentId: AgentId) => Promise<boolean> | boolean) | undefined;
 }
 
 export const CompanyCubeScene: React.FC<SceneProps> = ({
   data,
   onSelectNode,
   reducedMotion,
+  onAgentTaskStart,
 }) => {
   // Agent pyramid open/close states (Ava open by default for immediate interaction)
   const [openPyramids, setOpenPyramids] = useState<Record<AgentId, boolean>>({
@@ -121,6 +124,7 @@ export const CompanyCubeScene: React.FC<SceneProps> = ({
                 reducedMotion={reducedMotion}
                 staggerIndex={index}
                 onSetCaption={handleSetCaption}
+                onAgentTaskStart={onAgentTaskStart}
               />
             );
           })}
@@ -133,8 +137,9 @@ export const CompanyCubeScene: React.FC<SceneProps> = ({
       {/* Text Alternative for Screen Readers & Non-Visual Access */}
       <nav aria-label="Scene text alternative" className="scene-text-fallback">
         <strong>Graph Proof State:</strong> {data.status} | <strong>Nodes:</strong>{' '}
-        {data.nodes.length} verified | <strong>Selected Node:</strong>{' '}
-        {data.selectedNodeId ?? 'None'}
+        {data.status === 'AVAILABLE' ? data.nodes.length : 0} displayed |{' '}
+        <strong>Selected Node:</strong>{' '}
+        {data.status === 'AVAILABLE' ? (data.selectedNodeId ?? 'None') : 'None'}
       </nav>
     </section>
   );

@@ -12,6 +12,13 @@ import {
 import { AgentPortrait } from './AgentPortrait';
 import { speakPhrase, cancelSpeech } from './audio';
 
+// Module-level session greeting set (persists across remounts within the same session)
+const SESSION_GREETED_AGENTS = new Set<AgentId>();
+
+export function resetSessionGreetings(): void {
+  SESSION_GREETED_AGENTS.clear();
+}
+
 interface AgentPyramidProps {
   agent: AgentVisualConfig;
   isOpen: boolean;
@@ -20,6 +27,7 @@ interface AgentPyramidProps {
   reducedMotion: boolean;
   staggerIndex: number;
   onSetCaption: (caption: string, agentName: string) => void;
+  onAgentTaskStart?: ((agentId: AgentId) => Promise<boolean> | boolean) | undefined;
 }
 
 export const AgentPyramid: React.FC<AgentPyramidProps> = ({
@@ -30,8 +38,8 @@ export const AgentPyramid: React.FC<AgentPyramidProps> = ({
   reducedMotion,
   staggerIndex,
   onSetCaption,
+  onAgentTaskStart,
 }) => {
-  const [hasGreeted, setHasGreeted] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [viseme, setViseme] = useState<VisemeId>('rest');
   const [expression, setExpression] = useState<ExpressionId>('idle');
@@ -85,10 +93,10 @@ export const AgentPyramid: React.FC<AgentPyramidProps> = ({
     }, 40);
   };
 
-  // Trigger 1: First opening an agent's pyramid in the session
+  // Trigger 1: First opening an agent's pyramid in the session (persists across component remounts)
   useEffect(() => {
-    if (isOpen && !hasGreeted) {
-      setHasGreeted(true);
+    if (isOpen && !SESSION_GREETED_AGENTS.has(agent.id)) {
+      SESSION_GREETED_AGENTS.add(agent.id);
       playPhrase(PHRASE_GREETING);
     } else if (!isOpen) {
       stopActiveSpeech();
@@ -97,7 +105,7 @@ export const AgentPyramid: React.FC<AgentPyramidProps> = ({
     return () => {
       if (!isOpen) stopActiveSpeech();
     };
-  }, [isOpen]);
+  }, [isOpen, agent.id]);
 
   // Clean up on component unmount
   useEffect(() => {
@@ -126,15 +134,22 @@ export const AgentPyramid: React.FC<AgentPyramidProps> = ({
   };
 
   // Trigger 5: Actual task start (strictly guarded by application truth)
-  const handleTaskStart = (e: React.MouseEvent) => {
+  const handleTaskStart = async (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (sceneData.status !== 'AVAILABLE') {
-      // Presentation truth: never announce task start when database is offline or unverified
+    if (sceneData.status !== 'AVAILABLE' || !onAgentTaskStart) {
+      // Presentation truth: never announce task start when database is offline or unbound
       return;
     }
-    const { phraseDef, nextIndex } = getNextTaskStartPhrase(taskCycleIndex);
-    setTaskCycleIndex(nextIndex);
-    playPhrase(phraseDef);
+    try {
+      const started = await onAgentTaskStart(agent.id);
+      if (started) {
+        const { phraseDef, nextIndex } = getNextTaskStartPhrase(taskCycleIndex);
+        setTaskCycleIndex(nextIndex);
+        playPhrase(phraseDef);
+      }
+    } catch {
+      // Failed task execution does not announce start
+    }
   };
 
   return (
@@ -202,30 +217,36 @@ export const AgentPyramid: React.FC<AgentPyramidProps> = ({
               type="button"
               className="pyramid-btn-affirm"
               onClick={handleAffirmative}
-              title="Demonstrate affirmative nod"
+              title="Scripted affirmative expression demo (not an authorization grant)"
             >
-              Affirm (Yes)
+              Affirm (Demo)
             </button>
             <button
               type="button"
               className="pyramid-btn-negative"
               onClick={handleNegative}
-              title="Demonstrate negative shake"
+              title="Scripted negative expression demo (not a recorded denial)"
             >
-              Deny (No)
+              Deny (Demo)
             </button>
             <button
               type="button"
               className="pyramid-btn-task"
               onClick={handleTaskStart}
-              disabled={sceneData.status !== 'AVAILABLE'}
+              disabled={sceneData.status !== 'AVAILABLE' || !onAgentTaskStart}
               title={
-                sceneData.status === 'AVAILABLE'
-                  ? 'Trigger verified task start cycle'
-                  : 'Task start blocked: database offline or unverified'
+                sceneData.status !== 'AVAILABLE'
+                  ? 'Task start blocked: database offline or unverified'
+                  : !onAgentTaskStart
+                  ? 'Task start disabled: no application task handler configured'
+                  : 'Trigger verified task start cycle'
               }
             >
-              {sceneData.status === 'AVAILABLE' ? 'Start Task' : 'Task Blocked (Outage)'}
+              {sceneData.status !== 'AVAILABLE'
+                ? 'Task Blocked (Outage)'
+                : !onAgentTaskStart
+                ? 'Task Unbound'
+                : 'Start Task'}
             </button>
           </div>
         </div>

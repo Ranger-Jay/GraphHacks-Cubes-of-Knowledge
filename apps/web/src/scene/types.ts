@@ -41,5 +41,5 @@ export interface SceneInteractionProps {
   data: SceneData;
   onSelectNode: (id: string) => void;
   reducedMotion: boolean;
-  onAgentTaskStart?: (agentId: AgentId) => Promise<boolean> | boolean;
+  onAgentTaskStart?: ((agentId: AgentId) => Promise<boolean> | boolean) | undefined;
 }

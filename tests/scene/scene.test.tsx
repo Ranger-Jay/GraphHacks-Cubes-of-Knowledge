@@ -224,3 +224,80 @@ test('9. Full CompanyCubeScene mounts conforming to contract with accessible fal
   assert.ok(html.includes('data-testid="pyramid-guz"'));
   assert.ok(html.includes('Scene text alternative'));
 });
+
+test('10. P2-B Screen-reader fallback reports 0 displayed nodes during UNAVAILABLE even with stale props', () => {
+  const staleData: SceneData = {
+    status: 'UNAVAILABLE',
+    nodes: [
+      { id: 'stale-1', label: 'Stale 1', kind: 'Release', sourceRefIds: [] },
+      { id: 'stale-2', label: 'Stale 2', kind: 'Track', sourceRefIds: [] },
+    ],
+    edges: [],
+    selectedNodeId: 'stale-1',
+  };
+
+  const html = renderToStaticMarkup(
+    <CompanyCubeScene
+      data={staleData}
+      onSelectNode={() => {}}
+      reducedMotion={false}
+    />
+  );
+
+  assert.ok(html.includes('<strong>Graph Proof State:</strong> UNAVAILABLE'));
+  assert.ok(html.includes('<strong>Nodes:</strong> 0 displayed'));
+  assert.ok(html.includes('<strong>Selected Node:</strong> None'));
+  assert.ok(!html.includes('verified |'));
+  assert.ok(!html.includes('Nodes: 2'));
+});
+
+test('11. P2-B Screen-reader fallback reports honest node count without misleading verified label', () => {
+  const html = renderToStaticMarkup(
+    <CompanyCubeScene
+      data={availableData}
+      onSelectNode={() => {}}
+      reducedMotion={false}
+    />
+  );
+
+  assert.ok(html.includes('<strong>Graph Proof State:</strong> AVAILABLE'));
+  assert.ok(html.includes('<strong>Nodes:</strong> 2 displayed'));
+  assert.ok(html.includes('<strong>Selected Node:</strong> rel-wad'));
+  assert.ok(!html.includes('2 verified'));
+});
+
+test('12. P2-A Task button is disabled when onAgentTaskStart is omitted or during outage', () => {
+  // Without onAgentTaskStart -> button is disabled with 'Task Unbound'
+  const htmlUnbound = renderToStaticMarkup(
+    <CompanyCubeScene
+      data={availableData}
+      onSelectNode={() => {}}
+      reducedMotion={false}
+    />
+  );
+  assert.ok(htmlUnbound.includes('Task Unbound'));
+  assert.ok(htmlUnbound.includes('disabled'));
+
+  // With onAgentTaskStart on AVAILABLE -> enabled with 'Start Task'
+  const htmlBound = renderToStaticMarkup(
+    <CompanyCubeScene
+      data={availableData}
+      onSelectNode={() => {}}
+      reducedMotion={false}
+      onAgentTaskStart={async () => true}
+    />
+  );
+  assert.ok(htmlBound.includes('Start Task'));
+
+  // With onAgentTaskStart on UNAVAILABLE -> disabled with 'Task Blocked (Outage)'
+  const htmlOutage = renderToStaticMarkup(
+    <CompanyCubeScene
+      data={unavailableData}
+      onSelectNode={() => {}}
+      reducedMotion={false}
+      onAgentTaskStart={async () => true}
+    />
+  );
+  assert.ok(htmlOutage.includes('Task Blocked (Outage)'));
+  assert.ok(htmlOutage.includes('disabled'));
+});

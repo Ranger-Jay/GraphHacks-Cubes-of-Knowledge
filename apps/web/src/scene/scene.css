@@ -444,7 +444,7 @@
    Reduced Motion Accessibility Override
    ========================================================================== */
 
-@media (prefers-reduced-motion: reduce), .reduced-motion {
+@media (prefers-reduced-motion: reduce) {
   *,
   *::before,
   *::after {
@@ -460,4 +460,20 @@
   .cube-rotate-subtle {
     animation: none !important;
   }
+}
+
+.reduced-motion *,
+.reduced-motion *::before,
+.reduced-motion *::after {
+  animation-duration: 0.001ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.001ms !important;
+}
+.reduced-motion .portrait-breathing,
+.reduced-motion .portrait-eyes-blink,
+.reduced-motion .portrait-pupil-glance,
+.reduced-motion .portrait-head-nod,
+.reduced-motion .portrait-head-shake,
+.reduced-motion .cube-rotate-subtle {
+  animation: none !important;
 }

@@ -13,7 +13,8 @@
   "scripts": {
     "check": "npm run check --workspaces --if-present",
     "build": "npm run build -w @cubes/contracts && npm run build -w @cubes/graph && npm run build -w @cubes/api && npm run build -w @cubes/web",
-    "test": "npm run build -w @cubes/api && node --test tests/bootstrap/*.test.mjs",
+    "test": "npm run build -w @cubes/api && node --test tests/bootstrap/*.test.mjs && node --import ./tests/scene/register.mjs --test tests/scene/*.test.tsx",
+    "test:scene": "node --import ./tests/scene/register.mjs --test tests/scene/*.test.tsx",
     "test:integration": "node scripts/integration-required.mjs",
     "dev:api": "node --env-file-if-exists=.env --import tsx apps/api/src/server.ts",
     "dev:web": "npm run dev -w @cubes/web",
