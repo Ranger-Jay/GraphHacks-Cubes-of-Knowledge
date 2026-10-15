@@ -34,15 +34,15 @@ export function taskButtonLabel(
   inFlight: boolean
 ): string {
   if (inFlight) return 'Starting...';
-  if (!bound) return 'Task Unbound';
   const resolved = phase ?? 'CHECKING';
-  if (resolved !== 'READY') {
-    if (resolved === 'GRAPH_UNAVAILABLE') return 'Task Blocked (Outage)';
-    if (resolved === 'ACCESS_DENIED') return 'Task Blocked (Access)';
-    if (resolved === 'NOT_FOUND') return 'Task Blocked (Not Found)';
-    if (resolved === 'UNAVAILABLE') return 'Task Blocked (Unavailable)';
-    return 'Task Blocked (Checking)';
-  }
+  // A settled blocked phase is named even when no task handler is bound (the shell binds none today), so the button
+  // never reads like an unbound feature while the real reason is an outage, a denial or a missing release.
+  if (resolved === 'GRAPH_UNAVAILABLE') return 'Task Blocked (Outage)';
+  if (resolved === 'ACCESS_DENIED') return 'Task Blocked (Access)';
+  if (resolved === 'NOT_FOUND') return 'Task Blocked (Not Found)';
+  if (resolved === 'UNAVAILABLE') return 'Task Blocked (Unavailable)';
+  if (!bound) return 'Task Unbound';
+  if (resolved !== 'READY') return 'Task Blocked (Checking)';
   if (status !== 'AVAILABLE') return 'Task Blocked (Unverified)';
   return 'Start Task';
 }
