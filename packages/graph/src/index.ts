@@ -9,5 +9,5 @@ export { seedGraph, locateExcerpt, SEED_VERSION } from './seed.js';
 export type { SeedResult } from './seed.js';
 export { evidenceKeyFromEnv, bindingSig, revisionNumber } from './evidence-key.js';
 export type { BindingClaim, BindingKind } from './evidence-key.js';
-export { witnessedWrite, recoverWitness, checkWitness, readChain, evidenceState, ledgerFromEnv, WitnessError } from './state-ledger.js';
+export { witnessedWrite, recoverWitness, revokeEvidence, checkWitness, witnessedSnapshot, readChain, evidenceState, readEvidenceSnapshot, bindingKey, ledgerFromEnv, WitnessError } from './state-ledger.js';
 export type { LedgerConfig, LedgerRecord, ChainState, WitnessCheck } from './state-ledger.js';

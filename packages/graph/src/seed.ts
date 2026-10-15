@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import type { GraphClient, ParamValue } from './client.js';
 import { cueEntryOf, parseCueSheet, scopeOf, subjectOf } from './witness.js';
 import { bindingSig, evidenceKeyFromEnv, revisionNumber } from './evidence-key.js';
-import { ledgerFromEnv, witnessedWrite, type LedgerConfig } from './state-ledger.js';
+import { bindingKey, ledgerFromEnv, witnessedWrite, type LedgerConfig } from './state-ledger.js';
 
 /**
  * Synthetic studio seed. Source text lives in graph/seed/sources/. Every excerpt is located in the
@@ -183,6 +183,10 @@ export interface SeedOptions {
   initWitness?: boolean;
   /** Finish this same seed after a crash left the witness PENDING. */
   resumeWitness?: boolean;
+  /** Operator override: allow the release revision to go backwards (never a default). */
+  allowRevisionRollback?: boolean;
+  /** Operator re-grant: lift these revocation tombstones (binding keys) in this write. */
+  reinstate?: string[];
 }
 
 export async function seedGraph(client: GraphClient, repoRoot: string, options: SeedOptions = {}): Promise<SeedResult> {
@@ -208,6 +212,15 @@ export async function seedGraph(client: GraphClient, repoRoot: string, options: 
   if (!key) throw new Error('GRAPH_EVIDENCE_KEY (32+ characters) is required to seed signed evidence bindings');
   const witness = options.witness !== undefined ? options.witness : ledgerFromEnv(key);
   const intent = `seed:${SEED_VERSION}:${(options.bundles ?? []).join('+') || 'base'}`;
+  // What this seed will write, checked against the witness before any graph change: the release revision
+  // (never backwards) and the evidence bindings (never a revoked one).
+  const plannedFiles = new Map<string, { path: string; sha256: string }>();
+  for (const src of SOURCES_ALL) {
+    const bytes = await readFile(join(repoRoot, 'graph', 'seed', 'sources', src.file));
+    plannedFiles.set(src.id, { path: `graph/seed/sources/${src.file}`, sha256: createHash('sha256').update(bytes).digest('hex') });
+  }
+  const plannedBindings = EDGES_ALL.filter(e => e.type === 'EVIDENCED_BY' || e.type === 'LISTED_IN')
+    .map(e => bindingKey(e.type, e.from, plannedFiles.get(e.to)?.path, plannedFiles.get(e.to)?.sha256));
   const edges = await witnessedWrite(client, witness, TENANT, intent, async () => {
     const sourceDir = join(repoRoot, 'graph', 'seed', 'sources');
     const texts = new Map<string, string>();
@@ -266,6 +279,10 @@ export async function seedGraph(client: GraphClient, repoRoot: string, options: 
       edges++;
     }
     return edges;
-  }, { init: options.initWitness === true, resume: options.resumeWitness === true });
+  }, {
+    init: options.initWitness === true, resume: options.resumeWitness === true,
+    planned: { revisions: { [RELEASE]: String(releaseRevision) }, bindings: plannedBindings },
+    allowRevisionRollback: options.allowRevisionRollback === true, ...(options.reinstate ? { reinstate: options.reinstate } : {})
+  });
   return { seedVersion: SEED_VERSION, sources: SOURCES_ALL.length, refs: REFS_ALL.length, nodes: new Set(labels.keys()).size, edges };
 }
