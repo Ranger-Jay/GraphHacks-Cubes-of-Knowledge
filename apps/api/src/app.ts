@@ -16,15 +16,22 @@ export type GraphRevision =
   | { state: 'available'; revision: string };
 
 /** Read-only stand-in. This slice has no audit writer, so a passing read still cannot record. */
+export type ReleaseAnalysis =
+  | { state: 'unavailable'; reason: 'NOT_IMPLEMENTED' | 'CONNECTION_FAILED' | 'QUERY_FAILED' }
+  | { state: 'available'; revision: string; cutId: string; actionIds: readonly string[]; sourceIds: readonly string[] };
+
 export interface ApprovalGraph {
   currentRevision(releaseId: string, cutId: string): Promise<GraphRevision>;
   storedFingerprint(idempotencyKey: string): Promise<string | null>;
+  /** Re-read the release at the caller's expected revision. Cut, action and sources must be this result. */
+  releaseAnalysis(releaseId: string, expectedRevision: string): Promise<ReleaseAnalysis>;
 }
 
 const denyAllSessions: SessionStore = { authenticate: () => null };
 const unavailableGraph: ApprovalGraph = {
   async currentRevision() { return { state: 'unavailable', reason: 'NOT_IMPLEMENTED' }; },
   async storedFingerprint() { return null; },
+  async releaseAnalysis() { return { state: 'unavailable', reason: 'NOT_IMPLEMENTED' }; },
 };
 
 const allowedFields = new Set(['releaseId', 'cutId', 'expectedRevision', 'actionId', 'idempotencyKey', 'evidenceSourceIds']);
@@ -108,7 +115,24 @@ async function postApproval(
     sendError(response, 409, 'IDEMPOTENCY_CONFLICT', 'Approval was not recorded. This idempotency key was already used for a different request.', requestId);
     return;
   }
+  const analysis = await graph.releaseAnalysis(parsed.releaseId, parsed.expectedRevision);
+  if (analysis.state === 'unavailable') {
+    sendError(response, 503, 'GRAPH_UNAVAILABLE', 'Approval was not recorded. The graph is unavailable.', requestId);
+    return;
+  }
+  if (analysis.revision !== parsed.expectedRevision || !analysisAgrees(parsed, analysis)) {
+    const code = analysis.revision !== parsed.expectedRevision ? 'STALE_REVISION' : 'VALIDATION_ERROR';
+    const status = analysis.revision !== parsed.expectedRevision ? 409 : 400;
+    sendError(response, status, code, 'Approval was not recorded. The cut, action, evidence and revision do not agree.', requestId);
+    return;
+  }
   sendError(response, 503, 'NOT_IMPLEMENTED', 'Approval was not recorded. No durable audit writer is configured.', requestId);
+}
+
+function analysisAgrees(parsed: ApprovalBody, analysis: { cutId: string; actionIds: readonly string[]; sourceIds: readonly string[] }): boolean {
+  return analysis.cutId === parsed.cutId
+    && analysis.actionIds.includes(parsed.actionId)
+    && parsed.evidenceSourceIds.every(id => analysis.sourceIds.includes(id));
 }
 
 function principalFrom(request: IncomingMessage, sessions: SessionStore): Principal | null {

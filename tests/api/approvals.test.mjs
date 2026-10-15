@@ -67,10 +67,33 @@ test('stale revision and reused idempotency key are rejected before any record',
   }, { sessions: testSessions(), graph });
 });
 
+test('an owner request that misses the current analysis is not recorded', async () => {
+  const graph = {
+    async currentRevision() { return { state: 'available', revision: 'rev-4' }; },
+    async storedFingerprint() { return null; },
+    async releaseAnalysis() {
+      return { state: 'available', revision: 'rev-4', cutId: 'cut-DOES-NOT-EXIST', actionIds: ['act-other'], sourceIds: ['src-other'] };
+    },
+  };
+  await withApi(async origin => {
+    const missed = await post(origin, validBody, { authorization: 'Bearer kanny-session-token' });
+    assert.equal(missed.status, 400);
+    assert.equal(missed.body.error.code, 'VALIDATION_ERROR');
+    assert.equal(missed.body.auditEventId, undefined);
+    assert.equal(missed.body.status, undefined);
+  }, { sessions: testSessions(), graph });
+});
+
 test('a current owner request is not recorded without a durable audit writer', async () => {
   const graph = {
     async currentRevision() { return { state: 'available', revision: 'rev-4' }; },
     async storedFingerprint() { return null; },
+    async releaseAnalysis() {
+      return {
+        state: 'available', revision: 'rev-4', cutId: validBody.cutId,
+        actionIds: [validBody.actionId], sourceIds: validBody.evidenceSourceIds,
+      };
+    },
   };
   await withApi(async origin => {
     const held = await post(origin, validBody, { authorization: 'Bearer kanny-session-token' });
