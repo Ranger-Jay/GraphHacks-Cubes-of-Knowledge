@@ -77,11 +77,6 @@ blockquote { border-left: 3px solid #2c3442; margin: .25rem 0; padding-left: .75
 .status-area[data-phase="NOT_FOUND"] { border-color: #8cc8ff; border-style: dashed; }
 .status-area[data-phase="UNAVAILABLE"] { border-color: #ff6b6b; border-style: double; }
 
-/* INTERIM guard (remove when scene/CompanyCube reads runtime.phase): the cube draws its hard-coded
-   "GRAPH UNAVAILABLE / Evidence severed" overlay for ANY non-AVAILABLE data (loading, denied, missing release).
-   That is false outside a proven outage, so the shell hides it unless its own phase says GRAPH_UNAVAILABLE.
-   Reaches the scene only through its class name; scene/ is untouched. */
-.app-shell:not([data-phase="GRAPH_UNAVAILABLE"]) .cube-outage-overlay { display: none; }
 /* Cited source record after a source-link jump: outline + tint + text label, so it is not colour alone.
    Padding exists only on the cited record and the negative margin cancels it, so unmarked records and the cited text do not move. */
 .source-records li[data-cited] { padding: .25rem .5rem; margin: -.25rem -.5rem; outline: 3px solid #ffd166; outline-offset: 2px; background: #2a2616; }

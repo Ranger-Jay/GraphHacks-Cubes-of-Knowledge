@@ -33,9 +33,9 @@ At 1100px and wider the scene (cube, agents, human authorities) sits beside a si
 
 Measured with real headless Chrome (see PR): document height equals the viewport (no page scroll) at 1920x1080 and 1280x800 in READY, outage and the other states; cube, agents and the evidence list are inside the viewport. The side column scrolls internally for the collapsed sections, never the page.
 
-## Interim guard
+## Interim guard (removed on the combined candidate)
 
-`CompanyCube` draws "GRAPH UNAVAILABLE / Evidence severed" for any non-AVAILABLE data (loading, denied, missing). `styles.css` hides `.cube-outage-overlay` unless the shell phase is `GRAPH_UNAVAILABLE`. Remove it when the cube reads `runtime.phase`.
+The #33 head hid `.cube-outage-overlay` from `styles.css` unless the shell phase was `GRAPH_UNAVAILABLE`, because `CompanyCube` drew its outage overlay for any non-AVAILABLE data. On the combined candidate branch `CompanyCube` reads `runtime.phase` (wired in `scene/index.tsx`), so the guard rule is removed there. On #33 alone it is still required.
 
 ## Not done here (other owners) and limits
 
