@@ -107,3 +107,17 @@ export interface ApiError {
 }
 /** Scene boundary: only current API-returned evidence; decoration kept separate. */
 export interface SceneData { status: AnalysisResponse['status']; nodes: GraphNode[]; edges: GraphEdge[]; selectedNodeId: string | null; }
+
+/** Presentation state kept separate from evidence transport and process liveness.
+ * READY requires a successful current authorized analysis and real graph probe.
+ * Unavailable evidence alone must never assert that the database is disconnected.
+ * This context grants no identity, permissions, task execution or mutation authority.
+ */
+export type ScenePhase =
+  | 'CHECKING'
+  | 'READY'
+  | 'GRAPH_UNAVAILABLE'
+  | 'ACCESS_DENIED'
+  | 'NOT_FOUND'
+  | 'UNAVAILABLE';
+export interface SceneRuntimeContext { phase: ScenePhase; }
