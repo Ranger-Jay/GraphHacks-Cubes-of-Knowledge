@@ -4,7 +4,8 @@ import { GraphUnavailableError, type GraphClient } from './client.js';
 import { QUERIES } from './queries.js';
 import { analyzeRelease, type AnalyzeOptions } from './analysis.js';
 import { SourceFiles } from './verify.js';
-import { checkWitness, ledgerFromEnv, type LedgerConfig } from './state-ledger.js';
+import { ledgerFromEnv, witnessedSnapshot, type LedgerConfig } from './state-ledger.js';
+import { SnapshotView } from './snapshot-rows.js';
 import { evidenceKeyFromEnv } from './evidence-key.js';
 
 /**
@@ -122,15 +123,15 @@ export async function runTool(client: GraphClient, ctx: ToolContext, tool: strin
     }, a.sources);
   }
   // source_excerpt: the reference (graph claim) is returned only from a witnessed graph, so a rebound or
-  // replayed reference is never presented as current evidence, even when the file bytes are genuine.
+  // replayed reference is never presented as current evidence, even when the file bytes are genuine. The
+  // row is taken from the same single snapshot the witness check hashed (#20), never from a later query.
   try {
-    const witness = await checkWitness(client, ctx.witness !== undefined ? ctx.witness : ledgerFromEnv(
+    const witness = await witnessedSnapshot(client, ctx.witness !== undefined ? ctx.witness : ledgerFromEnv(
       ctx.evidenceKey !== undefined ? ctx.evidenceKey : evidenceKeyFromEnv()), ctx.tenantId);
     if (!witness.ok) {
       return done('INTEGRITY_FAILED', `Source references cannot be returned: ${witness.reason}.`, { witnessed: false, reason: witness.reason });
     }
-    const row = (await client.read<{ id: string; path: string; sha256: string; excerpt: string; startOffset: number; endOffset: number }>(
-      QUERIES.READ_SOURCE_REFS, { ids: [params['refId']!], tenantId: ctx.tenantId }))[0];
+    const row = new SnapshotView(witness.snapshot).sourceRefs([params['refId']!])[0];
     if (!row) return done('NOT_FOUND', `No source reference "${params['refId']}" in this tenant.`);
     if (!(await new SourceFiles(ctx.sourceRoot).excerptHolds(row))) {
       return done('NOT_FOUND', `Source reference "${row.id}" does not match its source file; it is not returned.`);
