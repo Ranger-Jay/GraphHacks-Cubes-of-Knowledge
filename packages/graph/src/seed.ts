@@ -220,7 +220,7 @@ export async function seedGraph(client: GraphClient, repoRoot: string, options: 
     plannedFiles.set(src.id, { path: `graph/seed/sources/${src.file}`, sha256: createHash('sha256').update(bytes).digest('hex') });
   }
   const plannedBindings = EDGES_ALL.filter(e => e.type === 'EVIDENCED_BY' || e.type === 'LISTED_IN')
-    .map(e => bindingKey(e.type, e.from, plannedFiles.get(e.to)?.path, plannedFiles.get(e.to)?.sha256));
+    .map(e => bindingKey(e.type, e.from, plannedFiles.get(e.to)?.path));
   const edges = await witnessedWrite(client, witness, TENANT, intent, async () => {
     const sourceDir = join(repoRoot, 'graph', 'seed', 'sources');
     const texts = new Map<string, string>();
