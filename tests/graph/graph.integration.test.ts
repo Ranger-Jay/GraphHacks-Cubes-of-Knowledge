@@ -16,7 +16,8 @@ import { parseCueSheet, refWitness } from '../../packages/graph/src/seed.ts';
 // Test-only evidence key (not a secret). Real deployments set GRAPH_EVIDENCE_KEY server-side.
 process.env['GRAPH_EVIDENCE_KEY'] ??= 'test-only-evidence-key-not-a-secret-0123456789';
 // Evidence witness (D-020) lives outside the graph; each test run starts a fresh, explicitly initialized chain.
-process.env['GRAPH_WITNESS_DIR'] ??= mkdtempSync(join(tmpdir(), 'cubes-witness-'));
+// Always a fresh temp dir: an operator's persistent GRAPH_WITNESS_DIR must never be reused (or polluted) by tests.
+process.env['GRAPH_WITNESS_DIR'] = mkdtempSync(join(tmpdir(), 'cubes-witness-'));
 const ledger = () => ledgerFromEnv(evidenceKeyFromEnv())!;
 /** A graph change made through the sanctioned, witnessed writer (tests the layers behind the witness). */
 const ww = (c: GraphClient, q: string, p?: Parameters<GraphClient['write']>[1]) => witnessedWrite(c, ledger(), 't-wad', 'test-mutation', () => c.write(q, p));
@@ -617,6 +618,89 @@ test('#20: snapshot rows equal the Cypher READ_* rows on witnessed graphs (base 
       assert.deepEqual(norm(view.sourceRefs(ids)), norm(q));
     }, bundles);
   }
+});
+
+// --- #6 review at c5f449d: durable revocation, monotonic revisions, graph-text-free blocks, torn tail ---
+test('revocation is durable: re-seeding cannot un-revoke, and revisions never go backwards', async () => {
+  const { revokeEvidence, readChain, bindingKey: key } = await import('../../packages/graph/src/index.ts');
+  await withVariant('revoke_durable', null, async c => {
+    const { revoked } = await revokeEvidence(c, ledger(), 't-wad', { licenseId: 'lic-night-drive-v4', releaseId: 'rel-wad', newRevision: 'rel-wad@r2' });
+    assert.equal(revoked.length, 1);
+    const gap = await analyzeRelease(c, 't-wad', 'rel-wad');
+    assert.ok(gap && gap.status === 'AVAILABLE');
+    assert.deepEqual([gap.clearance, gap.revision, statusOf(gap, 'ev-trk-night-drive')], ['GAP', 'rel-wad@r2', 'MISSING']);
+    // The routine base seed (r1) is refused before any write; so is it with the rollback override (tombstone).
+    await assert.rejects(seedGraph(c, process.cwd()), { code: 'ROLLBACK' });
+    await assert.rejects(seedGraph(c, process.cwd(), { allowRevisionRollback: true }), { code: 'REVOKED' });
+    // The v4 bundle (r2, not backwards) also carries the revoked Night Drive binding: refused.
+    await assert.rejects(seedGraph(c, process.cwd(), { bundles: ['basement-hum-v4-license'] }), { code: 'REVOKED' });
+    const chain = await readChain(ledger(), c.config.graphName, 't-wad');
+    assert.equal(chain.status, 'COMMITTED', 'refused before writing: nothing left pending');
+    const still = await analyzeRelease(c, 't-wad', 'rel-wad');
+    assert.ok(still && still.status === 'AVAILABLE');
+    assert.deepEqual([still.clearance, statusOf(still, 'ev-trk-night-drive')], ['GAP', 'MISSING']);
+    // A write that slips the binding back in is caught before COMMIT: left PENDING, reads blocked.
+    const sig = (await c.read<{ x: string }>("MATCH (:Cut {id: 'cut-wad-v4'})-[e:LISTED_IN]->() RETURN e.sig AS x"))[0]!.x;
+    await assert.rejects(ww(c, `MATCH (l:License {id: 'lic-night-drive-v4'}), (s:Source {id: 'src-lic-night-drive'})
+      CREATE (l)-[:EVIDENCED_BY {id: 'e-back', sig: '${sig}', rev: 1, tracks: ['trk-night-drive'], cuts: ['cut-wad-v4']}]->(s)`), { code: 'REVOKED' });
+    assertBlocked(await analyzeRelease(c, 't-wad', 'rel-wad'), /in progress or did not finish/);
+    // Operator restores the committed state and recovers.
+    await c.write("MATCH ()-[e:EVIDENCED_BY {id: 'e-back'}]->() DELETE e");
+    const { recoverWitness } = await import('../../packages/graph/src/index.ts');
+    assert.equal(await recoverWitness(c, ledger(), 't-wad'), 'ABORTED');
+    // A write that lowers the revision is refused at COMMIT the same way.
+    await assert.rejects(ww(c, "MATCH (r:Release {id: 'rel-wad'}) SET r.revision = 'rel-wad@r1'"), { code: 'ROLLBACK' });
+    await c.write("MATCH (r:Release {id: 'rel-wad'}) SET r.revision = 'rel-wad@r2'");
+    assert.equal(await recoverWitness(c, ledger(), 't-wad'), 'ABORTED');
+    // Explicit reinstatement (operator re-grant) is the only way back, and it is recorded.
+    const ndKey = key('EVIDENCED_BY', 'lic-night-drive-v4', 'graph/seed/sources/license-night-drive.txt',
+      createHash('sha256').update(await readFile('graph/seed/sources/license-night-drive.txt')).digest('hex'));
+    assert.deepEqual(revoked, [ndKey]);
+    await seedGraph(c, process.cwd(), { bundles: ['basement-hum-v4-license'], reinstate: [ndKey] });
+    const back = await analyzeRelease(c, 't-wad', 'rel-wad');
+    assert.ok(back && back.status === 'AVAILABLE');
+    assert.equal(back.clearance, 'ESTABLISHED');
+    const head = await readChain(ledger(), c.config.graphName, 't-wad');
+    assert.ok(head.status === 'COMMITTED' && head.head.revoked.length === 0);
+  });
+});
+
+test('a blocked answer carries no graph-derived text; a release deleted out of band is blocked, not 404', async () => {
+  await withVariant('spoof', null, async c => {
+    await c.write("MATCH (r:Release {id: 'rel-wad'}) SET r.title = 'SPOOF TITLE cleared by legal' WITH 1 AS x MATCH (k:Cut {id: 'cut-wad-v4'}) SET k.label = 'SPOOF CUT ESTABLISHED'");
+    const a = await analyzeRelease(c, 't-wad', 'rel-wad');
+    assertBlocked(a, /differs from the witnessed state/);
+    assert.ok(a && a.status === 'AVAILABLE');
+    assert.doesNotMatch(JSON.stringify(a), /SPOOF|cut-wad|@r1/);
+    assert.deepEqual([a.releaseId, a.cutId, a.revision, a.nodes.length], ['rel-wad', '', '', 0]);
+    await c.write("MATCH (r:Release {id: 'rel-wad'}) DETACH DELETE r");
+    assertBlocked(await analyzeRelease(c, 't-wad', 'rel-wad'), /not the witnessed revision \(rel-wad@r1\)/);
+    assert.equal(await analyzeRelease(c, 't-wad', 'rel-nope'), null, 'unknown to both witness and graph: 404');
+  });
+});
+
+test('a torn final append is recoverable only with the explicit repair flag', async () => {
+  const { recoverWitness, readChain } = await import('../../packages/graph/src/index.ts');
+  const { writeFile } = await import('node:fs/promises');
+  await withVariant('torn', null, async c => {
+    const file = chainFile(c);
+    // Torn COMMIT: a witnessed write whose final record was cut mid-append.
+    await ww(c, "MATCH (t:Track {id: 'trk-night-drive'}) SET t.note = 'edited'");
+    const full = await readFile(file, 'utf8');
+    await writeFile(file, full.slice(0, full.length - 40));
+    assertBlocked(await analyzeRelease(c, 't-wad', 'rel-wad'), /corrupt/);
+    await assert.rejects(recoverWitness(c, ledger(), 't-wad'), { code: 'CORRUPT' });
+    assert.equal(await recoverWitness(c, ledger(), 't-wad', { repairTornTail: true }), 'TAIL_REPAIRED');
+    assert.equal((await readChain(ledger(), c.config.graphName, 't-wad')).status, 'PENDING', 'the torn COMMIT never counted');
+    assertBlocked(await analyzeRelease(c, 't-wad', 'rel-wad'), /did not finish/);
+    // Same-intent resume commits the state the interrupted write produced.
+    await witnessedWrite(c, ledger(), 't-wad', 'test-mutation', async () => undefined, { resume: true });
+    assert.equal(witnessStatus(await analyzeRelease(c, 't-wad', 'rel-wad')), undefined);
+    // Damage that is not a torn tail is never "repaired".
+    const good = await readFile(file, 'utf8');
+    await writeFile(file, good.replace('"type":"COMMIT"', '"type":"ABORT"'));
+    await assert.rejects(recoverWitness(c, ledger(), 't-wad', { repairTornTail: true }), { code: 'CORRUPT' });
+  });
 });
 
 test('#15 unit: a binding holds only for its own claim, revision window, track and cut', () => {
