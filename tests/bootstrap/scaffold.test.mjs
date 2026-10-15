@@ -29,10 +29,8 @@ test('bootstrap liveness does not pretend graph or product readiness', async () 
     assert.equal(graph.status, 503);
     assert.equal((await graph.json()).status, 'UNAVAILABLE');
     const mutation = await fetch(`${origin}/api/approvals`, {method: 'POST'});
-    // Before the API lane lands this route is absent. Once present, anonymous
-    // requests must be rejected by authentication, never record an approval.
-    assert.ok(mutation.status === 404 || mutation.status === 401, `Anonymous approval returned ${mutation.status}`);
-    if (mutation.status === 401) assert.equal((await mutation.json()).error.code, 'UNAUTHENTICATED');
+    assert.equal(mutation.status, 401);
+    assert.equal((await mutation.json()).error.code, 'UNAUTHENTICATED');
   } finally {
     child.kill('SIGTERM');
     await once(child, 'exit');
