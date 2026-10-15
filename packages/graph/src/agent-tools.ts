@@ -61,11 +61,15 @@ export const TOOL_DEFINITIONS: Record<ToolName, ToolSpec> = {
 
 function validate(tool: ToolName, args: unknown): Record<string, string> | null {
   if (args === null || typeof args !== 'object' || Array.isArray(args)) return null;
+  const proto = Object.getPrototypeOf(args);
+  if (proto !== Object.prototype && proto !== null) return null; // plain JSON objects only
   const spec = TOOL_DEFINITIONS[tool].parameters;
   const a = args as Record<string, unknown>;
-  if (Object.keys(a).some(k => !(k in spec.properties))) return null;
+  // Own-property checks only: inherited names (constructor, toString, __proto__) never count as declared.
+  if (Reflect.ownKeys(a).some(k => typeof k !== 'string' || !Object.hasOwn(spec.properties, k))) return null;
   const out: Record<string, string> = {};
   for (const k of spec.required) {
+    if (!Object.hasOwn(a, k)) return null;
     const v = a[k];
     if (typeof v !== 'string' || !ID.test(v)) return null;
     out[k] = v;
