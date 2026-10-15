@@ -49,6 +49,7 @@ interface AgentPyramidProps {
   staggerIndex: number;
   onSetCaption: (caption: string, agentName: string) => void;
   onAgentTaskStart?: ((agentId: AgentId) => Promise<boolean> | boolean) | undefined;
+  onTaskClickHandlerCapture?: ((handler: (e?: { stopPropagation?: () => void }) => Promise<void>) => void) | undefined;
 }
 
 export const AgentPyramid: React.FC<AgentPyramidProps> = ({
@@ -60,12 +61,14 @@ export const AgentPyramid: React.FC<AgentPyramidProps> = ({
   staggerIndex,
   onSetCaption,
   onAgentTaskStart,
+  onTaskClickHandlerCapture,
 }) => {
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [viseme, setViseme] = useState<VisemeId>('rest');
   const [expression, setExpression] = useState<ExpressionId>('idle');
   const [taskCycleIndex, setTaskCycleIndex] = useState(0);
   const [isTaskStarting, setIsTaskStarting] = useState(false);
+  const isTaskStartingRef = useRef(false);
 
   const animationTimerRef = useRef<number | null>(null);
   const speechCancelRef = useRef<(() => void) | null>(null);
@@ -155,13 +158,14 @@ export const AgentPyramid: React.FC<AgentPyramidProps> = ({
     playPhrase(PHRASE_NEGATIVE);
   };
 
-  // Trigger 5: Actual task start (strictly guarded by application truth with in-flight guard)
-  const handleTaskStart = async (e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (sceneData.status !== 'AVAILABLE' || !onAgentTaskStart || isTaskStarting) {
-      // Presentation truth: never announce task start when database is offline, unbound, or already starting
+  // Trigger 5: Actual task start (strictly guarded by application truth with synchronous in-flight lock)
+  const handleTaskStart = async (e?: { stopPropagation?: () => void }) => {
+    e?.stopPropagation?.();
+    if (isTaskStartingRef.current || isTaskStarting || sceneData.status !== 'AVAILABLE' || !onAgentTaskStart) {
+      // Presentation truth & concurrency lock: ignore rapid synchronous clicks and unverified states
       return;
     }
+    isTaskStartingRef.current = true;
     setIsTaskStarting(true);
     try {
       const started = await executeAgentTaskStart(agent.id, sceneData.status, onAgentTaskStart, false);
@@ -171,9 +175,14 @@ export const AgentPyramid: React.FC<AgentPyramidProps> = ({
         playPhrase(phraseDef);
       }
     } finally {
+      isTaskStartingRef.current = false;
       setIsTaskStarting(false);
     }
   };
+
+  if (onTaskClickHandlerCapture) {
+    onTaskClickHandlerCapture(handleTaskStart);
+  }
 
   return (
     <article
@@ -256,13 +265,13 @@ export const AgentPyramid: React.FC<AgentPyramidProps> = ({
               type="button"
               className="pyramid-btn-task"
               onClick={handleTaskStart}
-              disabled={sceneData.status !== 'AVAILABLE' || !onAgentTaskStart || isTaskStarting}
+              disabled={sceneData.status !== 'AVAILABLE' || !onAgentTaskStart || isTaskStarting || isTaskStartingRef.current}
               title={
                 sceneData.status !== 'AVAILABLE'
                   ? 'Task start blocked: database offline or unverified'
                   : !onAgentTaskStart
                   ? 'Task start disabled: no application task handler configured'
-                  : isTaskStarting
+                  : isTaskStarting || isTaskStartingRef.current
                   ? 'Task execution in flight...'
                   : 'Trigger verified task start cycle'
               }
@@ -271,7 +280,7 @@ export const AgentPyramid: React.FC<AgentPyramidProps> = ({
                 ? 'Task Blocked (Outage)'
                 : !onAgentTaskStart
                 ? 'Task Unbound'
-                : isTaskStarting
+                : isTaskStarting || isTaskStartingRef.current
                 ? 'Starting...'
                 : 'Start Task'}
             </button>
