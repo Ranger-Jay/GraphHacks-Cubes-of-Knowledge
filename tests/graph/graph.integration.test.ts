@@ -564,6 +564,61 @@ test('D-020: concurrent writers are serialized and the chain stays valid', async
   });
 });
 
+// --- #20 pattern: no graph read after the witnessed snapshot ---
+test('#20: a write landing right after the witness check cannot change the answer (ABA interleaving)', async () => {
+  await withVariant('toctou', null, async c => {
+    const attacker = new GraphClient(c.config);
+    let witnessReads = 0;
+    let readsAfterWitness = 0;
+    let fired = false;
+    const isWitnessRead = (q: string) => q.includes('ANY(l IN labels(');
+    const hooked = Object.create(c) as GraphClient;
+    hooked.read = async (q, p) => {
+      if (isWitnessRead(q)) witnessReads++;
+      else if (witnessReads > 0) {
+        readsAfterWitness++;
+        if (!fired) {
+          fired = true; // tamper between the witness check and any later read: make Basement Hum look cleared
+          await attacker.write("MATCH (:Cut {id: 'cut-wad-v4'})-[u:USES_TRACK]->(:Track {id: 'trk-basement-hum'}) DELETE u");
+        }
+      }
+      return c.read(q, p);
+    };
+    try {
+      const a = await analyzeRelease(hooked, 't-wad', 'rel-wad');
+      assert.ok(a && a.status === 'AVAILABLE');
+      assert.equal(a.clearance, 'GAP', 'answer is the witnessed state');
+      assert.equal(statusOf(a, 'ev-trk-basement-hum'), 'STALE');
+      assert.ok(witnessReads >= 1);
+      assert.equal(readsAfterWitness, 0, 'analysis performs no graph read after the witnessed snapshot');
+      // A later write is caught by the next analysis.
+      await attacker.write("MATCH (:Cut {id: 'cut-wad-v4'})-[u:USES_TRACK]->(:Track {id: 'trk-basement-hum'}) DELETE u");
+      assertBlocked(await analyzeRelease(c, 't-wad', 'rel-wad'), /differs from the witnessed state/);
+    } finally { await attacker.close(); }
+  });
+});
+
+test('#20: snapshot rows equal the Cypher READ_* rows on witnessed graphs (base and v4 bundle)', async () => {
+  const { QUERIES } = await import('../../packages/graph/src/index.ts');
+  const { readEvidenceSnapshot } = await import('../../packages/graph/src/state-ledger.ts');
+  const { SnapshotView } = await import('../../packages/graph/src/snapshot-rows.ts');
+  const norm = (rows: object[]) => rows.map(r => JSON.stringify(Object.fromEntries(Object.entries(r).sort()))).sort();
+  for (const bundles of [[], ['basement-hum-v4-license']]) {
+    await withVariant(`equiv${bundles.length}`, null, async c => {
+      const view = new SnapshotView(await readEvidenceSnapshot(c, 't-wad'));
+      const head = await c.read<Record<string, unknown>>(QUERIES.READ_RELEASE_CURRENT_CUT, { tenantId: 't-wad', releaseId: 'rel-wad' });
+      assert.deepEqual(norm(view.currentCut('rel-wad')), norm(head));
+      for (const cutId of ['cut-wad-v3', 'cut-wad-v4']) {
+        const q = await c.read<Record<string, unknown>>(QUERIES.READ_CUT_TRACK_LICENSES, { tenantId: 't-wad', cutId });
+        assert.deepEqual(norm(view.trackLicenses(cutId)), norm(q), cutId);
+      }
+      const ids = (await c.read<{ id: string }>("MATCH (r:SourceRef {tenantId: 't-wad'}) RETURN r.id AS id")).map(r => r.id);
+      const q = await c.read<Record<string, unknown>>(QUERIES.READ_SOURCE_REFS, { tenantId: 't-wad', ids });
+      assert.deepEqual(norm(view.sourceRefs(ids)), norm(q));
+    }, bundles);
+  }
+});
+
 test('#15 unit: a binding holds only for its own claim, revision window, track and cut', () => {
   const key = Buffer.from('unit-test-key-unit-test-key-unit-test-key');
   const claim = { kind: 'EVIDENCED_BY' as const, tenantId: 't', releaseId: 'rel', subjectId: 'lic', path: 'p', sha256: 'h' };
