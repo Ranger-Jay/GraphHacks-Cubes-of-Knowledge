@@ -12,7 +12,7 @@ try {
     process.exitCode = h.ok ? 0 : 1;
   } else if (command === 'seed') {
     const bundles = rest.filter(a => !a.startsWith('--'));
-    console.log(JSON.stringify(await seedGraph(client, process.cwd(), { bundles, initWitness: rest.includes('--init-witness'), resumeWitness: rest.includes('--resume'), allowRevisionRollback: rest.includes('--allow-revision-rollback') })));
+    console.log(JSON.stringify(await seedGraph(client, process.cwd(), { bundles, initWitness: rest.includes('--init-witness'), resumeWitness: rest.includes('--resume'), allowRevisionRollback: rest.includes('--allow-revision-rollback'), reinstate: rest.filter(a => a.startsWith('--reinstate=')).map(a => a.slice('--reinstate='.length)) })));
   } else if (command === 'revoke' && arg1 && arg2) {
     // revoke <licenseId> <newRevision> [releaseId]
     console.log(JSON.stringify(await revokeEvidence(client, ledgerFromEnv(evidenceKeyFromEnv()), 't-wad', { licenseId: arg1, newRevision: arg2, releaseId: process.argv[5] ?? 'rel-wad' })));
@@ -26,7 +26,7 @@ try {
     console.log(JSON.stringify(result ?? { status: 'NOT_FOUND', releaseId: arg1 }, null, 2));
     process.exitCode = result?.status === 'AVAILABLE' ? 0 : 1;
   } else {
-    console.error('usage: cli.ts health | seed [--init-witness] [--resume] [--allow-revision-rollback] [bundle...] | revoke <licenseId> <newRevision> [releaseId] | witness-recover [tenantId] [--repair-torn-tail] | analyze <releaseId> [tenantId]');
+    console.error('usage: cli.ts health | seed [--init-witness] [--resume] [--allow-revision-rollback] [--reinstate=<kind|subject|path>] [bundle...] | revoke <licenseId> <newRevision> [releaseId] | witness-recover [tenantId] [--repair-torn-tail] | analyze <releaseId> [tenantId]');
     process.exitCode = 2;
   }
 } finally {
