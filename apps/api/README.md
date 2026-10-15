@@ -18,6 +18,10 @@ Mint the tokens outside this repo and put them only in the server process enviro
 
 The tenant is `API_TENANT_ID` only. The graph address, evidence key, and witness directory stay in their existing server variables.
 
+## Graph status
+
+`GET /api/graph/status` calls the graph lane's `graphHealth` read. No session is required, and the response has no release, evidence, or token fields. HTTP 200 `AVAILABLE` with `ready: true` means that read returned at least one `Release`. A refused connection is 503 `CONNECTION_FAILED`. An empty graph or a failed read is 503 `QUERY_FAILED`. `NOT_IMPLEMENTED` remains only when `createApiServer` is called without a status probe. This is not a Docker, hosted, or Cloud claim.
+
 ## Dropped graph socket
 
 Closing FalkorDB emits a client `error` after the failed query. The startup swallows that event so the process stays up and the read route can return 503 with empty evidence. The next read opens a new client. This is not a Docker or Cloud claim.
