@@ -1,5 +1,5 @@
 :root { font-family: system-ui, sans-serif; color: #e8ecf1; background: #11151c; line-height: 1.5; }
-body { margin: 0; } header, main { max-width: 60rem; margin: 0 auto; padding: 1rem; }
+body { margin: 0; }
 a { color: #8cc8ff; } a:focus-visible, button:focus-visible { outline: 3px solid #ffd166; outline-offset: 2px; }
 .skip { position: absolute; left: -999px; } .skip:focus { left: 1rem; top: 1rem; background: #000; padding: .5rem; }
 .panel { border: 1px solid #2c3442; border-radius: 8px; padding: 1rem; margin-bottom: 1rem; }
@@ -11,3 +11,55 @@ a { color: #8cc8ff; } a:focus-visible, button:focus-visible { outline: 3px solid
 .approval { color: #ffd166; font-weight: 600; }
 blockquote { border-left: 3px solid #2c3442; margin: .25rem 0; padding-left: .75rem; white-space: pre-wrap; }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; } }
+
+/* ---- v016 shell layout: scene, agents and the current-cut result on one screen. Outer shell only. ---- */
+.app-shell { min-height: 100dvh; display: flex; flex-direction: column; box-sizing: border-box; padding: .5rem 1rem; gap: .5rem; }
+.topbar { display: flex; flex-wrap: wrap; align-items: center; gap: .25rem 1.25rem; }
+.topbar .brand { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 .75rem; flex: 1 1 24rem; min-width: 0; }
+.topbar h1 { font-size: 1.15rem; margin: 0; } .topbar h1 a { text-decoration: none; }
+.identity { margin: 0; font-size: .8rem; color: #a5afbd; }
+.health-strip { display: flex; flex-wrap: wrap; align-items: center; gap: 0 .75rem; padding: .25rem .6rem; margin: 0; font-size: .85rem; }
+.strip-title { font-size: .8rem; margin: 0; color: #a5afbd; font-weight: 600; }
+.strip-list { display: flex; flex-wrap: wrap; gap: 0 1rem; margin: 0; }
+.tech-details { display: inline-block; } .tech-details summary { cursor: pointer; font-size: .8rem; color: #a5afbd; } .tech-details p { margin: .25rem 0; font-size: .75rem; }
+.requery-box { display: flex; align-items: center; gap: .5rem; font-size: .8rem; }
+.requery { font: inherit; padding: .2rem .7rem; white-space: nowrap; }
+.requery-box { flex: none; }
+.stage { flex: 1 1 auto; min-height: 0; outline: none; }
+.stage .panel { margin: 0; padding: .6rem .8rem; }
+.stage-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: .75rem; align-items: start; justify-content: center; }
+.scene-pane, .result-pane { min-width: 0; }
+.scene-pane h2, .result-pane h2 { font-size: 1rem; margin: 0 0 .35rem; }
+.sr-only, .scene-pane h2 { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.result-pane h3 { font-size: .9rem; margin: .6rem 0 .2rem; }
+.result-pane p { margin: .25rem 0; }
+.detail { border-top: 1px solid #2c3442; margin-top: .4rem; padding-top: .3rem; }
+.detail summary { cursor: pointer; font-weight: 600; font-size: .9rem; }
+.detail:focus-within { outline: none; }
+.result-pane .evidence, .result-pane .actions, .result-pane .edges, .result-pane .source-records { margin: .25rem 0; padding-left: 1.1rem; }
+.result-pane .sources { margin: 0; padding-left: 1rem; font-size: .8rem; }
+@media (min-width: 1100px) {
+  .stage-grid { grid-template-columns: minmax(0, 62rem) minmax(20rem, 30rem); }
+  .result-pane { max-height: calc(100dvh - 5.5rem); overflow-y: auto; }
+}
+/* Short screens (e.g. 1280x800): tighten the outer chrome and the embedded scene's spacing so all three stay in view.
+   Selectors below reach into the scene's class names; scene/ itself is untouched. */
+@media (min-width: 1100px) and (max-height: 1000px) {
+  .app-shell { padding: .25rem .75rem; gap: .25rem; }
+  .topbar { flex-wrap: nowrap; gap: .75rem; } .topbar .brand { flex: 0 1 27rem; flex-wrap: nowrap; gap: .5rem; align-items: center; } .topbar h1 { white-space: nowrap; } .identity { font-size: .7rem; line-height: 1.2; }
+  .health-strip { flex: 1 1 auto; } .health-strip .muted { font-size: .72rem; } .health-strip .strip-title { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+  .health-strip .strip-list { gap: 0 .75rem; } .health-strip .tech-details { margin-left: auto; }
+  .health-strip { padding: .15rem .5rem; } .requery-box .muted { display: none; }
+  .stage-grid { grid-template-columns: minmax(0, 1fr) minmax(19rem, 24rem); gap: .5rem; }
+  .scene-pane { padding: .25rem .5rem; position: relative; }
+  .scene-pane .company-cube-scene-root { gap: .3rem; padding: .35rem .6rem; }
+  .scene-pane .scene-top-bar { padding-bottom: .25rem; gap: .4rem; } .scene-pane .scene-top-bar h3 { font-size: 1rem; }
+  .scene-pane .scene-top-bar .muted { display: none; }
+  .scene-pane .scene-caption-banner { min-height: 0; padding: .25rem .6rem; font-size: .85rem; }
+  .scene-pane .scene-layout-grid { gap: .6rem; }
+  .scene-pane .human-avatars-panel { padding-top: 0; }
+  .scene-pane .human-roles-title, .scene-pane .human-roles-subtext { display: none; }
+  .scene-pane .scene-text-fallback { font-size: .78rem; padding: .3rem .5rem; }
+  .scene-pane nav[aria-label="Graph nodes (text alternative)"] { margin-top: .1rem; } .scene-pane .detail { margin-top: .1rem; padding-top: .1rem; }
+  .result-pane { max-height: calc(100dvh - 4.5rem); }
+}

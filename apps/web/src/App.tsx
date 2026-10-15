@@ -23,20 +23,25 @@ export function Shell({ route, health, graph, analysis, Scene, reducedMotion, se
   return (
     <>
       <a className="skip" href="#main">Skip to content</a>
-      <header><h1><a href="#/">Cubes of Knowledge</a></h1><p>{IDENTITY}</p></header>
-      <main id="main" tabIndex={-1}>
-        <HealthPanel health={health} graph={graph} />
-        {onRequery && <p><button type="button" className="requery" onClick={onRequery}>Re-query</button> <span className="muted">Clears shown results and asks the API again.</span></p>}
-        {route.name === 'home' && (
-          <section className="panel" aria-labelledby="rel-h"><h2 id="rel-h">Releases</h2>
-            <p>Open a release analysis: <a href={`#/releases/${SEEDED_RELEASE_ID}`}>{SEEDED_RELEASE_ID}</a>. Results come only from the API.</p></section>)}
-        {route.name === 'release' && <>
-          <AnalysisView releaseId={route.releaseId} result={analysis} phase={phase} />
-          <SceneMount Scene={Scene} data={toSceneData(current, selected)} onSelectNode={onSelect} reducedMotion={reducedMotion} runtime={toRuntimeContext(phase ?? 'CHECKING')} />
-        </>}
-        {route.name === 'not_found' && (
-          <section className="panel" role="alert"><h2>404: page not found</h2><p>No view for <code>{route.path}</code>. <a href="#/">Home</a></p></section>)}
-      </main>
+      <div className="app-shell" data-phase={phase ?? 'none'}>
+        <header className="topbar">
+          <div className="brand"><h1><a href="#/">Cubes of Knowledge</a></h1><p className="identity">{IDENTITY}</p></div>
+          <HealthPanel health={health} graph={graph} />
+          {onRequery && <div className="requery-box"><button type="button" className="requery" onClick={onRequery}>Re-query</button> <span className="muted">Clears shown results and asks the API again.</span></div>}
+        </header>
+        <main id="main" tabIndex={-1} className="stage">
+          {route.name === 'home' && (
+            <section className="panel" aria-labelledby="rel-h"><h2 id="rel-h">Releases</h2>
+              <p>Open a release analysis: <a href={`#/releases/${SEEDED_RELEASE_ID}`}>{SEEDED_RELEASE_ID}</a>. Results come only from the API.</p></section>)}
+          {route.name === 'release' && (
+            <div className="stage-grid">
+              <SceneMount Scene={Scene} data={toSceneData(current, selected)} onSelectNode={onSelect} reducedMotion={reducedMotion} runtime={toRuntimeContext(phase ?? 'CHECKING')} />
+              <AnalysisView releaseId={route.releaseId} result={analysis} phase={phase} />
+            </div>)}
+          {route.name === 'not_found' && (
+            <section className="panel" role="alert"><h2>404: page not found</h2><p>No view for <code>{route.path}</code>. <a href="#/">Home</a></p></section>)}
+        </main>
+      </div>
     </>
   );
 }
