@@ -26,7 +26,7 @@ try {
     console.log(JSON.stringify(result ?? { status: 'NOT_FOUND', releaseId: arg1 }, null, 2));
     process.exitCode = result?.status === 'AVAILABLE' ? 0 : 1;
   } else {
-    console.error('usage: cli.ts health | seed [--init-witness] [--resume] [--allow-revision-rollback] [--reinstate=<kind|subject|path>] [bundle...] | revoke <licenseId> <newRevision> [releaseId] | witness-recover [tenantId] [--repair-torn-tail] | analyze <releaseId> [tenantId]');
+    console.error('usage: cli.ts health | seed [--init-witness] [--resume] [--allow-revision-rollback] [\'--reinstate=<kind|subject|path>\'] [bundle...] | revoke <licenseId> <newRevision> [releaseId] | witness-recover [tenantId] [--repair-torn-tail] | analyze <releaseId> [tenantId]');
     process.exitCode = 2;
   }
 } finally {
