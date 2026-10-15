@@ -1,6 +1,17 @@
 import { timingSafeEqual } from 'node:crypto';
+import { FalkorDB } from 'falkordb';
 import { analyzeRelease, configFromEnv, GraphClient } from '@cubes/graph';
 import { createApiServer, type Principal, type ReleaseReader, type SessionStore } from './app.js';
+
+// A dropped socket emits `error`, and closing that client emits it again with no listener.
+// Swallow it here so the route can answer 503. The failed query still rejects.
+const connectGraph = FalkorDB.connect.bind(FalkorDB);
+FalkorDB.connect = (async (options?: Parameters<typeof FalkorDB.connect>[0]) => {
+  const db = await connectGraph(options);
+  const emit = db.emit.bind(db);
+  db.emit = ((event: string | symbol, ...args: unknown[]) => event === 'error' ? true : emit(event, ...args)) as typeof db.emit;
+  return db;
+}) as typeof FalkorDB.connect;
 
 const host = process.env['API_HOST'] ?? '127.0.0.1';
 const port = Number(process.env['API_PORT'] ?? 8787);
