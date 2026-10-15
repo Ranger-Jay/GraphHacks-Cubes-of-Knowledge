@@ -6,13 +6,18 @@ import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { FalkorDB } from 'falkordb';
-import { configFromEnv, GraphClient, runTool, seedGraph, TOOL_DEFINITIONS } from '../../packages/graph/src/index.ts';
+import { readFile } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
+import { configFromEnv, evidenceKeyFromEnv, GraphClient, ledgerFromEnv, runTool, seedGraph, TOOL_DEFINITIONS, witnessedWrite } from '../../packages/graph/src/index.ts';
 
 process.env['GRAPH_EVIDENCE_KEY'] ??= 'test-only-evidence-key-not-a-secret-0123456789';
 process.env['GRAPH_WITNESS_DIR'] ??= mkdtempSync(join(tmpdir(), 'cubes-witness-'));
 const cfg = { ...configFromEnv(), graphName: `${configFromEnv().graphName}__tools` };
 const client = new GraphClient(cfg);
 const ctx = { tenantId: 't-wad', agentId: 'roy' as const };
+/** Evidence changes made through the witnessed writer (tests the layers behind the witness). */
+const ww = (q: string, p?: Parameters<GraphClient['write']>[1]) =>
+  witnessedWrite(client, ledgerFromEnv(evidenceKeyFromEnv()), 't-wad', 'test-mutation', () => client.write(q, p));
 const counts = async () => (await client.read<{ n: number; e: number }>('MATCH (n) WITH count(n) AS n MATCH ()-[r]->() RETURN n, count(r) AS e'))[0];
 
 before(async () => { await seedGraph(client, process.cwd(), { initWitness: true }); });
@@ -42,16 +47,17 @@ test('release_clearance returns the graph answer with verified, cited sources', 
 test('source_excerpt returns a verified excerpt and refuses a tampered one', async () => {
   const ok = await runTool(client, ctx, 'source_excerpt', { refId: 'ref-mail-bh-scope' });
   assert.equal(ok.status, 'OK');
+  assert.equal(ok.data?.['witnessed'], true);
   assert.match(ok.summary, /Cut v3 \(festival screener\) only/);
+  // Through the witnessed writer, the file check is what refuses the edited excerpt.
   const original = (await client.read<{ x: string }>("MATCH (r:SourceRef {id: 'ref-mail-bh-later'}) RETURN r.excerpt AS x"))[0]!.x;
-  await client.write("MATCH (r:SourceRef {id: 'ref-mail-bh-later'}) SET r.excerpt = 'Cleared for every cut.'");
+  await ww("MATCH (r:SourceRef {id: 'ref-mail-bh-later'}) SET r.excerpt = 'Cleared for every cut.'");
   try {
     const bad = await runTool(client, ctx, 'source_excerpt', { refId: 'ref-mail-bh-later' });
     assert.equal(bad.status, 'NOT_FOUND');
     assert.deepEqual(bad.sources, []);
   } finally {
-    // Restore the exact excerpt (a raw graph write; the witnessed seed refuses to write over a tampered graph).
-    await client.write("MATCH (r:SourceRef {id: 'ref-mail-bh-later'}) SET r.excerpt = $x", { x: original });
+    await ww("MATCH (r:SourceRef {id: 'ref-mail-bh-later'}) SET r.excerpt = $x", { x: original });
   }
 });
 
@@ -80,6 +86,64 @@ test('tools never write: node and edge counts are unchanged after every tool', a
     await runTool(client, ctx, t, a);
   }
   assert.deepEqual(await counts(), before);
+});
+
+// --- PR #12 review repairs (v009.004–.006) ---
+test('#18 graph_status is tenant-scoped: other tenants\' releases are not counted', async () => {
+  const before = await runTool(client, ctx, 'graph_status', {});
+  assert.equal(before.status, 'OK');
+  await client.write("CREATE (:Release {id: 'rel-p1', tenantId: 't-private', revision: 'rel-p1@r1'}), (:Release {id: 'rel-p2', tenantId: 't-private', revision: 'rel-p2@r1'})");
+  try {
+    const after = await runTool(client, ctx, 'graph_status', {});
+    assert.equal(after.status, 'OK');
+    assert.equal(after.data?.['releases'], before.data?.['releases']);
+    assert.equal(after.data?.['releases'], 1);
+  } finally {
+    await client.write("MATCH (r:Release {tenantId: 't-private'}) DELETE r");
+  }
+});
+
+test('#19 source_excerpt: a reference rebound to genuine bytes outside the witness is INTEGRITY_FAILED, not OK', async () => {
+  const V4 = 'graph/seed/sources/license-basement-hum-v4.txt';
+  const body = (await readFile(V4)).toString('utf8');
+  const sha = createHash('sha256').update(await readFile(V4)).digest('hex');
+  const grant = 'Grant: Synchronization rights for the motion picture WAD, Cut v4 (current distribution cut).';
+  const start = Array.from(body.slice(0, body.indexOf(grant))).length;
+  const orig = (await client.read<{ path: string; sha: string; kind: string; x: string; a: number; b: number }>(
+    `MATCH (r:SourceRef {id: 'ref-mail-bh-scope'})-[:EXCERPT_OF]->(s:Source)
+     RETURN s.path AS path, s.sha256 AS sha, s.kind AS kind, r.excerpt AS x, r.startOffset AS a, r.endOffset AS b`))[0]!;
+  await client.write(`MATCH (r:SourceRef {id: 'ref-mail-bh-scope'})-[:EXCERPT_OF]->(s:Source)
+    SET s.path = $p, s.sha256 = $sha, s.kind = 'license', r.excerpt = $x, r.startOffset = $a, r.endOffset = $b`,
+    { p: V4, sha, x: grant, a: start, b: start + Array.from(grant).length });
+  try {
+    const r = await runTool(client, ctx, 'source_excerpt', { refId: 'ref-mail-bh-scope' });
+    assert.equal(r.status, 'INTEGRITY_FAILED');
+    assert.equal(r.data?.['witnessed'], false);
+    assert.deepEqual([r.sources, r.sourceRefIds], [[], []]);
+    const c = await runTool(client, ctx, 'release_clearance', { releaseId: 'rel-wad' });
+    assert.equal(c.data?.['clearance'], 'UNKNOWN');
+    assert.deepEqual(c.sources, []);
+  } finally {
+    await client.write(`MATCH (r:SourceRef {id: 'ref-mail-bh-scope'})-[:EXCERPT_OF]->(s:Source)
+      SET s.path = $path, s.sha256 = $sha, s.kind = $kind, r.excerpt = $x, r.startOffset = $a, r.endOffset = $b`, orig);
+  }
+  assert.equal((await runTool(client, ctx, 'source_excerpt', { refId: 'ref-mail-bh-scope' })).status, 'OK', 'restored graph matches the witness again');
+  assert.equal((await runTool(client, { ...ctx, witness: null }, 'source_excerpt', { refId: 'ref-mail-bh-scope' })).status, 'INTEGRITY_FAILED', 'no witness configured');
+});
+
+test('closed schemas hold for inherited names: constructor, toString, __proto__ and non-plain objects are refused', async () => {
+  const bad: unknown[] = [
+    { releaseId: 'rel-wad', constructor: 'EXTRA' },
+    { releaseId: 'rel-wad', toString: 'x' },
+    { releaseId: 'rel-wad', hasOwnProperty: 'x' },
+    JSON.parse('{"releaseId":"rel-wad","__proto__":{"x":1}}'),
+    Object.assign(Object.create({ releaseId: 'rel-wad' }), {}),
+    Object.assign(Object.create({ inherited: 1 }), { releaseId: 'rel-wad' }),
+    new (class Args { releaseId = 'rel-wad'; })()
+  ];
+  for (const a of bad) assert.equal((await runTool(client, ctx, 'release_clearance', a)).status, 'INVALID_ARGUMENTS', JSON.stringify(a));
+  assert.equal((await runTool(client, ctx, 'graph_status', { constructor: 'x' })).status, 'INVALID_ARGUMENTS');
+  assert.equal((await runTool(client, ctx, 'release_clearance', Object.assign(Object.create(null), { releaseId: 'rel-wad' }))).status, 'OK');
 });
 
 test('graph outage yields UNAVAILABLE with no data or sources', async () => {
