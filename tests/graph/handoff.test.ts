@@ -46,6 +46,17 @@ test('create, then recover in a fresh session (new connection) via the recipient
   assert.ok(got.status === 'FOUND' && got.handoff.objective === 'Confirm the Basement Hum gap for cut v4' && got.stale === false);
 });
 
+test('contract v003.003: returned handoffs carry the verified releaseId; a request without one is refused, never defaulted', async () => {
+  const saved = await saveHandoff(client, roy, req());
+  assert.ok(saved.status === 'CREATED' && saved.handoff.releaseId === 'rel-wad');
+  const got = await getHandoff(client, ava, saved.handoff.id);
+  assert.ok(got.status === 'FOUND' && got.handoff.releaseId === 'rel-wad');
+  const { releaseId: _omit, ...noRelease } = req();
+  assert.equal((await saveHandoff(client, roy, noRelease as never)).status, 'INVALID');
+  assert.equal((await saveHandoff(client, roy, req({ releaseId: '' }))).status, 'INVALID');
+  assert.equal((await saveHandoff(client, roy, req({ releaseId: 'rel-nope' }))).status, 'NOT_FOUND');
+});
+
 test('idempotency: same key + same request replays; same key + different request conflicts; concurrent saves create one record', async () => {
   const r = req();
   assert.equal((await saveHandoff(client, roy, r)).status, 'CREATED');
