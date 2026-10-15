@@ -6,7 +6,7 @@ import type { SceneData } from '@cubes/contracts';
 
 import { CompanyCubeScene } from '../../apps/web/src/scene/index';
 import { CompanyCube } from '../../apps/web/src/scene/CompanyCube';
-import { executeAgentTaskStart } from '../../apps/web/src/scene/AgentPyramid';
+import { executeAgentTaskStart, AgentPyramid } from '../../apps/web/src/scene/AgentPyramid';
 import { AgentPortrait } from '../../apps/web/src/scene/AgentPortrait';
 import { HumanAvatars, HUMAN_ROLES } from '../../apps/web/src/scene/HumanAvatars';
 import {
@@ -350,3 +350,99 @@ test('13. P2-A/P3 executeAgentTaskStart enforces truth gates: true, false, throw
   assert.equal(inFlightResult, false);
   assert.equal(handlerCalledInFlight, false);
 });
+
+test('14. P3 Synchronous lock prevents duplicate task invocations under rapid synchronous click burst', async () => {
+  let calls = 0;
+  let resolvePending!: (val: boolean) => void;
+  const pendingPromise = new Promise<boolean>((resolve) => {
+    resolvePending = resolve;
+  });
+
+  let capturedHandler: ((e?: { stopPropagation?: () => void }) => Promise<void>) | null = null;
+
+  renderToStaticMarkup(
+    React.createElement(AgentPyramid, {
+      agent: AGENT_CONFIGS.ava,
+      isOpen: true,
+      onToggleOpen: () => {},
+      sceneData: availableData,
+      reducedMotion: false,
+      staggerIndex: 0,
+      onSetCaption: () => {},
+      onAgentTaskStart: async () => {
+        calls++;
+        return pendingPromise;
+      },
+      onTaskClickHandlerCapture: (fn) => {
+        capturedHandler = fn;
+      },
+    })
+  );
+
+  assert.ok(capturedHandler, 'Click handler must be captured from rendered AgentPyramid component');
+
+  // Fire three synchronous clicks in rapid succession without awaiting in-between
+  const mockEvent = { stopPropagation: () => {} };
+  const p1 = (capturedHandler as any)(mockEvent);
+  const p2 = (capturedHandler as any)(mockEvent);
+  const p3 = (capturedHandler as any)(mockEvent);
+
+  // Exactly one call should have reached the onAgentTaskStart handler
+  assert.equal(calls, 1, 'Synchronous lock must limit rapid click burst to exactly 1 invocation');
+
+  // Resolve pending handler promise
+  resolvePending(true);
+  await Promise.all([p1, p2, p3]);
+
+  // After completion, the synchronous lock must be released
+  const p4 = (capturedHandler as any)(mockEvent);
+  assert.equal(calls, 2, 'Lock must be released after promise settles to allow subsequent task trigger');
+  await p4;
+});
+
+test('15. P3 Synchronous lock releases cleanly if handler throws/rejects', async () => {
+  let calls = 0;
+  let rejectPending!: (err: Error) => void;
+  const failingPromise = new Promise<boolean>((_, reject) => {
+    rejectPending = reject;
+  });
+
+  let capturedHandler: ((e?: { stopPropagation?: () => void }) => Promise<void>) | null = null;
+
+  renderToStaticMarkup(
+    React.createElement(AgentPyramid, {
+      agent: AGENT_CONFIGS.roy,
+      isOpen: true,
+      onToggleOpen: () => {},
+      sceneData: availableData,
+      reducedMotion: false,
+      staggerIndex: 0,
+      onSetCaption: () => {},
+      onAgentTaskStart: async () => {
+        calls++;
+        return failingPromise;
+      },
+      onTaskClickHandlerCapture: (fn) => {
+        capturedHandler = fn;
+      },
+    })
+  );
+
+  assert.ok(capturedHandler, 'Click handler must be captured from rendered AgentPyramid component');
+
+  // Fire synchronous click burst
+  const mockEvent = { stopPropagation: () => {} };
+  const p1 = (capturedHandler as any)(mockEvent);
+  const p2 = (capturedHandler as any)(mockEvent);
+  assert.equal(calls, 1, 'Only first click invokes handler before rejection');
+
+  // Reject the promise
+  rejectPending(new Error('Network failure'));
+  await Promise.all([p1, p2]);
+
+  // Lock must be released despite failure
+  const p3 = (capturedHandler as any)(mockEvent);
+  assert.equal(calls, 2, 'Lock must be released after rejection so retry is possible');
+  await p3;
+});
+

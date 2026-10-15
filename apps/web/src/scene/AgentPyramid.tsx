@@ -76,7 +76,7 @@ export const AgentPyramid: React.FC<AgentPyramidProps> = ({
   // Clear timers and cancel speech
   const stopActiveSpeech = () => {
     if (animationTimerRef.current !== null) {
-      window.clearInterval(animationTimerRef.current);
+      clearInterval(animationTimerRef.current);
       animationTimerRef.current = null;
     }
     if (speechCancelRef.current) {
@@ -106,7 +106,7 @@ export const AgentPyramid: React.FC<AgentPyramidProps> = ({
     });
 
     const startTime = Date.now();
-    animationTimerRef.current = window.setInterval(() => {
+    animationTimerRef.current = (setInterval as any)(() => {
       const elapsed = Date.now() - startTime;
       if (elapsed >= phraseDef.durationMs) {
         stopActiveSpeech();
