@@ -1,17 +1,19 @@
 # Shared contract v1
 
-Types: packages/contracts/src/index.ts. These are transport types, not runtime input validation or authorization. Coordinate contract/dependency edits before changing a consumer. All product routes below are **planned**, except the bootstrap liveness and unavailable status routes.
+Types: packages/contracts/src/index.ts. These are transport types, not runtime input validation or authorization. Coordinate contract/dependency edits before changing a consumer. The table distinguishes shipped candidate routes from planned writes/recovery. The types alone do not prove implementation or combined-head acceptance.
 
 | Route | Contract | Success | Failure / enforcement |
 | --- | --- | --- | --- |
 | GET /api/health | Bootstrap metadata | 200 BOOTSTRAP, ready=false | Process liveness only; never graph readiness |
-| GET /api/graph/status | GraphStatusResponse | 200 AVAILABLE after real query | 503 UNAVAILABLE; bootstrap reason NOT_IMPLEMENTED |
-| GET /api/releases/:releaseId/analysis | AnalysisResponse | 200 AVAILABLE, clearance ESTABLISHED/GAP/UNKNOWN | 503 UNAVAILABLE; empty current evidence/paths/actions; scoped reads |
-| POST /api/approvals | ApprovalRequest → ApprovalResponse | 201 RECORDED; 200 for verified matching replay | 401 unauthenticated; 403 forbidden; 409 stale revision/idempotency conflict; 503 graph unavailable |
-| POST /api/handoffs | HandoffRequest → Handoff | 201 with server-derived identity, scoped approved state | 401/403/409/503; unauthorized proposed next step must not become approved |
-| GET /api/handoffs/:handoffId | Handoff | 200 authorized session recovery | 401/403/404/503; server enforces tenant/agent/human scope |
+| GET /api/graph/status | GraphStatusResponse; shipped, unauthenticated | 200 AVAILABLE after real query | 503 UNAVAILABLE / CONNECTION_FAILED or QUERY_FAILED; exposes graphName but no release/evidence/token fields. Factory without a probe retains NOT_IMPLEMENTED |
+| GET /api/releases/:releaseId/analysis | AnalysisResponse; shipped | 200 AVAILABLE, clearance ESTABLISHED/GAP/UNKNOWN | 503 UNAVAILABLE; empty current evidence/paths/actions; scoped reads |
+| POST /api/approvals | ApprovalRequest → ApprovalResponse; writer disabled | Planned: 201 RECORDED / matching replay, not shipped | Shipped: 401 anonymous, 403 reader/agent, 503 owner fail-closed; no approval is recorded |
+| POST /api/handoffs | HandoffRequest → Handoff; planned, currently 404 | 201 with server-derived identity, scoped approved state | 401/403/409/503; unauthorized proposed next step must not become approved |
+| GET /api/handoffs/:handoffId | Handoff; planned, currently 404 | 200 authorized session recovery | 401/403/404/503; server enforces tenant/agent/human scope |
 
-Identity is server-authenticated and not accepted from a caller-supplied role, actor, or tenant field. Kanny is synthetic owner; Serena is limited reader; Roy/Ava/Guz are scoped agents. Role enforcement and session issuance remain API-lane implementation work. Missing route is 404, not a fabricated product result.
+Identity is server-authenticated and not accepted from a caller-supplied role, actor, or tenant field. Kanny is synthetic owner; Serena is limited reader; Roy/Ava/Guz are scoped agents. Shipped session slots bind configured opaque tokens to Kanny/owner, Serena/reader and Roy/agent. Owner/reader can read analysis; the agent slot is authenticated but denied that read. Analysis tenant comes only from API_TENANT_ID. These are local server-configured sessions, not a production login/issuance system. The Vite dev proxy injects only the server-side reader token; production web authentication remains unimplemented. Missing route is 404, not a fabricated product result.
+
+Handoff requests and returned handoffs require `releaseId`. The API validates a nonempty identifier and authorizes that release under the server-derived tenant and agent scope before saving or recovering state. Recovery returns the same release scope alongside its revision; possession of an ID never grants access. Earlier payloads without this field must be rejected by runtime validation rather than assigned a default release. Consumer branches must reconcile this required-field change before integration.
 
 Every mutation needs an expected revision and bounded idempotency key. Same key + same authorized request replays safely; same key + different request rejects. Current cut changes invalidate old approvals. Atomic compare/update or equivalent tested serialization must protect concurrent writers. Approval decisions never establish music license facts by themselves.
 

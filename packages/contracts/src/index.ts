@@ -77,6 +77,8 @@ export interface ApprovalResponse {
 }
 export interface Handoff {
   id: string;
+  /** Release whose evidence/revision this handoff concerns; server-authorized. */
+  releaseId: string;
   fromAgentId: AgentId;
   toAgentId: AgentId;
   objective: string;
@@ -86,6 +88,8 @@ export interface Handoff {
   createdAt: string;
 }
 export interface HandoffRequest {
+  /** Required scope, checked against the authenticated tenant and release. */
+  releaseId: string;
   toAgentId: AgentId;
   objective: string;
   proposedNextStep: string;

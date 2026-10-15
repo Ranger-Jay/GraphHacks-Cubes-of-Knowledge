@@ -29,7 +29,8 @@ test('bootstrap liveness does not pretend graph or product readiness', async () 
     assert.equal(graph.status, 503);
     assert.equal((await graph.json()).status, 'UNAVAILABLE');
     const mutation = await fetch(`${origin}/api/approvals`, {method: 'POST'});
-    assert.equal(mutation.status, 404);
+    assert.equal(mutation.status, 401);
+    assert.equal((await mutation.json()).error.code, 'UNAUTHENTICATED');
   } finally {
     child.kill('SIGTERM');
     await once(child, 'exit');
