@@ -190,6 +190,13 @@ test('shipped startup reads a disposable graph without writing', { skip: kind ==
     const before = await snapshot(graphEnv, witnessDir);
     primary = await startApi({ ...graphEnv, ...tokens, API_TENANT_ID: 't-wad' });
     hidden = await startApi({ ...graphEnv, ...tokens, API_TENANT_ID: 't-other' });
+    const status = await get(primary.origin, '/api/graph/status');
+    assert.equal(status.status, 200);
+    assert.equal(status.body.status, 'AVAILABLE');
+    assert.equal(status.body.ready, true);
+    assert.equal(status.body.reason, null);
+    assert.equal(status.body.graphName, graphName);
+    assert.equal(status.body.releases, undefined);
     const read = await get(primary.origin, '/api/releases/rel-wad/analysis', reader);
     assert.equal(read.status, 200);
     assert.equal(read.body.status, 'AVAILABLE');
@@ -221,6 +228,11 @@ test('shipped startup reads a disposable graph without writing', { skip: kind ==
       assert.equal(quiet.stdout.includes(token) || quiet.stderr.includes(token), false);
     }
     await graph.stop();
+    const statusDown = await get(primary.origin, '/api/graph/status');
+    assert.equal(statusDown.status, 503);
+    assert.equal(statusDown.body.status, 'UNAVAILABLE');
+    assert.equal(statusDown.body.ready, false);
+    assert.notEqual(statusDown.body.reason, 'NOT_IMPLEMENTED');
     const outage = await get(primary.origin, '/api/releases/rel-wad/analysis', reader);
     assert.equal(outage.status, 503);
     assert.equal(outage.body.status, 'UNAVAILABLE');
@@ -230,6 +242,12 @@ test('shipped startup reads a disposable graph without writing', { skip: kind ==
     assert.deepEqual(outage.body.sources, []);
     assert.deepEqual(outage.body.proposedActions, []);
     await graph.start();
+    const statusAgain = await get(primary.origin, '/api/graph/status');
+    assert.equal(statusAgain.status, 200);
+    assert.equal(statusAgain.body.status, 'AVAILABLE');
+    assert.equal(statusAgain.body.ready, true);
+    assert.equal(statusAgain.body.graphName, graphName);
+    assert.notEqual(statusAgain.body.requestId, status.body.requestId);
     const again = await get(primary.origin, '/api/releases/rel-wad/analysis', reader);
     assert.equal(again.status, 200);
     assert.equal(again.body.clearance, 'GAP');
