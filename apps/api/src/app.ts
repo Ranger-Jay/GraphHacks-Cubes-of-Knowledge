@@ -1,6 +1,6 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import { randomUUID } from 'node:crypto';
-import type { ApiError, GraphStatusResponse } from '@cubes/contracts';
+import type { ApiError, ApprovalResponse, GraphStatusResponse } from '@cubes/contracts';
 
 export interface Principal {
   id: 'kanny' | 'serena' | 'roy' | 'ava' | 'guz';
@@ -20,9 +20,17 @@ export type ReleaseAnalysis =
   | { state: 'unavailable'; reason: 'NOT_IMPLEMENTED' | 'CONNECTION_FAILED' | 'QUERY_FAILED' }
   | { state: 'available'; revision: string; cutId: string; actionIds: readonly string[]; sourceIds: readonly string[] };
 
+export interface RecordedApproval {
+  fingerprint: string;
+  auditEventId: string;
+  revision: string;
+}
+
 export interface ApprovalGraph {
   currentRevision(releaseId: string, cutId: string): Promise<GraphRevision>;
   storedFingerprint(idempotencyKey: string): Promise<string | null>;
+  /** Present only when a prior result was stored. This slice never writes one. */
+  recordedApproval?(idempotencyKey: string): Promise<RecordedApproval | null>;
   /** Re-read the release at the caller's expected revision. Cut, action and sources must be this result. */
   releaseAnalysis(releaseId: string, expectedRevision: string): Promise<ReleaseAnalysis>;
 }
@@ -31,6 +39,7 @@ const denyAllSessions: SessionStore = { authenticate: () => null };
 const unavailableGraph: ApprovalGraph = {
   async currentRevision() { return { state: 'unavailable', reason: 'NOT_IMPLEMENTED' }; },
   async storedFingerprint() { return null; },
+  async recordedApproval() { return null; },
   async releaseAnalysis() { return { state: 'unavailable', reason: 'NOT_IMPLEMENTED' }; },
 };
 
@@ -97,6 +106,28 @@ async function postApproval(
     sendError(response, 400, 'VALIDATION_ERROR', 'Approval was not recorded. The request did not match the approval contract.', requestId);
     return;
   }
+  const fingerprint = requestFingerprint(parsed);
+  const recorded = typeof graph.recordedApproval === 'function' ? await graph.recordedApproval(parsed.idempotencyKey) : null;
+  if (recorded !== null) {
+    if (recorded.fingerprint !== fingerprint) {
+      sendError(response, 409, 'IDEMPOTENCY_CONFLICT', 'Approval was not recorded. This idempotency key was already used for a different request.', requestId);
+      return;
+    }
+    const replay: ApprovalResponse = {
+      status: 'RECORDED', requestId, auditEventId: recorded.auditEventId, revision: recorded.revision, replayed: true,
+    };
+    send(response, 200, replay);
+    return;
+  }
+  const stored = await graph.storedFingerprint(parsed.idempotencyKey);
+  if (stored !== null) {
+    if (stored !== fingerprint) {
+      sendError(response, 409, 'IDEMPOTENCY_CONFLICT', 'Approval was not recorded. This idempotency key was already used for a different request.', requestId);
+      return;
+    }
+    sendError(response, 503, 'NOT_IMPLEMENTED', 'Approval was not recorded. This key matches, and no stored result is available to replay.', requestId);
+    return;
+  }
   const revision = await graph.currentRevision(parsed.releaseId, parsed.cutId);
   if (revision.state === 'unavailable') {
     sendError(response, 503, 'GRAPH_UNAVAILABLE', 'Approval was not recorded. The graph is unavailable.', requestId);
@@ -104,15 +135,6 @@ async function postApproval(
   }
   if (revision.revision !== parsed.expectedRevision) {
     sendError(response, 409, 'STALE_REVISION', 'Approval was not recorded. The cut revision changed.', requestId);
-    return;
-  }
-  const stored = await graph.storedFingerprint(parsed.idempotencyKey);
-  const fingerprint = JSON.stringify({
-    releaseId: parsed.releaseId, cutId: parsed.cutId, expectedRevision: parsed.expectedRevision,
-    actionId: parsed.actionId, evidenceSourceIds: parsed.evidenceSourceIds,
-  });
-  if (stored !== null && stored !== fingerprint) {
-    sendError(response, 409, 'IDEMPOTENCY_CONFLICT', 'Approval was not recorded. This idempotency key was already used for a different request.', requestId);
     return;
   }
   const analysis = await graph.releaseAnalysis(parsed.releaseId, parsed.expectedRevision);
@@ -127,6 +149,13 @@ async function postApproval(
     return;
   }
   sendError(response, 503, 'NOT_IMPLEMENTED', 'Approval was not recorded. No durable audit writer is configured.', requestId);
+}
+
+function requestFingerprint(parsed: ApprovalBody): string {
+  return JSON.stringify({
+    releaseId: parsed.releaseId, cutId: parsed.cutId, expectedRevision: parsed.expectedRevision,
+    actionId: parsed.actionId, evidenceSourceIds: parsed.evidenceSourceIds,
+  });
 }
 
 function analysisAgrees(parsed: ApprovalBody, analysis: { cutId: string; actionIds: readonly string[]; sourceIds: readonly string[] }): boolean {

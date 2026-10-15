@@ -37,7 +37,8 @@ test('owner approval fail-closes while the graph is unavailable', async () => {
   let writes = 0;
   const graph = {
     async currentRevision() { return { state: 'unavailable', reason: 'NOT_IMPLEMENTED' }; },
-    async storedFingerprint() { writes += 1; return null; },
+    async storedFingerprint() { return null; },
+    async recordApproval() { writes += 1; },
   };
   await withApi(async origin => {
     const denied = await post(origin, validBody, { authorization: 'Bearer kanny-session-token' });
@@ -56,14 +57,58 @@ test('stale revision and reused idempotency key are rejected before any record',
     },
   };
   await withApi(async origin => {
-    const stale = await post(origin, validBody, { authorization: 'Bearer kanny-session-token' });
+    const stale = await post(origin, { ...validBody, idempotencyKey: 'idem-stale' }, { authorization: 'Bearer kanny-session-token' });
     assert.equal(stale.status, 409);
     assert.equal(stale.body.error.code, 'STALE_REVISION');
-    const conflict = await post(origin, { ...validBody, expectedRevision: 'rev-5', actionId: 'act-other' }, {
+    const conflict = await post(origin, { ...validBody, actionId: 'act-other' }, {
       authorization: 'Bearer kanny-session-token',
     });
     assert.equal(conflict.status, 409);
     assert.equal(conflict.body.error.code, 'IDEMPOTENCY_CONFLICT');
+  }, { sessions: testSessions(), graph });
+});
+
+test('a matching key is not classified as stale after the revision moves', async () => {
+  let revisionReads = 0;
+  const fingerprint = JSON.stringify({
+    releaseId: validBody.releaseId, cutId: validBody.cutId, expectedRevision: validBody.expectedRevision,
+    actionId: validBody.actionId, evidenceSourceIds: validBody.evidenceSourceIds,
+  });
+  const graph = {
+    async currentRevision() { revisionReads += 1; return { state: 'available', revision: 'rev-9' }; },
+    async storedFingerprint() { return fingerprint; },
+    async releaseAnalysis() { throw new Error('analysis must not run'); },
+  };
+  await withApi(async origin => {
+    const replay = await post(origin, validBody, { authorization: 'Bearer kanny-session-token' });
+    assert.equal(replay.status, 503);
+    assert.equal(replay.body.error.code, 'NOT_IMPLEMENTED');
+    assert.equal(replay.body.status, undefined);
+    assert.equal(revisionReads, 0);
+  }, { sessions: testSessions(), graph });
+});
+
+test('a stored matching approval replays without a new record or a stale rejection', async () => {
+  let revisionReads = 0;
+  const fingerprint = JSON.stringify({
+    releaseId: validBody.releaseId, cutId: validBody.cutId, expectedRevision: validBody.expectedRevision,
+    actionId: validBody.actionId, evidenceSourceIds: validBody.evidenceSourceIds,
+  });
+  const graph = {
+    async currentRevision() { revisionReads += 1; return { state: 'available', revision: 'rev-9' }; },
+    async storedFingerprint() { return null; },
+    async recordedApproval() { return { fingerprint, auditEventId: 'audit-stored', revision: 'rev-4' }; },
+    async recordApproval() { throw new Error('replay must not record'); },
+  };
+  await withApi(async origin => {
+    const replay = await post(origin, validBody, { authorization: 'Bearer kanny-session-token' });
+    assert.equal(replay.status, 200);
+    assert.notEqual(replay.status, 201);
+    assert.equal(replay.body.status, 'RECORDED');
+    assert.equal(replay.body.replayed, true);
+    assert.equal(replay.body.auditEventId, 'audit-stored');
+    assert.equal(replay.body.revision, 'rev-4');
+    assert.equal(revisionReads, 0);
   }, { sessions: testSessions(), graph });
 });
 
