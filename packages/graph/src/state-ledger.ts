@@ -222,7 +222,6 @@ export interface WitnessedWriteOptions {
   allowRevisionRollback?: boolean;
 }
 
-/** Binding identity used for revocation tombstones. */
 /** Binding identity used for revocation tombstones: kind|subject|path. Deliberately without the file hash, so
  * an edited or re-encoded copy of the same evidence file (CRLF checkout, trailing newline) stays revoked. */
 export const bindingKey = (kind: string, subjectId: unknown, path: unknown) =>
