@@ -1,6 +1,6 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import { randomUUID } from 'node:crypto';
-import type { ApiError, ApprovalResponse, GraphStatusResponse } from '@cubes/contracts';
+import type { AnalysisResponse, ApiError, ApprovalResponse, GraphStatusResponse } from '@cubes/contracts';
 
 export interface Principal {
   id: 'kanny' | 'serena' | 'roy' | 'ava' | 'guz';
@@ -26,6 +26,11 @@ export interface RecordedApproval {
   revision: string;
 }
 
+/** Server-derived tenant is closed over by the reader. The request cannot name a tenant. */
+export interface ReleaseReader {
+  analyze(releaseId: string, requestId: string): Promise<AnalysisResponse | null>;
+}
+
 export interface ApprovalGraph {
   currentRevision(releaseId: string, cutId: string): Promise<GraphRevision>;
   storedFingerprint(idempotencyKey: string): Promise<string | null>;
@@ -36,6 +41,15 @@ export interface ApprovalGraph {
 }
 
 const denyAllSessions: SessionStore = { authenticate: () => null };
+const unconfiguredAnalysis: ReleaseReader = {
+  async analyze(_releaseId, requestId) {
+    return {
+      status: 'UNAVAILABLE', requestId, reason: 'NOT_IMPLEMENTED',
+      message: 'Release analysis is not configured.',
+      evidence: [], nodes: [], edges: [], sources: [], proposedActions: [],
+    };
+  },
+};
 const unavailableGraph: ApprovalGraph = {
   async currentRevision() { return { state: 'unavailable', reason: 'NOT_IMPLEMENTED' }; },
   async storedFingerprint() { return null; },
@@ -54,15 +68,18 @@ interface ApprovalBody {
   evidenceSourceIds: string[];
 }
 
-export function createApiServer(options?: { sessions?: SessionStore; graph?: ApprovalGraph }): Server {
+export function createApiServer(options?: { sessions?: SessionStore; graph?: ApprovalGraph; analysis?: ReleaseReader }): Server {
   const sessions = options?.sessions ?? denyAllSessions;
   const graph = options?.graph ?? unavailableGraph;
+  const analysis = options?.analysis ?? unconfiguredAnalysis;
   return createServer((request, response) => {
-    void route(request, response, sessions, graph);
+    void route(request, response, sessions, graph, analysis);
   });
 }
 
-async function route(request: IncomingMessage, response: ServerResponse, sessions: SessionStore, graph: ApprovalGraph): Promise<void> {
+async function route(
+  request: IncomingMessage, response: ServerResponse, sessions: SessionStore, graph: ApprovalGraph, analysis: ReleaseReader,
+): Promise<void> {
   const requestId = randomUUID();
   response.setHeader('Content-Type', 'application/json; charset=utf-8');
   response.setHeader('Cache-Control', 'no-store');
@@ -79,6 +96,11 @@ async function route(request: IncomingMessage, response: ServerResponse, session
       send(response, 503, body);
       return;
     }
+    const releaseId = releaseIdFrom(request);
+    if (request.method === 'GET' && releaseId !== null) {
+      await getAnalysis(request, response, requestId, sessions, analysis, releaseId);
+      return;
+    }
     if (request.method === 'POST' && request.url === '/api/approvals') {
       await postApproval(request, response, requestId, sessions, graph);
       return;
@@ -87,6 +109,42 @@ async function route(request: IncomingMessage, response: ServerResponse, session
   } catch {
     sendError(response, 503, 'GRAPH_UNAVAILABLE', 'Approval was not recorded. The request failed closed.', requestId);
   }
+}
+
+function releaseIdFrom(request: IncomingMessage): string | null {
+  if (request.method !== 'GET') return null;
+  const match = /^\/api\/releases\/([A-Za-z0-9._~-]{1,128})\/analysis$/.exec(request.url ?? '');
+  return match?.[1] ?? null;
+}
+
+async function getAnalysis(
+  request: IncomingMessage, response: ServerResponse, requestId: string,
+  sessions: SessionStore, analysis: ReleaseReader, releaseId: string,
+): Promise<void> {
+  const principal = principalFrom(request, sessions);
+  if (principal === null) {
+    sendError(response, 401, 'UNAUTHENTICATED', 'Release analysis was not read. No server session was presented.', requestId);
+    return;
+  }
+  if (!((principal.id === 'kanny' && principal.kind === 'owner') || (principal.id === 'serena' && principal.kind === 'reader'))) {
+    sendError(response, 403, 'FORBIDDEN', 'Release analysis was not read. This session cannot read it.', requestId);
+    return;
+  }
+  let result: AnalysisResponse | null;
+  try {
+    result = await analysis.analyze(releaseId, requestId);
+  } catch {
+    result = {
+      status: 'UNAVAILABLE', requestId, reason: 'QUERY_FAILED',
+      message: 'Release analysis was not read. The graph read failed.',
+      evidence: [], nodes: [], edges: [], sources: [], proposedActions: [],
+    };
+  }
+  if (result === null) {
+    sendError(response, 404, 'NOT_FOUND', 'Release analysis was not read. That release is not in this server tenant.', requestId);
+    return;
+  }
+  send(response, result.status === 'AVAILABLE' ? 200 : 503, result);
 }
 
 async function postApproval(
