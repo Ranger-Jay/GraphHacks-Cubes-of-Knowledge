@@ -223,12 +223,14 @@ export interface WitnessedWriteOptions {
 }
 
 /** Binding identity used for revocation tombstones. */
-export const bindingKey = (kind: string, subjectId: unknown, path: unknown, sha256: unknown) =>
-  `${kind}|${String(subjectId)}|${String(path)}|${String(sha256)}`;
+/** Binding identity used for revocation tombstones: kind|subject|path. Deliberately without the file hash, so
+ * an edited or re-encoded copy of the same evidence file (CRLF checkout, trailing newline) stays revoked. */
+export const bindingKey = (kind: string, subjectId: unknown, path: unknown) =>
+  `${kind}|${String(subjectId)}|${String(path)}`;
 /** Every EVIDENCED_BY / LISTED_IN binding in a snapshot, as tombstone keys. */
 export function snapshotBindings(snap: EvidenceSnapshot): string[] {
   return snap.edges.filter(e => e.type === 'EVIDENCED_BY' || e.type === 'LISTED_IN')
-    .map(e => bindingKey(e.type, e.from.props['id'], e.to.props['path'], e.to.props['sha256']));
+    .map(e => bindingKey(e.type, e.from.props['id'], e.to.props['path']));
 }
 const revNum = (rev: unknown): number | null => {
   const m = typeof rev === 'string' ? /@r([1-9][0-9]{0,8})$/.exec(rev) : null;
@@ -335,7 +337,7 @@ export async function revokeEvidence(client: GraphClient, cfg: LedgerConfig | nu
   }
   const snap = await readEvidenceSnapshot(client, tenantId);
   const keys = snap.edges.filter(e => e.type === 'EVIDENCED_BY' && e.from.props['id'] === input.licenseId)
-    .map(e => bindingKey(e.type, e.from.props['id'], e.to.props['path'], e.to.props['sha256']));
+    .map(e => bindingKey(e.type, e.from.props['id'], e.to.props['path']));
   if (keys.length === 0) throw new WitnessError('INVALID', `No evidence binding for license ${input.licenseId}`);
   const cur = revNum(snap.revisions[input.releaseId]);
   if (cur === null || revNum(input.newRevision)! <= cur) throw new WitnessError('ROLLBACK', 'A revocation must move the release to a higher revision');
