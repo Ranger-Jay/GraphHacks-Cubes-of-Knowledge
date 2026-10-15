@@ -730,6 +730,12 @@ test('the seed CLI passes a literal pipe-delimited --reinstate argument through'
     const refused = await cli('seed', 'basement-hum-v4-license');
     assert.notEqual(refused.code, 0, 'a seed carrying the revoked binding is refused without --reinstate');
     assert.match(refused.err, /REVOKED|revoked/);
+    // Only the exact identity named lifts a tombstone: the same binding at another path lifts nothing.
+    const wrong = await cli('seed', '--reinstate=EVIDENCED_BY|lic-night-drive-v4|graph/seed/sources/not-the-license.txt', 'basement-hum-v4-license');
+    assert.notEqual(wrong.code, 0, 'a non-matching --reinstate identity does not lift the tombstone');
+    assert.match(wrong.err, /REVOKED|revoked/);
+    const still = await readChain(ledger(), c.config.graphName, 't-wad');
+    assert.ok(still.status === 'COMMITTED' && JSON.stringify(still.head.revoked) === JSON.stringify([ndKey]), 'the tombstone is unchanged');
     const lifted = await cli('seed', `--reinstate=${ndKey}`, 'basement-hum-v4-license');
     assert.equal(lifted.code, 0, lifted.err);
     const chain = await readChain(ledger(), c.config.graphName, 't-wad');
