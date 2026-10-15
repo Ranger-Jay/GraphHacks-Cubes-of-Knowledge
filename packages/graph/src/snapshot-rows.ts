@@ -4,7 +4,8 @@ import type { EvidenceSnapshot, SnapEdge, SnapNode } from './state-ledger.js';
  * In-memory equivalents of the READ_* queries in queries.ts, evaluated over ONE witnessed snapshot
  * (state-ledger.ts readEvidenceSnapshot). Answering from the same rows that were hashed closes the
  * check-then-read gap (#20): no write can land between the witness check and the data used.
- * Semantics follow the Cypher: MATCH = inner join, OPTIONAL MATCH = left join (nulls when absent).
+ * Semantics follow the Cypher: MATCH = inner join, OPTIONAL MATCH = left join (nulls when absent). Rows are
+ * equal on the seeded graphs (tested); with parallel duplicate edges the view may return extra, harmless rows.
  */
 type Props = Record<string, unknown>;
 const str = (p: Props, k: string): string | null => (typeof p[k] === 'string' ? (p[k] as string) : null);
