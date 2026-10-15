@@ -146,6 +146,38 @@ test('closed schemas hold for inherited names: constructor, toString, __proto__ 
   assert.equal((await runTool(client, ctx, 'release_clearance', Object.assign(Object.create(null), { releaseId: 'rel-wad' }))).status, 'OK');
 });
 
+test('#20 check-then-read: a replacement written and restored around the witness check is never returned as witnessed', async () => {
+  const attacker = new GraphClient(cfg);
+  const original = (await client.read<{ x: string; a: number; b: number }>(
+    "MATCH (r:SourceRef {id: 'ref-mail-bh-scope'}) RETURN r.excerpt AS x, r.startOffset AS a, r.endOffset AS b"))[0]!;
+  let witnessReads = 0;
+  let readsAfterWitness = 0;
+  const hooked = Object.create(client) as GraphClient;
+  hooked.read = async (q, p) => {
+    const isWitness = q.includes('ANY(l IN labels(');
+    if (!isWitness && witnessReads > 0) readsAfterWitness++;
+    const rows = await client.read(q, p);
+    if (isWitness && witnessReads++ === 0) {
+      // Right after the witness snapshot: swap the reference to other genuine text, as #20 did.
+      await attacker.write(`MATCH (r:SourceRef {id: 'ref-mail-bh-scope'}), (o:SourceRef {id: 'ref-mail-bh-later'})
+        SET r.excerpt = o.excerpt, r.startOffset = o.startOffset, r.endOffset = o.endOffset`);
+    }
+    return rows;
+  };
+  try {
+    const r = await runTool(hooked, ctx, 'source_excerpt', { refId: 'ref-mail-bh-scope' });
+    assert.equal(r.status, 'OK');
+    assert.equal(r.sources[0]?.excerpt, original.x, 'the witnessed text, not the replacement');
+    assert.equal(readsAfterWitness, 0, 'no graph read after the witnessed snapshot');
+    // The replacement is still in place: the next call sees an unwitnessed graph.
+    assert.equal((await runTool(client, ctx, 'source_excerpt', { refId: 'ref-mail-bh-scope' })).status, 'INTEGRITY_FAILED');
+  } finally {
+    await attacker.write("MATCH (r:SourceRef {id: 'ref-mail-bh-scope'}) SET r.excerpt = $x, r.startOffset = $a, r.endOffset = $b", original);
+    await attacker.close();
+  }
+  assert.equal((await runTool(client, ctx, 'source_excerpt', { refId: 'ref-mail-bh-scope' })).status, 'OK');
+});
+
 test('graph outage yields UNAVAILABLE with no data or sources', async () => {
   const dead = new GraphClient({ ...cfg, port: 1, timeoutMs: 1000 });
   try {
