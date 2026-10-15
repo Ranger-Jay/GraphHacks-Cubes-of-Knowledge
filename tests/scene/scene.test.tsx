@@ -272,16 +272,29 @@ test('11. P2-B Screen-reader fallback reports honest node count without misleadi
 });
 
 test('12. P2-A Task button is disabled when onAgentTaskStart is omitted or during outage', () => {
-  // Without onAgentTaskStart -> button is disabled with 'Task Unbound'
+  // READY without onAgentTaskStart -> button is disabled with 'Task Unbound'
   const htmlUnbound = renderToStaticMarkup(
+    <CompanyCubeScene
+      data={availableData}
+      onSelectNode={() => {}}
+      reducedMotion={false}
+      runtime={{ phase: 'READY' }}
+    />
+  );
+  assert.ok(htmlUnbound.includes('Task Unbound'));
+  assert.ok(htmlUnbound.includes('disabled'));
+
+  // No runtime (fails closed to CHECKING) and no handler: reads Checking, not Task Unbound (v025.01)
+  const htmlChecking = renderToStaticMarkup(
     <CompanyCubeScene
       data={availableData}
       onSelectNode={() => {}}
       reducedMotion={false}
     />
   );
-  assert.ok(htmlUnbound.includes('Task Unbound'));
-  assert.ok(htmlUnbound.includes('disabled'));
+  assert.ok(htmlChecking.includes('Task Blocked (Checking)'));
+  assert.ok(!htmlChecking.includes('Task Unbound'));
+  assert.ok(htmlChecking.includes('disabled'));
 
   // No runtime prop fails closed. AVAILABLE evidence alone is not permission to speak or start.
   const htmlBound = renderToStaticMarkup(
