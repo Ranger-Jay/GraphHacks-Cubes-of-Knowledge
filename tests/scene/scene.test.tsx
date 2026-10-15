@@ -6,7 +6,7 @@ import type { SceneData } from '@cubes/contracts';
 
 import { CompanyCubeScene } from '../../apps/web/src/scene/index';
 import { CompanyCube } from '../../apps/web/src/scene/CompanyCube';
-import { executeAgentTaskStart, AgentPyramid } from '../../apps/web/src/scene/AgentPyramid';
+import { executeAgentTaskStart, AgentPyramid, taskButtonLabel } from '../../apps/web/src/scene/AgentPyramid';
 import { AgentPortrait } from '../../apps/web/src/scene/AgentPortrait';
 import { HumanAvatars, HUMAN_ROLES } from '../../apps/web/src/scene/HumanAvatars';
 import {
@@ -16,10 +16,14 @@ import {
   PHRASE_AFFIRMATIVE,
   PHRASE_NEGATIVE,
   TASK_START_CYCLE,
+  GRAPH_OUTAGE_NOTICES,
+  blockedStatusCaption,
   getNextTaskStartPhrase,
   findVisemeAtTime,
+  normalSpeechAllowed,
 } from '../../apps/web/src/scene/dialogue';
-import { isAudioMuted, setAudioMuted, cancelSpeech } from '../../apps/web/src/scene/audio';
+import { isAudioMuted, setAudioMuted, cancelSpeech, speakAuthorizedPhrase } from '../../apps/web/src/scene/audio';
+
 
 // Test Fixtures
 const availableData: SceneData = {
@@ -279,7 +283,7 @@ test('12. P2-A Task button is disabled when onAgentTaskStart is omitted or durin
   assert.ok(htmlUnbound.includes('Task Unbound'));
   assert.ok(htmlUnbound.includes('disabled'));
 
-  // With onAgentTaskStart on AVAILABLE -> enabled with 'Start Task'
+  // No runtime prop fails closed. AVAILABLE evidence alone is not permission to speak or start.
   const htmlBound = renderToStaticMarkup(
     <CompanyCubeScene
       data={availableData}
@@ -288,9 +292,10 @@ test('12. P2-A Task button is disabled when onAgentTaskStart is omitted or durin
       onAgentTaskStart={async () => true}
     />
   );
-  assert.ok(htmlBound.includes('Start Task'));
+  assert.ok(htmlBound.includes('Task Blocked (Checking)'));
+  assert.ok(!htmlBound.includes('Start Task'));
 
-  // With onAgentTaskStart on UNAVAILABLE -> disabled with 'Task Blocked (Outage)'
+  // Unavailable evidence without a graph-unavailable phase must not say Outage.
   const htmlOutage = renderToStaticMarkup(
     <CompanyCubeScene
       data={unavailableData}
@@ -299,7 +304,8 @@ test('12. P2-A Task button is disabled when onAgentTaskStart is omitted or durin
       onAgentTaskStart={async () => true}
     />
   );
-  assert.ok(htmlOutage.includes('Task Blocked (Outage)'));
+  assert.ok(htmlOutage.includes('Task Blocked (Checking)'));
+  assert.ok(!htmlOutage.includes('Task Blocked (Outage)'));
   assert.ok(htmlOutage.includes('disabled'));
 });
 
@@ -369,6 +375,7 @@ test('14. P3 Synchronous lock prevents duplicate task invocations under rapid sy
       reducedMotion: false,
       staggerIndex: 0,
       onSetCaption: () => {},
+      runtime: { phase: 'READY' },
       onAgentTaskStart: async () => {
         calls++;
         return pendingPromise;
@@ -418,6 +425,7 @@ test('15. P3 Synchronous lock releases cleanly if handler throws/rejects', async
       reducedMotion: false,
       staggerIndex: 0,
       onSetCaption: () => {},
+      runtime: { phase: 'READY' },
       onAgentTaskStart: async () => {
         calls++;
         return failingPromise;
@@ -444,5 +452,93 @@ test('15. P3 Synchronous lock releases cleanly if handler throws/rejects', async
   const p3 = (capturedHandler as any)(mockEvent);
   assert.equal(calls, 2, 'Lock must be released after rejection so retry is possible');
   await p3;
+});
+
+test('16. Approved outage notices are exact and other blocked phases do not use them', () => {
+  assert.equal(GRAPH_OUTAGE_NOTICES.roy, 'FalkorDB is disconnected. Operations are offline.');
+  assert.equal(
+    GRAPH_OUTAGE_NOTICES.ava,
+    'I can\u2019t access the company\u2019s knowledge. Information is unavailable until FalkorDB reconnects.'
+  );
+  assert.equal(
+    GRAPH_OUTAGE_NOTICES.guz,
+    'I can\u2019t verify any sources. I won\u2019t provide an answer without evidence.'
+  );
+  assert.equal(normalSpeechAllowed('READY'), true);
+  assert.equal(normalSpeechAllowed(undefined), false);
+  assert.equal(normalSpeechAllowed('GRAPH_UNAVAILABLE'), false);
+  assert.equal(blockedStatusCaption('roy', 'GRAPH_UNAVAILABLE'), GRAPH_OUTAGE_NOTICES.roy);
+  assert.equal(blockedStatusCaption('ava', 'ACCESS_DENIED'), 'Access denied.');
+  assert.ok(!blockedStatusCaption('ava', 'ACCESS_DENIED')!.includes('disconnected'));
+  assert.equal(blockedStatusCaption('guz', 'NOT_FOUND'), 'The requested release is missing.');
+  assert.equal(blockedStatusCaption('roy', 'CHECKING'), 'Checking current information.');
+  assert.equal(blockedStatusCaption('roy', undefined), 'Checking current information.');
+  assert.equal(blockedStatusCaption('roy', 'READY'), null);
+});
+
+test('17. Task start refuses a blocked phase even when scene status is AVAILABLE', async () => {
+  let calls = 0;
+  const blocked = await executeAgentTaskStart('roy', 'AVAILABLE', async () => {
+    calls++;
+    return true;
+  }, false, 'GRAPH_UNAVAILABLE');
+  assert.equal(blocked, false);
+  assert.equal(calls, 0);
+
+  const denied = await executeAgentTaskStart('ava', 'AVAILABLE', async () => {
+    calls++;
+    return true;
+  }, false, 'ACCESS_DENIED');
+  assert.equal(denied, false);
+  assert.equal(calls, 0);
+
+  const ready = await executeAgentTaskStart('guz', 'AVAILABLE', async () => true, false, 'READY');
+  assert.equal(ready, true);
+});
+
+test('18. Pyramid labels follow the runtime phase and do not call a down graph an access denial', () => {
+  const outage = renderToStaticMarkup(
+    React.createElement(AgentPyramid, {
+      agent: AGENT_CONFIGS.roy,
+      isOpen: true,
+      onToggleOpen: () => {},
+      sceneData: availableData,
+      reducedMotion: false,
+      staggerIndex: 0,
+      onSetCaption: () => {},
+      onAgentTaskStart: async () => true,
+      runtime: { phase: 'GRAPH_UNAVAILABLE' },
+    })
+  );
+  assert.ok(outage.includes('Task Blocked (Outage)'));
+  assert.ok(outage.includes('disabled'));
+
+  const denied = renderToStaticMarkup(
+    React.createElement(AgentPyramid, {
+      agent: AGENT_CONFIGS.ava,
+      isOpen: true,
+      onToggleOpen: () => {},
+      sceneData: availableData,
+      reducedMotion: false,
+      staggerIndex: 0,
+      onSetCaption: () => {},
+      onAgentTaskStart: async () => true,
+      runtime: { phase: 'ACCESS_DENIED' },
+    })
+  );
+  assert.ok(denied.includes('Task Blocked (Access)'));
+  assert.ok(!denied.includes('Task Blocked (Outage)'));
+
+  assert.equal(taskButtonLabel('AVAILABLE', 'READY', true, false), 'Start Task');
+  assert.equal(taskButtonLabel('UNAVAILABLE', 'READY', true, false), 'Task Blocked (Unverified)');
+});
+
+test('19. Authorized speech refuses ordinary phrases while the graph is unavailable', () => {
+  const refused = speakAuthorizedPhrase('Greetings, Commander', AGENT_CONFIGS.roy, 'GRAPH_UNAVAILABLE');
+  assert.equal(typeof refused, 'function');
+  const allowed = speakAuthorizedPhrase(GRAPH_OUTAGE_NOTICES.roy, AGENT_CONFIGS.roy, 'GRAPH_UNAVAILABLE');
+  assert.equal(typeof allowed, 'function');
+  const ready = speakAuthorizedPhrase(PHRASE_GREETING.phrase, AGENT_CONFIGS.roy, 'READY');
+  assert.equal(typeof ready, 'function');
 });
 
