@@ -1,5 +1,5 @@
 import { createHash, createHmac, timingSafeEqual } from 'node:crypto';
-import { mkdir, open, readFile, stat, unlink } from 'node:fs/promises';
+import { mkdir, open, readFile, rename, stat, unlink } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { GraphClient } from './client.js';
 
@@ -120,6 +120,10 @@ export async function readChain(cfg: LedgerConfig, graph: string, tenantId: stri
     if ((e as NodeJS.ErrnoException).code === 'ENOENT') return { status: 'MISSING' };
     return { status: 'CORRUPT', reason: 'witness file unreadable' };
   }
+  return parseChain(cfg, graph, tenantId, raw);
+}
+
+function parseChain(cfg: LedgerConfig, graph: string, tenantId: string, raw: string): ChainState {
   if (raw.length === 0 || !raw.endsWith('\n')) return { status: 'CORRUPT', reason: 'witness file is empty or ends in a partial record' };
   const recs: LedgerRecord[] = [];
   let prevMac = '';
@@ -301,17 +305,39 @@ export async function revokeEvidence(client: GraphClient, cfg: LedgerConfig | nu
   return { revoked: keys };
 }
 
-/** Clears a PENDING head when the graph still holds the committed state (the write never happened). */
-export async function recoverWitness(client: GraphClient, cfg: LedgerConfig, tenantId: string): Promise<'NOTHING_TO_DO' | 'ABORTED'> {
+/**
+ * Clears a PENDING head when the graph still holds the committed state (the write never happened).
+ * With repairTornTail (explicit operator flag), a final record torn by a crash mid-append is dropped first,
+ * but only when everything before it verifies; the chain then shows what really committed (usually PENDING).
+ */
+export async function recoverWitness(client: GraphClient, cfg: LedgerConfig, tenantId: string,
+  opts: { repairTornTail?: boolean } = {}): Promise<'NOTHING_TO_DO' | 'ABORTED' | 'TAIL_REPAIRED'> {
   const graph = client.config.graphName;
   return withLock(cfg, graph, tenantId, async () => {
-    const chain = await readChain(cfg, graph, tenantId);
+    let chain = await readChain(cfg, graph, tenantId);
+    let repaired = false;
+    if (chain.status === 'CORRUPT' && opts.repairTornTail) {
+      const file = chainPath(cfg, graph, tenantId);
+      const raw = await readFile(file, 'utf8');
+      const cut = raw.lastIndexOf('\n') + 1;
+      const prefix = raw.slice(0, cut);
+      if (cut === raw.length || prefix.length === 0) throw new WitnessError('CORRUPT', `Cannot recover: ${chain.reason} (not a torn final record)`);
+      const fixed = parseChain(cfg, graph, tenantId, prefix);
+      if (fixed.status === 'CORRUPT' || fixed.status === 'MISSING') throw new WitnessError('CORRUPT', 'Cannot recover: the records before the torn tail do not verify');
+      const tmp = `${file}.repair`;
+      const fh = await open(tmp, 'w', 0o600);
+      try { await fh.write(prefix); await fh.datasync(); } finally { await fh.close(); }
+      await rename(tmp, file);
+      chain = fixed;
+      repaired = true;
+    }
     if (chain.status !== 'PENDING') {
-      if (chain.status === 'COMMITTED') return 'NOTHING_TO_DO';
+      if (chain.status === 'COMMITTED') return repaired ? 'TAIL_REPAIRED' : 'NOTHING_TO_DO';
       throw new WitnessError(chain.status === 'MISSING' ? 'MISSING' : 'CORRUPT', `Cannot recover: witness ${chain.status.toLowerCase()}`);
     }
     const now = await evidenceState(client, tenantId);
     if (now.stateHash !== chain.committed.stateHash) {
+      if (repaired) return 'TAIL_REPAIRED'; // head is PENDING again: rerun the same write with resume
       throw new WitnessError('PENDING', 'The interrupted write changed the graph; rerun it with resume and the same intent');
     }
     await append(cfg, graph, tenantId, chain.head, 'ABORT', now, chain.head.intent, chain.committed.revoked);

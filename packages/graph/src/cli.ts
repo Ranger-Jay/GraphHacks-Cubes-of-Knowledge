@@ -19,13 +19,14 @@ try {
   } else if (command === 'witness-recover') {
     const cfg = ledgerFromEnv(evidenceKeyFromEnv());
     if (!cfg) throw new Error('GRAPH_WITNESS_DIR and GRAPH_EVIDENCE_KEY are required');
-    console.log(JSON.stringify({ result: await recoverWitness(client, cfg, arg1 ?? 't-wad') }));
+    const tenant = arg1 && !arg1.startsWith('--') ? arg1 : 't-wad';
+    console.log(JSON.stringify({ result: await recoverWitness(client, cfg, tenant, { repairTornTail: process.argv.includes('--repair-torn-tail') }) }));
   } else if (command === 'analyze' && arg1) {
     const result = await analyzeRelease(client, arg2 ?? 't-wad', arg1);
     console.log(JSON.stringify(result ?? { status: 'NOT_FOUND', releaseId: arg1 }, null, 2));
     process.exitCode = result?.status === 'AVAILABLE' ? 0 : 1;
   } else {
-    console.error('usage: cli.ts health | seed [--init-witness] [--resume] [--allow-revision-rollback] [bundle...] | revoke <licenseId> <newRevision> [releaseId] | witness-recover [tenantId] | analyze <releaseId> [tenantId]');
+    console.error('usage: cli.ts health | seed [--init-witness] [--resume] [--allow-revision-rollback] [bundle...] | revoke <licenseId> <newRevision> [releaseId] | witness-recover [tenantId] [--repair-torn-tail] | analyze <releaseId> [tenantId]');
     process.exitCode = 2;
   }
 } finally {
