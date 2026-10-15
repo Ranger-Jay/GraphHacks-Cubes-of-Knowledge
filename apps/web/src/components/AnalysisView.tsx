@@ -2,15 +2,41 @@ import type { AnalysisResponse, AvailableAnalysis, ScenePhase, SourceRef } from 
 import type { ApiResult } from '../api';
 import { StatusBadge } from './StatusBadge';
 
-// In-page jump to a cited source record; never touches the hash router.
-function focusSource(e: { preventDefault: () => void }, id: string) {
+/** Attribute that marks the cited source record after a jump. Styled in styles.css (outline, tint, text label). */
+export const CITED_ATTR = 'data-cited';
+
+interface CitableElement {
+  setAttribute(name: string, value: string): void;
+  removeAttribute(name: string): void;
+  scrollIntoView(options?: ScrollIntoViewOptions): void;
+  focus(): void;
+  addEventListener(type: 'blur' | 'keydown', listener: (event: { key?: string }) => void, options?: { once?: boolean }): void;
+}
+interface CitableDocument {
+  getElementById(id: string): CitableElement | null;
+  querySelectorAll(selector: string): ArrayLike<{ removeAttribute(name: string): void }>;
+}
+
+/**
+ * In-page jump to a cited source record; never touches the hash router.
+ * Programmatic focus draws no focus ring after a pointer click, so the record is also marked with
+ * data-cited. The mark stays until another jump, Escape on the record, or focus leaving it.
+ * Focus still moves to the record, so keyboard and screen reader users land on it.
+ */
+export function focusSource(e: { preventDefault: () => void }, id: string, doc: CitableDocument | null = typeof document !== 'undefined' ? document : null) {
   e.preventDefault();
-  const el = typeof document !== 'undefined' ? document.getElementById(`source-${id}`) : null;
-  if (el) {
-    // Evidence details are collapsed by default: open every collapsed ancestor so the record can take focus.
-    for (let a = el.parentElement; a; a = a.parentElement) if (a instanceof HTMLDetailsElement) a.open = true;
-    el.setAttribute('tabindex', '-1'); el.scrollIntoView({ block: 'center' }); el.focus();
-  }
+  if (!doc) return;
+  const el = doc.getElementById(`source-${id}`);
+  if (!el) return;
+  for (const prev of Array.from(doc.querySelectorAll(`[${CITED_ATTR}]`))) prev.removeAttribute(CITED_ATTR);
+  // Evidence details are collapsed by default: open every collapsed ancestor so the record can take focus.
+  for (let a = (el as { parentElement?: Element | null }).parentElement ?? null; a; a = a.parentElement) if (typeof HTMLDetailsElement !== 'undefined' && a instanceof HTMLDetailsElement) a.open = true;
+  el.setAttribute('tabindex', '-1');
+  el.setAttribute(CITED_ATTR, 'true');
+  el.scrollIntoView({ block: 'center' });
+  el.focus();
+  el.addEventListener('blur', () => el.removeAttribute(CITED_ATTR), { once: true });
+  el.addEventListener('keydown', ev => { if (ev.key === 'Escape') el.removeAttribute(CITED_ATTR); });
 }
 
 function Sources({ ids, byId }: { ids: string[]; byId: Map<string, SourceRef> }) {
