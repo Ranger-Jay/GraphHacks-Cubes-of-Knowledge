@@ -19,6 +19,27 @@ export function resetSessionGreetings(): void {
   SESSION_GREETED_AGENTS.clear();
 }
 
+/**
+ * Pure task execution gate: validates that the scene is in an AVAILABLE state,
+ * that an application task handler is bound, that no concurrent task is in flight,
+ * and that the handler resolves strictly true before any acknowledgment phrase can play.
+ */
+export async function executeAgentTaskStart(
+  agentId: AgentId,
+  status: SceneData['status'],
+  onAgentTaskStart?: ((agentId: AgentId) => Promise<boolean> | boolean) | undefined,
+  inFlight = false
+): Promise<boolean> {
+  if (status !== 'AVAILABLE' || !onAgentTaskStart || inFlight) {
+    return false;
+  }
+  try {
+    return (await onAgentTaskStart(agentId)) === true;
+  } catch {
+    return false;
+  }
+}
+
 interface AgentPyramidProps {
   agent: AgentVisualConfig;
   isOpen: boolean;
@@ -44,6 +65,7 @@ export const AgentPyramid: React.FC<AgentPyramidProps> = ({
   const [viseme, setViseme] = useState<VisemeId>('rest');
   const [expression, setExpression] = useState<ExpressionId>('idle');
   const [taskCycleIndex, setTaskCycleIndex] = useState(0);
+  const [isTaskStarting, setIsTaskStarting] = useState(false);
 
   const animationTimerRef = useRef<number | null>(null);
   const speechCancelRef = useRef<(() => void) | null>(null);
@@ -133,22 +155,23 @@ export const AgentPyramid: React.FC<AgentPyramidProps> = ({
     playPhrase(PHRASE_NEGATIVE);
   };
 
-  // Trigger 5: Actual task start (strictly guarded by application truth)
+  // Trigger 5: Actual task start (strictly guarded by application truth with in-flight guard)
   const handleTaskStart = async (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (sceneData.status !== 'AVAILABLE' || !onAgentTaskStart) {
-      // Presentation truth: never announce task start when database is offline or unbound
+    if (sceneData.status !== 'AVAILABLE' || !onAgentTaskStart || isTaskStarting) {
+      // Presentation truth: never announce task start when database is offline, unbound, or already starting
       return;
     }
+    setIsTaskStarting(true);
     try {
-      const started = await onAgentTaskStart(agent.id);
+      const started = await executeAgentTaskStart(agent.id, sceneData.status, onAgentTaskStart, false);
       if (started) {
         const { phraseDef, nextIndex } = getNextTaskStartPhrase(taskCycleIndex);
         setTaskCycleIndex(nextIndex);
         playPhrase(phraseDef);
       }
-    } catch {
-      // Failed task execution does not announce start
+    } finally {
+      setIsTaskStarting(false);
     }
   };
 
@@ -233,12 +256,14 @@ export const AgentPyramid: React.FC<AgentPyramidProps> = ({
               type="button"
               className="pyramid-btn-task"
               onClick={handleTaskStart}
-              disabled={sceneData.status !== 'AVAILABLE' || !onAgentTaskStart}
+              disabled={sceneData.status !== 'AVAILABLE' || !onAgentTaskStart || isTaskStarting}
               title={
                 sceneData.status !== 'AVAILABLE'
                   ? 'Task start blocked: database offline or unverified'
                   : !onAgentTaskStart
                   ? 'Task start disabled: no application task handler configured'
+                  : isTaskStarting
+                  ? 'Task execution in flight...'
                   : 'Trigger verified task start cycle'
               }
             >
@@ -246,6 +271,8 @@ export const AgentPyramid: React.FC<AgentPyramidProps> = ({
                 ? 'Task Blocked (Outage)'
                 : !onAgentTaskStart
                 ? 'Task Unbound'
+                : isTaskStarting
+                ? 'Starting...'
                 : 'Start Task'}
             </button>
           </div>

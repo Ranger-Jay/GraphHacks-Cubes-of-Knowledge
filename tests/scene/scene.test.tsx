@@ -6,6 +6,7 @@ import type { SceneData } from '@cubes/contracts';
 
 import { CompanyCubeScene } from '../../apps/web/src/scene/index';
 import { CompanyCube } from '../../apps/web/src/scene/CompanyCube';
+import { executeAgentTaskStart } from '../../apps/web/src/scene/AgentPyramid';
 import { AgentPortrait } from '../../apps/web/src/scene/AgentPortrait';
 import { HumanAvatars, HUMAN_ROLES } from '../../apps/web/src/scene/HumanAvatars';
 import {
@@ -300,4 +301,52 @@ test('12. P2-A Task button is disabled when onAgentTaskStart is omitted or durin
   );
   assert.ok(htmlOutage.includes('Task Blocked (Outage)'));
   assert.ok(htmlOutage.includes('disabled'));
+});
+
+test('13. P2-A/P3 executeAgentTaskStart enforces truth gates: true, false, throw, outage, unbound, and in-flight debounce', async () => {
+  // 1. Success path: returns true when handler resolves true on AVAILABLE
+  let calledWith: string | null = null;
+  const ok = await executeAgentTaskStart('ava', 'AVAILABLE', async (id) => {
+    calledWith = id;
+    return true;
+  });
+  assert.equal(ok, true);
+  assert.equal(calledWith, 'ava');
+
+  // 2. Denial / failed task path: returns false when handler resolves false
+  const denied = await executeAgentTaskStart('ava', 'AVAILABLE', async () => false);
+  assert.equal(denied, false);
+
+  // 3. Exception / error path: returns false when handler throws
+  const errored = await executeAgentTaskStart('ava', 'AVAILABLE', async () => {
+    throw new Error('Task launch failed');
+  });
+  assert.equal(errored, false);
+
+  // 4. Outage path: returns false without calling handler when status is UNAVAILABLE
+  let handlerCalledOnOutage = false;
+  const outage = await executeAgentTaskStart('ava', 'UNAVAILABLE', async () => {
+    handlerCalledOnOutage = true;
+    return true;
+  });
+  assert.equal(outage, false);
+  assert.equal(handlerCalledOnOutage, false);
+
+  // 5. Unbound path: returns false when handler is undefined
+  const unbound = await executeAgentTaskStart('ava', 'AVAILABLE', undefined);
+  assert.equal(unbound, false);
+
+  // 6. In-flight debounce guard: returns false without calling handler when inFlight is true
+  let handlerCalledInFlight = false;
+  const inFlightResult = await executeAgentTaskStart(
+    'ava',
+    'AVAILABLE',
+    async () => {
+      handlerCalledInFlight = true;
+      return true;
+    },
+    true // inFlight
+  );
+  assert.equal(inFlightResult, false);
+  assert.equal(handlerCalledInFlight, false);
 });
