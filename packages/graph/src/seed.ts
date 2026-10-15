@@ -211,7 +211,9 @@ export async function seedGraph(client: GraphClient, repoRoot: string, options: 
   const key = options.evidenceKey !== undefined ? options.evidenceKey : evidenceKeyFromEnv();
   if (!key) throw new Error('GRAPH_EVIDENCE_KEY (32+ characters) is required to seed signed evidence bindings');
   const witness = options.witness !== undefined ? options.witness : ledgerFromEnv(key);
-  const intent = `seed:${SEED_VERSION}:${(options.bundles ?? []).join('+') || 'base'}`;
+  // Overrides are visible in the ledger: the intent names them.
+  const intent = `seed:${SEED_VERSION}:${(options.bundles ?? []).join('+') || 'base'}`
+    + (options.allowRevisionRollback ? '+allow-revision-rollback' : '') + ((options.reinstate ?? []).length > 0 ? '+reinstate' : '');
   // What this seed will write, checked against the witness before any graph change: the release revision
   // (never backwards) and the evidence bindings (never a revoked one).
   const plannedFiles = new Map<string, { path: string; sha256: string }>();
@@ -220,7 +222,7 @@ export async function seedGraph(client: GraphClient, repoRoot: string, options: 
     plannedFiles.set(src.id, { path: `graph/seed/sources/${src.file}`, sha256: createHash('sha256').update(bytes).digest('hex') });
   }
   const plannedBindings = EDGES_ALL.filter(e => e.type === 'EVIDENCED_BY' || e.type === 'LISTED_IN')
-    .map(e => bindingKey(e.type, e.from, plannedFiles.get(e.to)?.path, plannedFiles.get(e.to)?.sha256));
+    .map(e => bindingKey(e.type, e.from, plannedFiles.get(e.to)?.path));
   const edges = await witnessedWrite(client, witness, TENANT, intent, async () => {
     const sourceDir = join(repoRoot, 'graph', 'seed', 'sources');
     const texts = new Map<string, string>();
