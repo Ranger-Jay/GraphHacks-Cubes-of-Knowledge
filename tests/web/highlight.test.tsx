@@ -13,10 +13,9 @@ class FakeEl {
   removeAttribute(n: string) { this.attrs.delete(n); }
   scrollIntoView() { this.calls.push('scroll'); }
   focus() { this.calls.push('focus'); if (this.doc.active && this.doc.active !== this) this.doc.active.fire('blur'); this.doc.active = this; }
-  addEventListener(t: string, l: Listener, o?: { once?: boolean }) {
-    const wrapped: Listener = ev => { if (o?.once) this.listeners.set(t, (this.listeners.get(t) ?? []).filter(x => x !== wrapped)); l(ev); };
-    this.listeners.set(t, [...(this.listeners.get(t) ?? []), wrapped]);
-  }
+  addEventListener(t: string, l: Listener) { this.listeners.set(t, [...(this.listeners.get(t) ?? []), l]); }
+  removeEventListener(t: string, l: Listener) { this.listeners.set(t, (this.listeners.get(t) ?? []).filter(x => x !== l)); }
+  count(t: string) { return (this.listeners.get(t) ?? []).length; }
   fire(t: string, ev: { key?: string } = {}) { for (const l of [...(this.listeners.get(t) ?? [])]) l(ev); }
 }
 class FakeDoc {
@@ -70,4 +69,18 @@ test('stylesheet gives the marked record an outline, a tint and a text label, an
   assert.match(rule, /background:/);
   assert.match(css, /\[data-cited\]::before\s*\{[^}]*content:\s*"Cited source"/);
   assert.ok(!/\[data-cited\][^{]*\{[^}]*(animation|transition)/.test(css));
+});
+
+const listenerCount = (doc: FakeDoc) => [...doc.els.values()].reduce((n, e) => n + e.count('keydown') + e.count('blur'), 0);
+
+test('listeners do not accumulate: repeated jumps leave one pair, and Escape or blur detach them', () => {
+  const doc = new FakeDoc(['s1', 's2']); const s1 = doc.els.get('source-s1')!;
+  jump(doc, 's1'); jump(doc, 's1'); jump(doc, 's2'); jump(doc, 's1');
+  assert.equal(listenerCount(doc), 2, 'one keydown and one blur listener in total');
+  assert.deepEqual(cited(doc), ['source-s1']);
+  s1.fire('keydown', { key: 'Escape' });
+  assert.equal(listenerCount(doc), 0, 'Escape detaches both listeners');
+  jump(doc, 's2'); doc.els.get('source-s2')!.fire('blur');
+  assert.equal(listenerCount(doc), 0, 'blur detaches both listeners');
+  assert.deepEqual(cited(doc), []);
 });
