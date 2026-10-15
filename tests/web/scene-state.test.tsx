@@ -217,3 +217,10 @@ test('recovery is not claimed after denial, missing release or ordinary loading'
   r = nextRecovery(r, 'READY'); assert.equal(r.recovered, false);
   assert.deepEqual(nextRecovery({ settled: 'READY', recovered: false }, null), { settled: 'READY', recovered: false });
 });
+
+test('interim CSS guard: the cube outage overlay is hidden unless the shell phase is GRAPH_UNAVAILABLE', async () => {
+  const { readFile } = await import('node:fs/promises');
+  const css = await readFile(new URL('../../apps/web/src/styles.css', import.meta.url), 'utf8');
+  assert.match(css, /\.app-shell:not\(\[data-phase="GRAPH_UNAVAILABLE"\]\) \.cube-outage-overlay \{ display: none; \}/);
+  assert.ok(render(healthy, denied(401)).html.includes('class="app-shell" data-phase="ACCESS_DENIED"'));
+});
