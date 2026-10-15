@@ -4,6 +4,8 @@ import { GraphUnavailableError, type GraphClient } from './client.js';
 import { QUERIES } from './queries.js';
 import { analyzeRelease, type AnalyzeOptions } from './analysis.js';
 import { SourceFiles } from './verify.js';
+import { checkWitness, ledgerFromEnv, type LedgerConfig } from './state-ledger.js';
+import { evidenceKeyFromEnv } from './evidence-key.js';
 
 /**
  * Bounded agent tools (v009). Each tool is a named, parameterized READ over the graph lane's own
@@ -13,8 +15,12 @@ import { SourceFiles } from './verify.js';
  * evidence of LLM agent behavior; a model run must be recorded separately.
  */
 export type ToolName = 'graph_status' | 'release_clearance' | 'source_excerpt';
-export interface ToolContext { tenantId: string; agentId: AgentId; sourceRoot?: string; evidenceKey?: Buffer | null }
-export type ToolStatus = 'OK' | 'UNAVAILABLE' | 'NOT_FOUND' | 'FORBIDDEN' | 'INVALID_ARGUMENTS';
+export interface ToolContext {
+  tenantId: string; agentId: AgentId; sourceRoot?: string; evidenceKey?: Buffer | null;
+  /** Evidence state witness (D-020). Default: GRAPH_WITNESS_DIR + evidence key. Absent → evidence tools fail closed. */
+  witness?: LedgerConfig | null;
+}
+export type ToolStatus = 'OK' | 'UNAVAILABLE' | 'NOT_FOUND' | 'FORBIDDEN' | 'INVALID_ARGUMENTS' | 'INTEGRITY_FAILED';
 export interface ToolResult {
   callId: string;
   tool: ToolName;
@@ -101,6 +107,7 @@ export async function runTool(client: GraphClient, ctx: ToolContext, tool: strin
     const opts: AnalyzeOptions = { requestId: callId };
     if (ctx.sourceRoot !== undefined) opts.sourceRoot = ctx.sourceRoot;
     if (ctx.evidenceKey !== undefined) opts.evidenceKey = ctx.evidenceKey;
+    if (ctx.witness !== undefined) opts.witness = ctx.witness;
     const a = await analyzeRelease(client, ctx.tenantId, params['releaseId']!, opts);
     if (a === null) return done('NOT_FOUND', `No release "${params['releaseId']}" in this tenant.`);
     if (a.status === 'UNAVAILABLE') return done('UNAVAILABLE', 'The graph is unavailable; clearance cannot be asserted.', { reason: a.reason });
@@ -110,8 +117,14 @@ export async function runTool(client: GraphClient, ctx: ToolContext, tool: strin
       evidence: a.evidence, proposedActions: a.proposedActions
     }, a.sources);
   }
-  // source_excerpt
+  // source_excerpt: the reference (graph claim) is returned only from a witnessed graph, so a rebound or
+  // replayed reference is never presented as current evidence, even when the file bytes are genuine.
   try {
+    const witness = await checkWitness(client, ctx.witness !== undefined ? ctx.witness : ledgerFromEnv(
+      ctx.evidenceKey !== undefined ? ctx.evidenceKey : evidenceKeyFromEnv()), ctx.tenantId);
+    if (!witness.ok) {
+      return done('INTEGRITY_FAILED', `Source references cannot be returned: ${witness.reason}.`, { witnessed: false, reason: witness.reason });
+    }
     const row = (await client.read<{ id: string; path: string; sha256: string; excerpt: string; startOffset: number; endOffset: number }>(
       QUERIES.READ_SOURCE_REFS, { ids: [params['refId']!], tenantId: ctx.tenantId }))[0];
     if (!row) return done('NOT_FOUND', `No source reference "${params['refId']}" in this tenant.`);
@@ -119,7 +132,7 @@ export async function runTool(client: GraphClient, ctx: ToolContext, tool: strin
       return done('NOT_FOUND', `Source reference "${row.id}" does not match its source file; it is not returned.`);
     }
     const s: SourceRef = { id: row.id, path: row.path, sha256: row.sha256, excerpt: row.excerpt, startOffset: row.startOffset, endOffset: row.endOffset };
-    return done('OK', `"${s.excerpt}" (${s.path}, code points ${s.startOffset}-${s.endOffset})`, { ref: s }, [s]);
+    return done('OK', `"${s.excerpt}" (${s.path}, code points ${s.startOffset}-${s.endOffset})`, { ref: s, witnessed: true }, [s]);
   } catch (err) {
     return done('UNAVAILABLE', err instanceof GraphUnavailableError ? 'The graph is unavailable.' : 'The graph result could not be interpreted.');
   }
