@@ -1,0 +1,38 @@
+# Studio population slice (v023, issue #38)
+
+Synthetic crew and departments for the fictional Warnings After Dark Studios. **An additive slice, separate from licensing evidence.** The licensing labels, queries, seed, signed bindings and witness are unchanged.
+
+## Labels and relationships
+
+| Label | Key properties | Meaning |
+| --- | --- | --- |
+| StudioPerson | id `sp-<slug>`, tenantId, slug, displayName, role, departmentId, sourceId, line, synthetic | One fictional crew member |
+| Department | id `dept-<slug>`, tenantId, slug, name, kind (`department`/`service`), sourceId, line, synthetic | A department or service (Finance Office, Catering) |
+| StudioSource | id `ssrc-*`, tenantId, kind, path, sha256, synthetic, origin, licenseStatus | A fixture file. Deliberately **not** the licensing `Source` label |
+
+`(StudioPerson)-[:WORKS_IN]->(Department)`, `(StudioPerson|Department)-[:DEFINED_IN {line, excerpt}]->(StudioSource)`. Every edge has an `id`. There is **no** `MEMBER_OF` edge to a Tenant and **no** Principal: crew hold no owner, reader or agent rights and cannot authenticate.
+
+Fixtures (project-authored, fictional, no distribution license claimed): `graph/seed/studio/departments.txt` (10) and `crew-roster.txt` (20). Strict grammar: `Department <slug> | <Name> | department|service`, `Crew <slug> | <Display name> | <Role> | <department slug>`, and a declared-count footer. A malformed record, duplicate slug, orphan department or count mismatch refuses the fixture.
+
+## Relationship to the evidence witness (D-020)
+
+The witness hashes only the evidence labels (Release, Cut, Track, License, Source, SourceRef). Studio records are **outside that domain**: the witness neither sees nor vouches for them, and seeding them does not write the ledger. A test asserts the witness state hash and the licensing analysis are identical with and without the studio seed. Studio provenance is checked separately at read time:
+
+1. The stored `StudioSource` must be an allowlisted fixture whose stored path and SHA-256 equal the file on disk (the graph never supplies a path).
+2. A person or department is served only if its stored fields and `line` equal the fixture line they cite. Served values are the fixture's.
+3. An edge is served only if both endpoints are served and its `WORKS_IN` target or `DEFINED_IN` line and excerpt equal the fixture.
+
+Anything else is **withheld** and listed under `integrity`; it is never served as a fact. An invalid fixture returns `UNAVAILABLE / FIXTURE_INVALID`; an unreachable graph returns `UNAVAILABLE` with the graph reason and no records. An unseeded tenant returns `EMPTY`.
+
+## Operations
+
+`cli.ts seed-studio [tenantId]` (deterministic MERGE on `(id, tenantId)`; a repeat adds nothing) and `cli.ts studio-overview [tenantId]`. Run seeding serialized: there is no database uniqueness constraint, so two concurrent first-time seeds of one tenant could duplicate. Use a disposable local graph for proof; nothing here seeds a shared or hosted graph.
+
+## Proposed transport (for the integration owner to agree before any consumer uses it)
+
+`studioOverview(client, repoRoot, tenantId)` returns `StudioOverview` (`packages/graph/src/studio.ts`):
+`{ status: 'AVAILABLE', tenantId, domain: 'studio', origin: {kind, licenseStatus: 'none claimed', synthetic: true}, nodes: [{id, label, name, detail, departmentId?, sourceId?, line?}], edges: [{id, type, from, to, line?, excerpt?}], counts, integrity: [{id, reason}] }`, or `EMPTY`, or `UNAVAILABLE`. `domain: 'studio'` lets a consumer keep these nodes visually distinct from verified licensing paths; they must never be added to an evidence array.
+
+## Not in this slice yet
+
+IdeaFile metadata (waits for the #39 manifest: ids, hashes, submittedAt, touchedAt), the workspace/cube node and the persisted import operation (#40). Studio facts have no approval, clearance or revision semantics.
