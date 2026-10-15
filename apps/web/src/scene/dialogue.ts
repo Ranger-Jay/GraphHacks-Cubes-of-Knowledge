@@ -1,4 +1,4 @@
-import type { AgentId } from '@cubes/contracts';
+import type { AgentId, ScenePhase } from '@cubes/contracts';
 import type { AgentVisualConfig, PhraseDefinition, VisemeFrame } from './types';
 
 export const AGENT_CONFIGS: Record<AgentId, AgentVisualConfig> = {
@@ -140,6 +140,36 @@ export const PHRASE_TASK_OPTIONAL: PhraseDefinition = {
     { timeMs: 500, viseme: 'rest' },
   ],
 };
+
+/** Approved fixed notices. Apostrophes are U+2019, matching issue #29. */
+export const GRAPH_OUTAGE_NOTICES: Record<AgentId, string> = {
+  roy: 'FalkorDB is disconnected. Operations are offline.',
+  ava: 'I can\u2019t access the company\u2019s knowledge. Information is unavailable until FalkorDB reconnects.',
+  guz: 'I can\u2019t verify any sources. I won\u2019t provide an answer without evidence.',
+};
+
+const BLOCKED_STATUS_CAPTIONS: Record<Exclude<ScenePhase, 'READY' | 'GRAPH_UNAVAILABLE'>, string> = {
+  CHECKING: 'Checking current information.',
+  ACCESS_DENIED: 'Access denied.',
+  NOT_FOUND: 'The requested release is missing.',
+  UNAVAILABLE: 'Current information is unavailable.',
+};
+
+export function normalSpeechAllowed(phase: ScenePhase | undefined): boolean {
+  return phase === 'READY';
+}
+
+export function isApprovedOutageNotice(phrase: string): boolean {
+  return (Object.values(GRAPH_OUTAGE_NOTICES) as string[]).includes(phrase);
+}
+
+/** Caption for a blocked phase. GRAPH_UNAVAILABLE is the only approved spoken notice. */
+export function blockedStatusCaption(agentId: AgentId, phase: ScenePhase | undefined): string | null {
+  const resolved = phase ?? 'CHECKING';
+  if (resolved === 'READY') return null;
+  if (resolved === 'GRAPH_UNAVAILABLE') return GRAPH_OUTAGE_NOTICES[agentId];
+  return BLOCKED_STATUS_CAPTIONS[resolved];
+}
 
 export function getNextTaskStartPhrase(currentIndex: number): {
   phraseDef: PhraseDefinition;
