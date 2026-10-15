@@ -1,5 +1,8 @@
 import { createHash, createHmac, randomUUID, timingSafeEqual } from 'node:crypto';
 import type { AgentId, Handoff } from '@cubes/contracts';
+
+/** Transport handoff with its verified release scope (contract v003.003 makes `releaseId` required on Handoff). */
+export type ScopedHandoff = Handoff & { releaseId: string };
 import { GraphUnavailableError, type GraphClient } from './client.js';
 import { evidenceKeyFromEnv } from './evidence-key.js';
 import { TOOL_DEFINITIONS } from './agent-tools.js';
@@ -28,8 +31,8 @@ export interface SaveHandoffInput {
   idempotencyKey: string;
 }
 export type HandoffOutcome =
-  | { status: 'CREATED' | 'REPLAYED'; handoff: Handoff; pendingNextStep: string | null }
-  | { status: 'FOUND'; handoff: Handoff; pendingNextStep: string | null; currentRevision: string | null; stale: boolean }
+  | { status: 'CREATED' | 'REPLAYED'; handoff: ScopedHandoff; pendingNextStep: string | null }
+  | { status: 'FOUND'; handoff: ScopedHandoff; pendingNextStep: string | null; currentRevision: string | null; stale: boolean }
   | { status: 'INVALID' | 'FORBIDDEN' | 'NOT_FOUND' | 'STALE_REVISION' | 'IDEMPOTENCY_CONFLICT' | 'INTEGRITY_FAILED' | 'UNAVAILABLE'; message: string };
 
 const ID = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
@@ -62,9 +65,11 @@ function sigHolds(key: Buffer | null, h: Signed, sig: unknown): boolean {
   return timingSafeEqual(Buffer.from(sign(key, h), 'hex'), Buffer.from(sig, 'hex'));
 }
 
-function toContract(h: Signed): Handoff {
-  return { id: h.id, fromAgentId: h.fromAgentId as AgentId, toAgentId: h.toAgentId as AgentId, objective: h.objective,
+function toContract(h: Signed): ScopedHandoff {
+  // releaseId comes from the signed, verified record, never from the caller.
+  const out: ScopedHandoff = { id: h.id, releaseId: h.releaseId, fromAgentId: h.fromAgentId as AgentId, toAgentId: h.toAgentId as AgentId, objective: h.objective,
     approvedNextStep: h.approvedNextStep, sourceRefIds: h.sourceRefIds, revision: h.revision, createdAt: h.createdAt };
+  return out;
 }
 
 const MEMBERS = `
