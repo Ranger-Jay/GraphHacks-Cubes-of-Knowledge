@@ -8,7 +8,8 @@ import { QUERIES } from './queries.js';
 import { SourceFiles } from './verify.js';
 import { cueEntryOf, parseCueSheet, scopeOf, subjectOf } from './witness.js';
 import { bindingHolds, evidenceKeyFromEnv, revisionNumber } from './evidence-key.js';
-import { checkWitness, ledgerFromEnv, type LedgerConfig } from './state-ledger.js';
+import { ledgerFromEnv, witnessedSnapshot, type LedgerConfig } from './state-ledger.js';
+import { SnapshotView } from './snapshot-rows.js';
 
 interface CurrentCutRow {
   releaseId: string; releaseTitle: string; revision: string; currentCutEdgeId: string; currentCutRefs: string[] | null;
@@ -65,11 +66,14 @@ export async function analyzeRelease(client: GraphClient, tenantId: string, rele
   const files = new SourceFiles(o.sourceRoot);
   const key = o.evidenceKey !== undefined ? o.evidenceKey : evidenceKeyFromEnv();
   try {
-    const head = (await client.read<CurrentCutRow>(QUERIES.READ_RELEASE_CURRENT_CUT, { tenantId, releaseId }))[0];
-    if (!head) return null;
+    const probe = (await client.read<CurrentCutRow>(QUERIES.READ_RELEASE_CURRENT_CUT, { tenantId, releaseId }))[0];
+    if (!probe) return null;
 
-    // D-020: trust nothing in the graph unless its evidence state is the committed witness head.
-    const witness = await checkWitness(client, o.witness !== undefined ? o.witness : ledgerFromEnv(key), tenantId, releaseId);
+    // D-020: trust nothing in the graph unless its evidence state is the committed witness head. Every
+    // row below comes from that one witnessed snapshot, never from a later query (#20).
+    const witness = await witnessedSnapshot(client, o.witness !== undefined ? o.witness : ledgerFromEnv(key), tenantId, releaseId);
+    const head: CurrentCutRow | undefined = witness.ok ? new SnapshotView(witness.snapshot).currentCut(releaseId)[0] : probe;
+    if (!head) return null;
     if (!witness.ok) {
       const blocked: AvailableAnalysis = {
         status: 'AVAILABLE', requestId, releaseId: head.releaseId, cutId: head.cutId, revision: head.revision, clearance: 'UNKNOWN',
@@ -80,12 +84,13 @@ export async function analyzeRelease(client: GraphClient, tenantId: string, rele
       };
       return blocked;
     }
-    const rows = await client.read<TrackRow>(QUERIES.READ_CUT_TRACK_LICENSES, { cutId: head.cutId, tenantId });
+    const view = new SnapshotView(witness.snapshot);
+    const rows: TrackRow[] = view.trackLicenses(head.cutId);
 
     // Fetch and verify every excerpt the graph cites for this cut.
     const cited = new Set<string>([...refs(head.currentCutRefs), ...refs(head.listedInRefs)]);
     for (const r of rows) for (const id of [...refs(r.usesRefs), ...refs(r.coversRefs), ...refs(r.validForRefs)]) cited.add(id);
-    const refRows = cited.size === 0 ? [] : await client.read<RefRow>(QUERIES.READ_SOURCE_REFS, { ids: [...cited], tenantId });
+    const refRows: RefRow[] = cited.size === 0 ? [] : view.sourceRefs([...cited]);
     const verified = new Map<string, RefRow>();
     for (const r of refRows) if (await files.excerptHolds(r)) verified.set(r.id, r);
     const failedRefs = [...cited].filter(id => !verified.has(id));

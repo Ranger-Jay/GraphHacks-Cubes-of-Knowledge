@@ -54,22 +54,50 @@ function canonical(v: unknown): string {
   return JSON.stringify(v ?? null);
 }
 
-/** Canonical evidence state of one tenant in this graph (handoffs and principals are excluded). */
-export async function evidenceState(client: GraphClient, tenantId: string): Promise<EvidenceState> {
-  const nodes = await client.read<{ labels: string[]; props: Record<string, unknown> }>(
-    `MATCH (n) WHERE n.tenantId = $tenantId AND ${isEvidence.replace('%', 'n')} RETURN labels(n) AS labels, properties(n) AS props`, { tenantId });
-  const edges = await client.read<{ type: string; from: string; fromLabels: string[]; to: string; toLabels: string[]; props: Record<string, unknown> }>(
-    `MATCH (a)-[e]->(b) WHERE a.tenantId = $tenantId AND b.tenantId = $tenantId AND ${isEvidence.replace('%', 'a')} AND ${isEvidence.replace('%', 'b')}
-     RETURN type(e) AS type, a.id AS from, labels(a) AS fromLabels, b.id AS to, labels(b) AS toLabels, properties(e) AS props`, { tenantId });
+export interface SnapNode { iid: number; labels: string[]; props: Record<string, unknown> }
+export interface SnapEdge { type: string; from: SnapNode; to: SnapNode; props: Record<string, unknown> }
+/** One tenant's evidence nodes and edges, read in ONE graph query (a single consistent snapshot). */
+export interface EvidenceSnapshot extends EvidenceState { nodes: SnapNode[]; edges: SnapEdge[] }
+
+const SNAPSHOT = `
+MATCH (n) WHERE n.tenantId = $tenantId AND ${isEvidence.replace('%', 'n')}
+OPTIONAL MATCH (n)-[e]->(b) WHERE b.tenantId = $tenantId AND ${isEvidence.replace('%', 'b')}
+WITH n, collect([type(e), id(b), labels(b), properties(b), properties(e)]) AS out
+RETURN id(n) AS iid, labels(n) AS labels, properties(n) AS props, out`;
+
+/**
+ * Reads the tenant's evidence in a single query, so the rows that are hashed are exactly the rows a
+ * caller then answers from. Answering from a separate, later query would reopen a check-then-read gap.
+ */
+export async function readEvidenceSnapshot(client: GraphClient, tenantId: string): Promise<EvidenceSnapshot> {
+  type Out = [string, number, string[], Record<string, unknown>, Record<string, unknown>];
+  const rows = await client.read<{ iid: number; labels: string[]; props: Record<string, unknown>; out: Out[] }>(SNAPSHOT, { tenantId });
+  const byId = new Map<number, SnapNode>();
+  for (const r of rows) byId.set(r.iid, { iid: r.iid, labels: r.labels, props: r.props });
+  const edges: SnapEdge[] = [];
+  for (const r of rows) {
+    for (const [type, toIid, toLabels, toProps, props] of r.out ?? []) {
+      if (typeof type !== 'string') continue; // OPTIONAL MATCH with no edge
+      const to = byId.get(toIid) ?? { iid: toIid, labels: toLabels, props: toProps };
+      edges.push({ type, from: byId.get(r.iid)!, to, props: props ?? {} });
+    }
+  }
+  const nodes = [...byId.values()];
   const lines = [
     ...nodes.map(n => canonical(['N', [...n.labels].sort(), n.props])),
-    ...edges.map(e => canonical(['E', e.type, [...e.fromLabels].sort(), e.from, [...e.toLabels].sort(), e.to, e.props]))
+    ...edges.map(e => canonical(['E', e.type, [...e.from.labels].sort(), e.from.props['id'] ?? null, [...e.to.labels].sort(), e.to.props['id'] ?? null, e.props]))
   ].sort();
   const revisions: Record<string, string> = {};
   for (const n of nodes) {
     if (n.labels.includes('Release') && typeof n.props['id'] === 'string') revisions[n.props['id']] = String(n.props['revision'] ?? '');
   }
-  return { stateHash: createHash('sha256').update(lines.join('\n')).digest('hex'), revisions };
+  return { stateHash: createHash('sha256').update(lines.join('\n')).digest('hex'), revisions, nodes, edges };
+}
+
+/** Canonical evidence state of one tenant in this graph (handoffs and principals are excluded). */
+export async function evidenceState(client: GraphClient, tenantId: string): Promise<EvidenceState> {
+  const { stateHash, revisions } = await readEvidenceSnapshot(client, tenantId);
+  return { stateHash, revisions };
 }
 
 const macKey = (key: Buffer) => createHmac('sha256', key).update('cubes-witness-key/v1').digest();
@@ -210,22 +238,35 @@ export async function recoverWitness(client: GraphClient, cfg: LedgerConfig, ten
 }
 
 export type WitnessCheck = { ok: true } | { ok: false; reason: string };
+export type WitnessedSnapshot = { ok: true; snapshot: EvidenceSnapshot } | { ok: false; reason: string };
 
-/** Read-side gate: the graph's current evidence state must equal the committed head of the witness. */
-export async function checkWitness(client: GraphClient, cfg: LedgerConfig | null, tenantId: string, releaseId: string): Promise<WitnessCheck> {
+/**
+ * Read-side gate. Reads ONE snapshot and returns it only if it equals the committed witness head (and,
+ * with a releaseId, that release's revision is the witnessed one). Callers must answer from the returned
+ * snapshot, never from a separate query, so no write can slip between the check and the read.
+ */
+export async function witnessedSnapshot(client: GraphClient, cfg: LedgerConfig | null, tenantId: string, releaseId?: string): Promise<WitnessedSnapshot> {
   if (!cfg) return { ok: false, reason: 'no evidence witness is configured' };
   let chain: ChainState;
   try { chain = await readChain(cfg, client.config.graphName, tenantId); } catch { return { ok: false, reason: 'the evidence witness could not be read' }; }
   if (chain.status === 'MISSING') return { ok: false, reason: 'no evidence witness exists for this graph' };
   if (chain.status === 'CORRUPT') return { ok: false, reason: `the evidence witness is corrupt (${chain.reason})` };
   if (chain.status === 'PENDING') return { ok: false, reason: 'an evidence write is in progress or did not finish' };
-  const now = await evidenceState(client, tenantId);
-  const want = chain.head.revisions[releaseId];
-  if (want === undefined || now.revisions[releaseId] !== want) {
-    return { ok: false, reason: `the graph revision (${now.revisions[releaseId] ?? 'none'}) is not the witnessed revision (${want ?? 'none'})` };
+  const snapshot = await readEvidenceSnapshot(client, tenantId);
+  if (releaseId !== undefined) {
+    const want = chain.head.revisions[releaseId];
+    if (want === undefined || snapshot.revisions[releaseId] !== want) {
+      return { ok: false, reason: `the graph revision (${snapshot.revisions[releaseId] ?? 'none'}) is not the witnessed revision (${want ?? 'none'})` };
+    }
   }
-  if (now.stateHash !== chain.head.stateHash) return { ok: false, reason: 'the graph evidence differs from the witnessed state at this revision' };
-  return { ok: true };
+  if (snapshot.stateHash !== chain.head.stateHash) return { ok: false, reason: 'the graph evidence differs from the witnessed state at this revision' };
+  return { ok: true, snapshot };
+}
+
+/** Witness check without the snapshot (callers that do not read evidence afterwards). */
+export async function checkWitness(client: GraphClient, cfg: LedgerConfig | null, tenantId: string, releaseId?: string): Promise<WitnessCheck> {
+  const w = await witnessedSnapshot(client, cfg, tenantId, releaseId);
+  return w.ok ? { ok: true } : w;
 }
 
 /** Test/ops helper: whether a chain file exists. */
