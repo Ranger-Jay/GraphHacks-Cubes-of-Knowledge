@@ -45,8 +45,8 @@ test('wiring: no runtime fails closed to CHECKING, never to an outage, and the t
   assert.ok(!html.includes('graph-proof-edges'));
 });
 
-test('wiring: a denied or missing-release phase is never drawn as an outage by the scene', () => {
-  for (const phase of ['ACCESS_DENIED', 'NOT_FOUND'] as const) {
+test('wiring: only GRAPH_UNAVAILABLE is drawn as an outage (denied, missing, checking and undetermined are not)', () => {
+  for (const phase of ['ACCESS_DENIED', 'NOT_FOUND', 'UNAVAILABLE', 'CHECKING'] as const) {
     const html = scene({ phase });
     assert.ok(!html.includes('GRAPH UNAVAILABLE') && !html.includes('damaged-cube') && !html.includes('Task Blocked (Outage)'), phase);
   }

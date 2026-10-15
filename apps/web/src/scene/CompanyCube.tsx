@@ -18,7 +18,8 @@ export const CompanyCube: React.FC<CompanyCubeProps> = ({
   const phase = runtime?.phase ?? (data.status === 'AVAILABLE' ? 'READY' : 'GRAPH_UNAVAILABLE');
   const isReady = phase === 'READY';
   const isAvailable = isReady;
-  const isGraphUnavailable = phase === 'GRAPH_UNAVAILABLE' || phase === 'UNAVAILABLE';
+  // Only a proven graph failure gets the outage visual; UNAVAILABLE means "cannot be determined" (docs/scene-phase-matrix.md).
+  const isGraphUnavailable = phase === 'GRAPH_UNAVAILABLE';
   const nodes = isReady ? data.nodes : [];
   const edges = isReady ? data.edges : [];
 
