@@ -23,10 +23,14 @@ export interface LedgerRecord {
   stateHash: string; revisions: Record<string, string>;
   /** PENDING only: what the write is (resume must match). */
   intent: string;
-  /** Revocation tombstones: binding identities (kind|subject|path|sha256) that may not come back. */
+  /** Revocation tombstones: binding identities that may not come back. */
   revoked: string[];
+  /** PENDING only: the tombstone/override plan this write commits. MAC'd, so a resume after a crash commits
+   * exactly this plan (a revoke cannot lose its tombstone); null on every other record type. */
+  plan: WritePlan | null;
   at: string; prevMac: string; mac: string;
 }
+export interface WritePlan { revoke: string[]; reinstate: string[]; allowRevisionRollback: boolean }
 export interface EvidenceState { stateHash: string; revisions: Record<string, string> }
 export type ChainState =
   | { status: 'MISSING' }
@@ -103,6 +107,12 @@ export async function evidenceState(client: GraphClient, tenantId: string): Prom
   return { stateHash, revisions };
 }
 
+/** Tombstones after a write: committed + plan.revoke - plan.reinstate (sorted, unique). */
+function planTombstones(committed: string[], plan: WritePlan): string[] {
+  const lift = new Set(plan.reinstate);
+  return [...new Set([...committed, ...plan.revoke])].filter(k => !lift.has(k)).sort();
+}
+
 const macKey = (key: Buffer) => createHmac('sha256', key).update('cubes-witness-key/v1').digest();
 function macOf(key: Buffer, r: Omit<LedgerRecord, 'mac'>): string {
   return createHmac('sha256', macKey(key)).update(canonical(['cubes-witness/v1', r])).digest('hex');
@@ -128,6 +138,8 @@ function parseChain(cfg: LedgerConfig, graph: string, tenantId: string, raw: str
   const recs: LedgerRecord[] = [];
   let prevMac = '';
   let committed: LedgerRecord | null = null;
+  let lastPending: LedgerRecord | null = null;
+  const strs = (v: unknown) => Array.isArray(v) && v.every(x => typeof x === 'string');
   for (const [i, line] of raw.slice(0, -1).split('\n').entries()) {
     let r: LedgerRecord;
     try { r = JSON.parse(line) as LedgerRecord; } catch { return { status: 'CORRUPT', reason: `record ${i} is not JSON` }; }
@@ -146,11 +158,21 @@ function parseChain(cfg: LedgerConfig, graph: string, tenantId: string, raw: str
       : r.type === 'PENDING';
     if (!okType) return { status: 'CORRUPT', reason: `record ${i} (${r.type}) is not a valid transition` };
     if (r.type === 'ABORT' && committed && r.stateHash !== committed.stateHash) return { status: 'CORRUPT', reason: `record ${i} ABORT does not restore the committed state` };
+    const planOk = r.type === 'PENDING'
+      ? r.plan !== null && typeof r.plan === 'object' && strs(r.plan.revoke) && strs(r.plan.reinstate) && typeof r.plan.allowRevisionRollback === 'boolean'
+      : r.plan === null;
+    if (!planOk) return { status: 'CORRUPT', reason: `record ${i} has an invalid write plan` };
+    // A COMMIT changes tombstones exactly as its PENDING plan said (committed + revoke - reinstate).
+    if (r.type === 'COMMIT' && committed && lastPending?.plan) {
+      const want = canonical(planTombstones(committed.revoked, lastPending.plan));
+      if (canonical(r.revoked) !== want) return { status: 'CORRUPT', reason: `record ${i} COMMIT does not apply its pending revocation plan` };
+    }
     // Tombstones only grow, except through an explicit reinstatement recorded in a COMMIT.
     if (committed && (r.type === 'PENDING' || r.type === 'ABORT') && canonical(r.revoked) !== canonical(committed.revoked)) {
       return { status: 'CORRUPT', reason: `record ${i} changes revocations outside a commit` };
     }
     if (r.type !== 'PENDING') committed = r;
+    lastPending = r.type === 'PENDING' ? r : null;
     recs.push(r);
     prevMac = r.mac;
   }
@@ -159,10 +181,10 @@ function parseChain(cfg: LedgerConfig, graph: string, tenantId: string, raw: str
 }
 
 async function append(cfg: LedgerConfig, graph: string, tenantId: string, prev: LedgerRecord | null,
-  type: RecordType, state: EvidenceState, intent: string, revoked: string[]): Promise<LedgerRecord> {
+  type: RecordType, state: EvidenceState, intent: string, revoked: string[], plan: WritePlan | null = null): Promise<LedgerRecord> {
   const body: Omit<LedgerRecord, 'mac'> = {
     v: 1, graph, tenantId, seq: prev ? prev.seq + 1 : 0, type, stateHash: state.stateHash, revisions: state.revisions,
-    intent, revoked: [...new Set(revoked)].sort(), at: new Date().toISOString(), prevMac: prev ? prev.mac : ''
+    intent, revoked: [...new Set(revoked)].sort(), plan, at: new Date().toISOString(), prevMac: prev ? prev.mac : ''
   };
   const rec: LedgerRecord = { ...body, mac: macOf(cfg.key, body) };
   const fh = await open(chainPath(cfg, graph, tenantId), prev ? 'a' : 'wx');
@@ -251,19 +273,27 @@ export async function witnessedWrite<T>(client: GraphClient, cfg: LedgerConfig |
     if (chain.status === 'MISSING') throw new WitnessError('MISSING', 'No witness chain: initialization must be explicit');
     if (chain.status === 'CORRUPT') throw new WitnessError('CORRUPT', `Witness chain is corrupt: ${chain.reason}`);
     const committed = chain.status === 'PENDING' ? chain.committed : chain.head;
-    const reinstate = new Set(opts.reinstate ?? []);
-    const tombstones = new Set([...committed.revoked, ...(opts.revoke ?? [])].filter(k => !reinstate.has(k)));
+    if (chain.status === 'PENDING' && (!opts.resume || chain.head.intent !== intent)) {
+      throw new WitnessError('PENDING', 'An earlier evidence write did not finish; resume it with the same intent');
+    }
+    // The plan is fixed when PENDING is written; a resume uses the MAC'd plan, never the caller's options.
+    const plan: WritePlan = chain.status === 'PENDING' ? chain.head.plan! : {
+      revoke: [...new Set(opts.revoke ?? [])].sort(), reinstate: [...new Set(opts.reinstate ?? [])].sort(),
+      allowRevisionRollback: opts.allowRevisionRollback === true
+    };
+    const rules: WitnessedWriteOptions = { allowRevisionRollback: plan.allowRevisionRollback };
+    const lifted = new Set(plan.reinstate);
+    const tombstones = new Set(planTombstones(committed.revoked, plan));
     const plannedRevs = { ...committed.revisions, ...(opts.planned?.revisions ?? {}) };
-    const early = violation(committed, plannedRevs, opts.planned?.bindings ?? [], new Set(committed.revoked.filter(k => !reinstate.has(k))), opts);
+    const early = violation(committed, plannedRevs, opts.planned?.bindings ?? [], new Set(committed.revoked.filter(k => !lifted.has(k))), rules);
     if (early) throw early;
     let pending: LedgerRecord;
     if (chain.status === 'PENDING') {
-      if (!opts.resume || chain.head.intent !== intent) throw new WitnessError('PENDING', 'An earlier evidence write did not finish; resume it with the same intent');
       pending = chain.head;
     } else {
       const before = await evidenceState(client, tenantId);
       if (before.stateHash !== chain.head.stateHash) throw new WitnessError('MISMATCH', 'Graph evidence state does not match the witness; refusing to write over it');
-      pending = await append(cfg, graph, tenantId, chain.head, 'PENDING', before, intent, committed.revoked);
+      pending = await append(cfg, graph, tenantId, chain.head, 'PENDING', before, intent, committed.revoked, plan);
     }
     let out: T;
     try { out = await write(); } catch (e) {
@@ -272,7 +302,7 @@ export async function witnessedWrite<T>(client: GraphClient, cfg: LedgerConfig |
       throw e;
     }
     const after = await readEvidenceSnapshot(client, tenantId);
-    const late = violation(committed, after.revisions, snapshotBindings(after), tombstones, opts);
+    const late = violation(committed, after.revisions, snapshotBindings(after), tombstones, rules);
     if (late) {
       if (after.stateHash === committed.stateHash) await append(cfg, graph, tenantId, pending, 'ABORT', after, intent, committed.revoked);
       throw late; // left PENDING when the graph changed: reads fail closed
@@ -292,16 +322,24 @@ export async function revokeEvidence(client: GraphClient, cfg: LedgerConfig | nu
     || revNum(input.newRevision) === null || !input.newRevision.startsWith(`${input.releaseId}@r`)) {
     throw new WitnessError('INVALID', 'licenseId, releaseId and a newRevision of the form <releaseId>@rN are required');
   }
+  const intent = `revoke:${input.licenseId}@${input.newRevision}`;
+  const write = async () => {
+    await client.write(`MATCH (:License {id: $licenseId, tenantId: $tenantId})-[e:EVIDENCED_BY]->() DELETE e
+      WITH count(*) AS n MATCH (r:Release {id: $releaseId, tenantId: $tenantId}) SET r.revision = $newRevision`, { ...input, tenantId });
+  };
+  // A revoke interrupted after its graph write resumes with the tombstones recorded in its PENDING plan.
+  const chain = cfg ? await readChain(cfg, client.config.graphName, tenantId) : null;
+  if (chain?.status === 'PENDING' && chain.head.intent === intent) {
+    await witnessedWrite(client, cfg, tenantId, intent, write, { resume: true, planned: { revisions: { [input.releaseId]: input.newRevision } } });
+    return { revoked: chain.head.plan!.revoke };
+  }
   const snap = await readEvidenceSnapshot(client, tenantId);
   const keys = snap.edges.filter(e => e.type === 'EVIDENCED_BY' && e.from.props['id'] === input.licenseId)
     .map(e => bindingKey(e.type, e.from.props['id'], e.to.props['path'], e.to.props['sha256']));
   if (keys.length === 0) throw new WitnessError('INVALID', `No evidence binding for license ${input.licenseId}`);
   const cur = revNum(snap.revisions[input.releaseId]);
   if (cur === null || revNum(input.newRevision)! <= cur) throw new WitnessError('ROLLBACK', 'A revocation must move the release to a higher revision');
-  await witnessedWrite(client, cfg, tenantId, `revoke:${input.licenseId}@${input.newRevision}`, async () => {
-    await client.write(`MATCH (:License {id: $licenseId, tenantId: $tenantId})-[e:EVIDENCED_BY]->() DELETE e
-      WITH count(*) AS n MATCH (r:Release {id: $releaseId, tenantId: $tenantId}) SET r.revision = $newRevision`, { ...input, tenantId });
-  }, { revoke: keys, planned: { revisions: { [input.releaseId]: input.newRevision } } });
+  await witnessedWrite(client, cfg, tenantId, intent, write, { revoke: keys, planned: { revisions: { [input.releaseId]: input.newRevision } } });
   return { revoked: keys };
 }
 
