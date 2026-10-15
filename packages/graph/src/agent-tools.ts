@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import type { AgentId, SourceRef } from '@cubes/contracts';
 import { GraphUnavailableError, type GraphClient } from './client.js';
 import { QUERIES } from './queries.js';
-import { analyzeRelease, graphHealth, type AnalyzeOptions } from './analysis.js';
+import { analyzeRelease, type AnalyzeOptions } from './analysis.js';
 import { SourceFiles } from './verify.js';
 
 /**
@@ -88,9 +88,14 @@ export async function runTool(client: GraphClient, ctx: ToolContext, tool: strin
   }
 
   if (name === 'graph_status') {
-    const h = await graphHealth(client);
-    return h.ok ? done('OK', `Graph is available with ${h.releases} release(s).`, { releases: h.releases })
-      : done('UNAVAILABLE', `Graph is not ready (${h.reason}); nothing can be asserted.`);
+    // Tenant-scoped: an agent learns nothing about other tenants (not even a count).
+    try {
+      const releases = (await client.read<{ releases: number }>(QUERIES.READ_TENANT_RELEASES, { tenantId: ctx.tenantId }))[0]?.releases ?? 0;
+      return releases > 0 ? done('OK', `Graph is available with ${releases} release(s) in this tenant.`, { releases })
+        : done('UNAVAILABLE', 'No seeded releases in this tenant; nothing can be asserted.');
+    } catch (err) {
+      return done('UNAVAILABLE', err instanceof GraphUnavailableError ? 'The graph is unavailable; nothing can be asserted.' : 'The graph result could not be interpreted.');
+    }
   }
   if (name === 'release_clearance') {
     const opts: AnalyzeOptions = { requestId: callId };
