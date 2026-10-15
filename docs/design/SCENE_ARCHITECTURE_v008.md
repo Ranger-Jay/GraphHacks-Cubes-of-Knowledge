@@ -89,4 +89,19 @@ The central isometric Company Cube implements the visual representation of Falko
 
 - **Reduced Motion:** Fully honors `reducedMotion` prop and `prefers-reduced-motion: reduce`. Disables idle breathing, blinking, pupil saccades, head nods/shakes, and cube rotation. Transitions are instantaneous. Usable controls and captions remain 100% functional.
 - **Text Alternative:** Semantic `<nav aria-label="Scene text alternative">` and accessible lists render complete state for assistive technology.
-- **Host Performance:** Measured unit test suite execution: **9 tests pass in 553.5ms** on Node 24 (Windows).
+- **Host Performance:** Measured unit test suite execution: **15 tests pass in ~715ms** on Node 22/24 (Windows).
+
+---
+
+## 7. Synchronous Concurrency Lock & Task Truth Enforcement (`v008.005`–`v008.007`)
+
+1. **Synchronous In-Flight Lock:**
+   - React state updates (`setIsTaskStarting(true)`) are asynchronous. Rapid synchronous clicks occurring within the same event loop tick before the component re-renders could previously call the async handler multiple times.
+   - To eliminate this race condition, `AgentPyramid` employs a synchronous mutable reference lock (`isTaskStartingRef = useRef(false)`).
+   - In `handleTaskStart`, `isTaskStartingRef.current = true` is asserted synchronously immediately before any `await`. Subsequent clicks in the same tick or before promise settlement observe `isTaskStartingRef.current === true` and return immediately.
+2. **Deterministic Settlement & Recovery:**
+   - A `try ... finally` block guarantees that `isTaskStartingRef.current = false` and `setIsTaskStarting(false)` execute on both successful promise resolution and rejection/error, restoring the button for subsequent user actions.
+3. **Executable Regression Test Suite:**
+   - Test 14 mounts the component and dispatches three rapid synchronous clicks against an unresolved pending promise, verifying that `onAgentTaskStart` is invoked exactly once and unlocks after settlement.
+   - Test 15 validates that if the task promise rejects, the synchronous lock releases cleanly in the `finally` block, permitting subsequent retry attempts.
+
