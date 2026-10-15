@@ -11,3 +11,6 @@ export { evidenceKeyFromEnv, bindingSig, revisionNumber } from './evidence-key.j
 export type { BindingClaim, BindingKind } from './evidence-key.js';
 export { witnessedWrite, recoverWitness, revokeEvidence, checkWitness, witnessedSnapshot, readChain, evidenceState, readEvidenceSnapshot, bindingKey, ledgerFromEnv, WitnessError } from './state-ledger.js';
 export type { LedgerConfig, LedgerRecord, ChainState, WitnessCheck } from './state-ledger.js';
+export { runTool, TOOL_DEFINITIONS } from './agent-tools.js';
+export type { ToolName, ToolContext, ToolResult, ToolStatus } from './agent-tools.js';
+export type { AnalyzeOptions } from './analysis.js';
