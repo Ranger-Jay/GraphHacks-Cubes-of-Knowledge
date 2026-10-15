@@ -653,8 +653,7 @@ test('revocation is durable: re-seeding cannot un-revoke, and revisions never go
     await c.write("MATCH (r:Release {id: 'rel-wad'}) SET r.revision = 'rel-wad@r2'");
     assert.equal(await recoverWitness(c, ledger(), 't-wad'), 'ABORTED');
     // Explicit reinstatement (operator re-grant) is the only way back, and it is recorded.
-    const ndKey = key('EVIDENCED_BY', 'lic-night-drive-v4', 'graph/seed/sources/license-night-drive.txt',
-      createHash('sha256').update(await readFile('graph/seed/sources/license-night-drive.txt')).digest('hex'));
+    const ndKey = key('EVIDENCED_BY', 'lic-night-drive-v4', 'graph/seed/sources/license-night-drive.txt');
     assert.deepEqual(revoked, [ndKey]);
     await seedGraph(c, process.cwd(), { bundles: ['basement-hum-v4-license'], reinstate: [ndKey] });
     const back = await analyzeRelease(c, 't-wad', 'rel-wad');
