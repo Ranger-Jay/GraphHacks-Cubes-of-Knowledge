@@ -1,4 +1,4 @@
-import { useEffect, useState, type ComponentType } from 'react';
+import { useEffect, useMemo, useState, type ComponentType } from 'react';
 import type { AnalysisResponse, GraphStatusResponse } from '@cubes/contracts';
 import { getAnalysis, getGraphStatus, getHealth, type ApiResult, type Fetcher, type HealthResponse } from './api';
 import { HealthPanel, type Loadable } from './components/HealthPanel';
@@ -41,17 +41,37 @@ export function Shell({ route, health, graph, analysis, Scene, reducedMotion, se
 export type Sinks = {
   setHealth: (v: Loadable<HealthResponse>) => void; setGraph: (v: Loadable<GraphStatusResponse>) => void;
   setAnalysis: (v: ApiResult<AnalysisResponse> | null) => void; setSelected: (v: string | null) => void;
+  /** Optional: told which request generation the sinks now belong to (for display and evidence only). */
+  setGeneration?: (id: number) => void;
 };
+
+/**
+ * Request generation. Every load takes the next id; a completion may write only while its id is still the
+ * newest one issued for the same sinks. A slow, old success therefore cannot restore READY (or repopulate
+ * proof) after a newer request started or failed, even when nobody called the older load's cancel function.
+ */
+export interface RequestGate { next(): number; isCurrent(id: number): boolean }
+export function createRequestGate(): RequestGate {
+  let latest = 0;
+  return { next: () => ++latest, isCurrent: id => id === latest };
+}
+const gates = new WeakMap<object, RequestGate>();
+/** One gate per sinks object, so the newest load for those sinks wins without any cooperation from callers. */
+const gateFor = (s: Sinks): RequestGate => { let g = gates.get(s); if (!g) { g = createRequestGate(); gates.set(s, g); } return g; };
+
 /** Fresh load from the API. Clears every shown result first; nothing is cached between calls. Returns a cancel fn. */
-export function loadAll(route: Route, fetcher: Fetcher | undefined, s: Sinks): () => void {
+export function loadAll(route: Route, fetcher: Fetcher | undefined, s: Sinks, gate: RequestGate = gateFor(s)): () => void {
   let live = true;
+  const id = gate.next();
+  const current = () => live && gate.isCurrent(id);
+  s.setGeneration?.(id);
   s.setHealth({ state: 'loading' }); s.setGraph({ state: 'loading' });
   s.setAnalysis(null); s.setSelected(null);
   const ps: Promise<unknown>[] = [
-    getHealth(fetcher).then(result => { if (live) s.setHealth({ state: 'done', result }); }),
-    getGraphStatus(fetcher).then(result => { if (live) s.setGraph({ state: 'done', result }); })
+    getHealth(fetcher).then(result => { if (current()) s.setHealth({ state: 'done', result }); }),
+    getGraphStatus(fetcher).then(result => { if (current()) s.setGraph({ state: 'done', result }); })
   ];
-  if (route.name === 'release') ps.push(getAnalysis(route.releaseId, fetcher).then(r => { if (live) s.setAnalysis(r); }));
+  if (route.name === 'release') ps.push(getAnalysis(route.releaseId, fetcher).then(r => { if (current()) s.setAnalysis(r); }));
   loadAll.last = Promise.all(ps);
   return () => { live = false; };
 }
@@ -74,7 +94,10 @@ export function App({ Scene, fetcher }: { Scene: ComponentType<SceneProps> | nul
 
   useEffect(() => { const h = () => setRoute(prev => nextRoute(prev, window.location.hash)); window.addEventListener('hashchange', h); return () => window.removeEventListener('hashchange', h); }, []);
   const [nonce, setNonce] = useState(0);
-  useEffect(() => loadAll(route, fetcher, { setHealth, setGraph, setAnalysis, setSelected }), [route, fetcher, nonce]);
+  const [, setGeneration] = useState(0);
+  // Stable sinks object: the request gate is keyed to it, so only the newest load may write.
+  const sinks = useMemo<Sinks>(() => ({ setHealth, setGraph, setAnalysis, setSelected, setGeneration }), []);
+  useEffect(() => loadAll(route, fetcher, sinks), [route, fetcher, nonce, sinks]);
 
   return <Shell route={route} health={health} graph={graph} analysis={analysis} Scene={Scene}
     reducedMotion={reducedMotion} selected={selected} onSelect={setSelected} onRequery={() => setNonce(n => n + 1)} />;
