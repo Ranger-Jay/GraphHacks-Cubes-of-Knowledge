@@ -47,8 +47,8 @@ blockquote { border-left: 3px solid #2c3442; margin: .25rem 0; padding-left: .75
    Selectors below reach into the scene's class names; scene/ itself is untouched. */
 @media (min-width: 1100px) and (max-height: 1000px) {
   .app-shell { padding: .25rem .75rem; gap: .25rem; }
-  .topbar { flex-wrap: nowrap; gap: .75rem; } .topbar .brand { flex: 0 1 27rem; flex-wrap: nowrap; gap: .5rem; align-items: center; } .topbar h1 { white-space: nowrap; } .identity { font-size: .7rem; line-height: 1.2; }
-  .health-strip { flex: 1 1 auto; } .health-strip .muted { font-size: .72rem; } .health-strip .strip-title { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+  .topbar { flex-wrap: nowrap; gap: .75rem; } .topbar .brand { flex: 0 1 21.5rem; display: block; } .topbar .brand h1 { float: left; margin-right: .5rem; line-height: 1.2; } .identity { display: block; } .topbar h1 { white-space: nowrap; } .identity { font-size: .66rem; line-height: 1.15; }
+  .health-strip { flex: 1 1 auto; font-size: .78rem; } .health-strip .muted { font-size: .7rem; } .health-strip .badge { border-width: 1px; padding: 0 .35em; } .health-strip .strip-title { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
   .health-strip .strip-list { gap: 0 .75rem; } .health-strip .tech-details { margin-left: auto; }
   .health-strip { padding: .15rem .5rem; } .requery-box .muted { display: none; }
   .stage-grid { grid-template-columns: minmax(0, 1fr) minmax(19rem, 24rem); gap: .5rem; }
