@@ -11,7 +11,7 @@ import { createHash } from 'node:crypto';
 import { configFromEnv, evidenceKeyFromEnv, GraphClient, ledgerFromEnv, runTool, seedGraph, TOOL_DEFINITIONS, witnessedWrite } from '../../packages/graph/src/index.ts';
 
 process.env['GRAPH_EVIDENCE_KEY'] ??= 'test-only-evidence-key-not-a-secret-0123456789';
-process.env['GRAPH_WITNESS_DIR'] ??= mkdtempSync(join(tmpdir(), 'cubes-witness-'));
+process.env['GRAPH_WITNESS_DIR'] = mkdtempSync(join(tmpdir(), 'cubes-witness-'));
 const cfg = { ...configFromEnv(), graphName: `${configFromEnv().graphName}__tools` };
 const client = new GraphClient(cfg);
 const ctx = { tenantId: 't-wad', agentId: 'roy' as const };
