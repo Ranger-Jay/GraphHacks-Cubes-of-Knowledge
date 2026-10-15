@@ -7,7 +7,7 @@ export type Loadable<T> = { state: 'loading' } | { state: 'done'; result: ApiRes
 function Line({ name, value }: { name: string; value: Loadable<unknown> }) {
   if (value.state === 'loading') return <li>{name}: <span role="status">Checking…</span></li>;
   const r = value.result;
-  if (r.kind === 'error' || r.kind === 'not_found') return <li>{name}: <StatusBadge value="UNAVAILABLE" /> <span className="muted">{r.message}</span></li>;
+  if (r.kind === 'error' || r.kind === 'not_found' || r.kind === 'unauthorized') return <li>{name}: <StatusBadge value="UNAVAILABLE" /> <span className="muted">{r.message}</span></li>;
   return null;
 }
 

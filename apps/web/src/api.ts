@@ -5,6 +5,8 @@ export type ApiResult<T> =
   | { kind: 'ok'; httpStatus: number; data: T }
   | { kind: 'unavailable'; httpStatus: number; data: T }
   | { kind: 'not_found'; httpStatus: 404; message: string }
+  /** 401 or 403: the API refused the session. No answer is shown. */
+  | { kind: 'unauthorized'; httpStatus: 401 | 403; message: string }
   | { kind: 'error'; httpStatus: number | null; message: string };
 
 export interface HealthResponse { status: string; ready: boolean; message?: string }
@@ -34,6 +36,9 @@ export function isAnalysis(v: unknown): v is AnalysisResponse {
     && (v['clearance'] === 'ESTABLISHED' || v['clearance'] === 'GAP' || v['clearance'] === 'UNKNOWN');
 }
 
+export const UNAUTHENTICATED_MESSAGE = 'The API did not accept this session (HTTP 401). In dev, set API_READER_TOKEN in the server environment so the dev proxy can add it; the browser holds no credential.';
+export const FORBIDDEN_MESSAGE = 'The API accepted the session but does not allow this read (HTTP 403).';
+
 async function getJson<T>(fetcher: Fetcher, url: string, guard: (v: unknown) => v is T, unavailable: (v: T) => boolean): Promise<ApiResult<T>> {
   let response: Response;
   try {
@@ -41,8 +46,14 @@ async function getJson<T>(fetcher: Fetcher, url: string, guard: (v: unknown) => 
   } catch (e) {
     return { kind: 'error', httpStatus: null, message: `API unreachable: ${e instanceof Error ? e.message : String(e)}` };
   }
+  // Checked before the body is parsed: a refusal is a refusal whatever its body looks like.
+  if (response.status === 401) return { kind: 'unauthorized', httpStatus: 401, message: UNAUTHENTICATED_MESSAGE };
+  if (response.status === 403) return { kind: 'unauthorized', httpStatus: 403, message: FORBIDDEN_MESSAGE };
   let body: unknown;
   try { body = await response.json(); } catch {
+    if (response.status === 502 || response.status === 504) {
+      return { kind: 'error', httpStatus: response.status, message: `API unreachable through the dev proxy (HTTP ${response.status}). Is the API process running?` };
+    }
     return { kind: 'error', httpStatus: response.status, message: `Non-JSON response (HTTP ${response.status}).` };
   }
   if (response.status === 404) {

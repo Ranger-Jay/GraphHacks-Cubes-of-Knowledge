@@ -69,6 +69,9 @@ export function AnalysisView({ releaseId, result }: { releaseId: string; result:
       {result?.kind === 'not_found' && (
         <div role="alert"><p><StatusBadge value="NOT_IMPLEMENTED" /> The analysis route returned 404: {result.message}</p>
           <p>No graph answer is shown. Clearance is not asserted.</p></div>)}
+      {result?.kind === 'unauthorized' && (
+        <div role="alert" className="unauthorized"><p><StatusBadge value="UNAVAILABLE" /> Not authorized (HTTP {result.httpStatus}): {result.message}</p>
+          <p>No graph answer is shown. Clearance is not asserted.</p></div>)}
       {result?.kind === 'error' && (
         <div role="alert"><p><StatusBadge value="UNAVAILABLE" /> Request failed{result.httpStatus ? ` (HTTP ${result.httpStatus})` : ''}: {result.message}</p>
           <p>No graph answer is shown. Clearance is not asserted.</p></div>)}
