@@ -665,6 +665,35 @@ test('revocation is durable: re-seeding cannot un-revoke, and revisions never go
   });
 });
 
+test('a revoke interrupted after its graph write keeps its tombstone on any resume (MAC\'d plan)', async () => {
+  const { revokeEvidence, readChain, recoverWitness } = await import('../../packages/graph/src/index.ts');
+  const REV = { licenseId: 'lic-night-drive-v4', releaseId: 'rel-wad', newRevision: 'rel-wad@r2' };
+  const intent = 'revoke:lic-night-drive-v4@rel-wad@r2';
+  for (const how of ['generic-resume', 'revoke-again'] as const) {
+    await withVariant(`crashrevoke_${how}`, null, async c => {
+      const crashing = Object.create(c) as GraphClient;
+      crashing.write = async (q, p) => { const r = await c.write(q, p); if (q.includes('DELETE e')) throw new Error('CRASH'); return r; };
+      crashing.read = (q, p) => c.read(q, p);
+      await assert.rejects(revokeEvidence(crashing, ledger(), 't-wad', REV), /CRASH/);
+      assertBlocked(await analyzeRelease(c, 't-wad', 'rel-wad'), /did not finish/);
+      await assert.rejects(recoverWitness(c, ledger(), 't-wad'), { code: 'PENDING' });
+      await assert.rejects(seedGraph(c, process.cwd(), { resumeWitness: true }), { code: 'PENDING' }, 'another intent cannot finish it');
+      if (how === 'generic-resume') {
+        // Even a resume that passes no revocation options commits the MAC'd plan.
+        await witnessedWrite(c, ledger(), 't-wad', intent, async () => undefined, { resume: true });
+      } else {
+        assert.equal((await revokeEvidence(c, ledger(), 't-wad', REV)).revoked.length, 1);
+      }
+      const chain = await readChain(ledger(), c.config.graphName, 't-wad');
+      assert.ok(chain.status === 'COMMITTED' && chain.head.revoked.length === 1, 'tombstone kept');
+      await assert.rejects(seedGraph(c, process.cwd(), { bundles: ['basement-hum-v4-license'] }), { code: 'REVOKED' });
+      const a = await analyzeRelease(c, 't-wad', 'rel-wad');
+      assert.ok(a && a.status === 'AVAILABLE');
+      assert.deepEqual([a.clearance, statusOf(a, 'ev-trk-night-drive')], ['GAP', 'MISSING']);
+    });
+  }
+});
+
 test('a blocked answer carries no graph-derived text; a release deleted out of band is blocked, not 404', async () => {
   await withVariant('spoof', null, async c => {
     await c.write("MATCH (r:Release {id: 'rel-wad'}) SET r.title = 'SPOOF TITLE cleared by legal' WITH 1 AS x MATCH (k:Cut {id: 'cut-wad-v4'}) SET k.label = 'SPOOF CUT ESTABLISHED'");
