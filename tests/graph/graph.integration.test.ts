@@ -693,6 +693,29 @@ test('a revoke interrupted after its graph write keeps its tombstone on any resu
   }
 });
 
+test('a tombstone survives an edited copy of the evidence file; overrides are named in the ledger intent', async () => {
+  const { revokeEvidence, readChain } = await import('../../packages/graph/src/index.ts');
+  const { cp, appendFile } = await import('node:fs/promises');
+  await withVariant('tombstone_key', null, async c => {
+    await revokeEvidence(c, ledger(), 't-wad', { licenseId: 'lic-night-drive-v4', releaseId: 'rel-wad', newRevision: 'rel-wad@r2' });
+    // A checkout whose license file differs by one trailing newline (different SHA-256) is still revoked.
+    const root = mkdtempSync(join(tmpdir(), 'cubes-root-'));
+    await cp('graph/seed/sources', join(root, 'graph/seed/sources'), { recursive: true });
+    await appendFile(join(root, 'graph/seed/sources/license-night-drive.txt'), '\n');
+    await assert.rejects(seedGraph(c, root, { bundles: ['basement-hum-v4-license'] }), { code: 'REVOKED' });
+    await assert.rejects(seedGraph(c, root, { bundles: ['basement-hum-v4-license'], allowRevisionRollback: true }), { code: 'REVOKED' });
+    // Overrides are visible: the committed intent names them.
+    const ndKey = 'EVIDENCED_BY|lic-night-drive-v4|graph/seed/sources/license-night-drive.txt';
+    await seedGraph(c, process.cwd(), { bundles: ['basement-hum-v4-license'], reinstate: [ndKey] });
+    let chain = await readChain(ledger(), c.config.graphName, 't-wad');
+    assert.ok(chain.status === 'COMMITTED' && chain.head.intent.endsWith('+reinstate') && chain.head.revoked.length === 0);
+    await seedGraph(c, process.cwd(), { allowRevisionRollback: true });
+    chain = await readChain(ledger(), c.config.graphName, 't-wad');
+    assert.ok(chain.status === 'COMMITTED' && chain.head.intent === 'seed:wad-studio-seed@6:base+allow-revision-rollback' && chain.head.revisions['rel-wad'] === 'rel-wad@r1');
+    await rm(root, { recursive: true, force: true });
+  });
+});
+
 test('a blocked answer carries no graph-derived text; a release deleted out of band is blocked, not 404', async () => {
   await withVariant('spoof', null, async c => {
     await c.write("MATCH (r:Release {id: 'rel-wad'}) SET r.title = 'SPOOF TITLE cleared by legal' WITH 1 AS x MATCH (k:Cut {id: 'cut-wad-v4'}) SET k.label = 'SPOOF CUT ESTABLISHED'");
