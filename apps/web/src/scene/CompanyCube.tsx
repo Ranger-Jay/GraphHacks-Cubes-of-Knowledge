@@ -153,7 +153,7 @@ export const CompanyCube: React.FC<CompanyCubeProps> = ({
           />
         </g>
 
-        {/* NON-READY / OUTAGE STATE: Disconnected & Fractured */}
+        {/* NON-READY STATES: neutral or damaged cube with a per-phase notice (damaged only for GRAPH_UNAVAILABLE; wording never claims a lost connection) */}
         {!isReady && (
           <g className="cube-outage-overlay">
             <rect
