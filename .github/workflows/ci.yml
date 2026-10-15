@@ -55,5 +55,8 @@ jobs:
           python-version: '3.12'
       - run: npm ci
       - run: python -m pip install falkordblite==0.10.0
+      - run: npm run build -w @cubes/api
+      - name: Require shipped API startup and reconnect proof
+        run: CUBES_STARTUP_GRAPH=1 npm run test:api
       - name: Real graph tests on isolated vendor server
         run: python scripts/ci-graph-tests.py
