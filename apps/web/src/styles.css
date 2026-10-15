@@ -1,0 +1,13 @@
+:root { font-family: system-ui, sans-serif; color: #e8ecf1; background: #11151c; line-height: 1.5; }
+body { margin: 0; } header, main { max-width: 60rem; margin: 0 auto; padding: 1rem; }
+a { color: #8cc8ff; } a:focus-visible, button:focus-visible { outline: 3px solid #ffd166; outline-offset: 2px; }
+.skip { position: absolute; left: -999px; } .skip:focus { left: 1rem; top: 1rem; background: #000; padding: .5rem; }
+.panel { border: 1px solid #2c3442; border-radius: 8px; padding: 1rem; margin-bottom: 1rem; }
+.plain { list-style: none; padding: 0; } .muted { color: #a5afbd; }
+.badge { display: inline-block; padding: 0 .5em; border-radius: 4px; font-weight: 600; border: 2px solid; }
+.badge-ok { border-color: #3fb27f; } .badge-bad { border-color: #ff6b6b; border-style: double; }
+.badge-warn { border-color: #ffd166; border-style: dashed; } .badge-down { border-color: #c77dff; border-style: dotted; }
+.badge-unknown { border-color: #a5afbd; }
+.approval { color: #ffd166; font-weight: 600; }
+blockquote { border-left: 3px solid #2c3442; margin: .25rem 0; padding-left: .75rem; white-space: pre-wrap; }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; } }

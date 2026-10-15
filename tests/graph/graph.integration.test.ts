@@ -1,0 +1,792 @@
+// Live graph integration tests. They require a reachable FalkorDB server (FALKORDB_HOST/PORT/GRAPH)
+// and FAIL when it is unreachable; there is no offline substitute.
+// Run from the repository root: node --import tsx --test tests/graph/*.test.ts
+import { test, before, after } from 'node:test';
+import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
+import { mkdtempSync } from 'node:fs';
+import { readFile, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { FalkorDB } from 'falkordb';
+import { analyzeRelease, bindingSig, configFromEnv, evidenceKeyFromEnv, graphHealth, GraphClient, ledgerFromEnv, seedGraph, witnessedWrite } from '../../packages/graph/src/index.ts';
+import { bindingHolds } from '../../packages/graph/src/evidence-key.ts';
+import { parseCueSheet, refWitness } from '../../packages/graph/src/seed.ts';
+
+// Test-only evidence key (not a secret). Real deployments set GRAPH_EVIDENCE_KEY server-side.
+process.env['GRAPH_EVIDENCE_KEY'] ??= 'test-only-evidence-key-not-a-secret-0123456789';
+// Evidence witness (D-020) lives outside the graph; each test run starts a fresh, explicitly initialized chain.
+// Always a fresh temp dir: an operator's persistent GRAPH_WITNESS_DIR must never be reused (or polluted) by tests.
+process.env['GRAPH_WITNESS_DIR'] = mkdtempSync(join(tmpdir(), 'cubes-witness-'));
+const ledger = () => ledgerFromEnv(evidenceKeyFromEnv())!;
+/** A graph change made through the sanctioned, witnessed writer (tests the layers behind the witness). */
+const ww = (c: GraphClient, q: string, p?: Parameters<GraphClient['write']>[1]) => witnessedWrite(c, ledger(), 't-wad', 'test-mutation', () => c.write(q, p));
+
+const client = new GraphClient(configFromEnv());
+const count = async (cypher: string) => (await client.read<{ n: number }>(cypher))[0]?.n ?? -1;
+
+before(async () => { await seedGraph(client, process.cwd(), { initWitness: true }); });
+after(async () => { await client.close(); });
+
+test('seed is idempotent: a second run adds no nodes or edges', async () => {
+  const nodes = await count('MATCH (n) RETURN count(n) AS n');
+  const edges = await count('MATCH ()-[e]->() RETURN count(e) AS n');
+  await seedGraph(client, process.cwd());
+  assert.equal(await count('MATCH (n) RETURN count(n) AS n'), nodes);
+  assert.equal(await count('MATCH ()-[e]->() RETURN count(e) AS n'), edges);
+});
+
+test('health is a real read of seeded releases', async () => {
+  const h = await graphHealth(client);
+  assert.ok(h.ok && h.releases > 0);
+});
+
+test('current cut v4 has a GAP: Basement Hum is cleared only for the old cut; Night Drive is verified', async () => {
+  const a = await analyzeRelease(client, 't-wad', 'rel-wad');
+  assert.ok(a && a.status === 'AVAILABLE');
+  assert.equal(a.cutId, 'cut-wad-v4');
+  assert.equal(a.clearance, 'GAP');
+  assert.equal(a.revision, 'rel-wad@r1');
+  const byTrack = Object.fromEntries(a.evidence.map(e => [e.id, e.status]));
+  assert.deepEqual(byTrack, { 'ev-trk-basement-hum': 'STALE', 'ev-trk-night-drive': 'VERIFIED' });
+  assert.deepEqual(a.proposedActions.map(p => [p.kind, p.requiresHumanApproval]), [['REQUEST_CLEARANCE', true]]);
+  // Every edge endpoint is a returned node, and every cited reference is a returned source.
+  const nodeIds = new Set(a.nodes.map(n => n.id));
+  for (const e of a.edges) assert.ok(nodeIds.has(e.from) && nodeIds.has(e.to), e.id);
+  const refIds = new Set(a.sources.map(s => s.id));
+  for (const e of [...a.evidence, ...a.edges]) for (const r of e.sourceRefIds) assert.ok(refIds.has(r), r);
+  // The stale path old-license -> VALID_FOR -> cut v3 is present as returned graph edges.
+  assert.ok(a.edges.some(e => e.type === 'VALID_FOR' && e.from === 'lic-basement-hum-v3' && e.to === 'cut-wad-v3'));
+});
+
+test('every returned excerpt matches its file at the stored SHA-256 and code-point offsets', async () => {
+  const a = await analyzeRelease(client, 't-wad', 'rel-wad');
+  assert.ok(a && a.status === 'AVAILABLE');
+  assert.ok(a.sources.length > 0);
+  for (const s of a.sources) {
+    const bytes = await readFile(s.path);
+    assert.equal(createHash('sha256').update(bytes).digest('hex'), s.sha256, s.id);
+    assert.equal(Array.from(bytes.toString('utf8')).slice(s.startOffset, s.endOffset).join(''), s.excerpt, s.id);
+  }
+});
+
+test('release outside the caller tenant is not visible', async () => {
+  assert.equal(await analyzeRelease(client, 't-other', 'rel-wad'), null);
+});
+
+test('unreachable graph yields UNAVAILABLE with no evidence, paths, sources or actions', async () => {
+  const dead = new GraphClient({ ...configFromEnv(), port: 1, timeoutMs: 1000 });
+  try {
+    const a = await analyzeRelease(dead, 't-wad', 'rel-wad');
+    assert.ok(a && a.status === 'UNAVAILABLE');
+    assert.equal(a.reason, 'CONNECTION_FAILED');
+    assert.deepEqual([a.evidence, a.nodes, a.edges, a.sources, a.proposedActions], [[], [], [], [], []]);
+    assert.deepEqual(await graphHealth(dead), { ok: false, reason: 'CONNECTION_FAILED' });
+  } finally {
+    await dead.close();
+  }
+});
+
+// Variant graphs: a separate, freshly seeded graph per case, deleted afterwards. The main graph is untouched.
+async function withVariant(name: string, mutate: string | null, check: (c: GraphClient) => Promise<void>, bundles: string[] = []) {
+  const c = new GraphClient({ ...configFromEnv(), graphName: `${configFromEnv().graphName}__variant_${name}` });
+  try {
+    await seedGraph(c, process.cwd(), { bundles, initWitness: true });
+    // Mutations go through the witnessed writer, so the layers behind the witness are what is tested.
+    if (mutate) await ww(c, mutate);
+    await check(c);
+  } finally {
+    await c.close();
+    // Remove the whole variant graph key (test-only; the adapter exposes no delete operation).
+    const cfg = configFromEnv();
+    const db = await FalkorDB.connect({ socket: { host: cfg.host, port: cfg.port, ...(cfg.tls ? { tls: true as const } : {}) }, ...(cfg.username ? { username: cfg.username } : {}), ...(cfg.password ? { password: cfg.password } : {}) });
+    await db.selectGraph(c.config.graphName).delete().catch(() => undefined);
+    await db.close();
+    await rm(join(ledger().dir, c.config.graphName), { recursive: true, force: true });
+  }
+}
+
+test('MISSING: a current-cut track with no covering license is a GAP with a clearance action', async () => {
+  await withVariant('missing', "MATCH (:License {id: 'lic-night-drive-v4'})-[e:COVERS]->() DELETE e", async c => {
+    const a = await analyzeRelease(c, 't-wad', 'rel-wad');
+    assert.ok(a && a.status === 'AVAILABLE');
+    assert.equal(a.clearance, 'GAP');
+    const nd = a.evidence.find(e => e.id === 'ev-trk-night-drive');
+    assert.equal(nd?.status, 'MISSING');
+    assert.ok(a.proposedActions.some(p => p.id === 'act-clear-trk-night-drive-cut-wad-v4'));
+  });
+});
+
+test('UNKNOWN: an unverifiable cue sheet (hash mismatch) leaves absence unasserted and proposes no action', async () => {
+  await withVariant('unknown', "MATCH (s:Source {id: 'src-cue-v4'}) SET s.sha256 = '0000000000000000000000000000000000000000000000000000000000000000'", async c => {
+    const a = await analyzeRelease(c, 't-wad', 'rel-wad');
+    assert.ok(a && a.status === 'AVAILABLE');
+    assert.equal(a.clearance, 'UNKNOWN');
+    assert.equal(a.evidence.find(e => e.id === 'ev-trk-basement-hum')?.status, 'UNKNOWN');
+    assert.equal(a.evidence.find(e => e.id === 'ev-trk-night-drive')?.status, 'VERIFIED');
+    assert.deepEqual(a.proposedActions, []);
+  });
+});
+
+// --- Final-review regressions (#8, #9) and the legitimate positive ---
+const statusOf = (a: { evidence: { id: string; status: string }[] }, id: string) => a.evidence.find(e => e.id === id)?.status;
+
+test('#8 negative: deleting a USES_TRACK edge cannot clear a cut whose cue sheet lists that cue', async () => {
+  await withVariant('b01-edge', "MATCH (:Cut {id: 'cut-wad-v4'})-[e:USES_TRACK]->(:Track {id: 'trk-basement-hum'}) DELETE e", async c => {
+    const a = await analyzeRelease(c, 't-wad', 'rel-wad');
+    assert.ok(a && a.status === 'AVAILABLE');
+    assert.equal(a.clearance, 'UNKNOWN');
+    assert.equal(statusOf(a, 'ev-coverage-cut-wad-v4'), 'UNKNOWN');
+    assert.match(a.evidence.find(e => e.id === 'ev-coverage-cut-wad-v4')!.statement, /Basement Hum/);
+  });
+});
+
+test('#8 negative: deleting the track node itself cannot clear the cut', async () => {
+  await withVariant('b01-node', "MATCH (t:Track {id: 'trk-basement-hum'}) DETACH DELETE t", async c => {
+    const a = await analyzeRelease(c, 't-wad', 'rel-wad');
+    assert.ok(a && a.status === 'AVAILABLE');
+    assert.equal(a.clearance, 'UNKNOWN');
+  });
+});
+
+test('#8 negative: a USES_TRACK edge citing another cue entry is unsupported coverage', async () => {
+  await withVariant('b01-cite', "MATCH (:Cut {id: 'cut-wad-v4'})-[e:USES_TRACK]->(:Track {id: 'trk-basement-hum'}) SET e.sourceRefIds = ['ref-cue-v4-night-drive']", async c => {
+    const a = await analyzeRelease(c, 't-wad', 'rel-wad');
+    assert.ok(a && a.status === 'AVAILABLE');
+    assert.equal(a.clearance, 'UNKNOWN');
+  });
+});
+
+test('#9 negative: relinking the v3-only license to cut v4 is reported, not counted (still GAP)', async () => {
+  await withVariant('b02-relink', "MATCH (l:License {id: 'lic-basement-hum-v3'}), (c:Cut {id: 'cut-wad-v4'}) CREATE (l)-[:VALID_FOR {id: 'e-relink', sourceRefIds: ['ref-mail-bh-scope']}]->(c)", async c => {
+    const a = await analyzeRelease(c, 't-wad', 'rel-wad');
+    assert.ok(a && a.status === 'AVAILABLE');
+    assert.equal(a.clearance, 'GAP');
+    assert.equal(statusOf(a, 'ev-trk-basement-hum'), 'STALE');
+    assert.equal(statusOf(a, 'ev-unsupported-e-relink'), 'UNKNOWN');
+  });
+});
+
+test('#9 negative: a v4 scope excerpt from a different license source does not support the link', async () => {
+  await withVariant('b02-foreign', "MATCH (l:License {id: 'lic-basement-hum-v3'}), (c:Cut {id: 'cut-wad-v4'}) CREATE (l)-[:VALID_FOR {id: 'e-foreign', sourceRefIds: ['ref-lic-nd-grant']}]->(c)", async c => {
+    const a = await analyzeRelease(c, 't-wad', 'rel-wad');
+    assert.ok(a && a.status === 'AVAILABLE');
+    assert.equal(a.clearance, 'GAP');
+    assert.equal(statusOf(a, 'ev-unsupported-e-foreign'), 'UNKNOWN');
+  });
+});
+
+test('#9 negative: with genuine v4 evidence present, an extra unsupported link blocks ESTABLISHED', async () => {
+  await withVariant('b02-mixed', "MATCH (l:License {id: 'lic-basement-hum-v3'}), (c:Cut {id: 'cut-wad-v4'}) CREATE (l)-[:VALID_FOR {id: 'e-mixed', sourceRefIds: ['ref-mail-bh-scope']}]->(c)", async c => {
+    const a = await analyzeRelease(c, 't-wad', 'rel-wad');
+    assert.ok(a && a.status === 'AVAILABLE');
+    assert.equal(a.clearance, 'UNKNOWN');
+    assert.equal(statusOf(a, 'ev-trk-basement-hum'), 'VERIFIED');
+  }, ['basement-hum-v4-license']);
+});
+
+test('positive: a genuine v4 license document clears the cut and advances the revision', async () => {
+  await withVariant('positive', null, async c => {
+    const a = await analyzeRelease(c, 't-wad', 'rel-wad');
+    assert.ok(a && a.status === 'AVAILABLE');
+    assert.equal(a.clearance, 'ESTABLISHED');
+    assert.equal(a.revision, 'rel-wad@r2');
+    assert.deepEqual(a.proposedActions, []);
+    const bh = a.evidence.find(e => e.id === 'ev-trk-basement-hum')!;
+    assert.equal(bh.status, 'VERIFIED');
+    assert.ok(bh.sourceRefIds.includes('ref-lic-bh4-grant'));
+    const grant = a.sources.find(s => s.id === 'ref-lic-bh4-grant')!;
+    assert.equal(grant.path, 'graph/seed/sources/license-basement-hum-v4.txt');
+  }, ['basement-hum-v4-license']);
+});
+
+// --- Read-time verification regressions (review P1 at 679787c) ---
+const ESTABLISHED_FORBIDDEN = async (name: string, mutate: string, bundles: string[] = []) =>
+  withVariant(name, mutate, async c => {
+    const a = await analyzeRelease(c, 't-wad', 'rel-wad');
+    assert.ok(a && a.status === 'AVAILABLE');
+    assert.notEqual(a.clearance, 'ESTABLISHED', `${name} must not clear`);
+  }, bundles);
+
+test('attack 1: forged scopeCutVersion property + relink cannot clear (excerpt still says v3)', async () => {
+  await ESTABLISHED_FORBIDDEN('atk1', "MATCH (r:SourceRef {id: 'ref-mail-bh-scope'}) SET r.scopeCutVersion = 4 WITH r MATCH (l:License {id: 'lic-basement-hum-v3'}), (c:Cut {id: 'cut-wad-v4'}) CREATE (l)-[:VALID_FOR {id: 'e-atk1', sourceRefIds: ['ref-mail-bh-scope']}]->(c)");
+});
+
+test('attack 2: forged cueTitle property + edge delete cannot clear (file still lists both cues)', async () => {
+  await ESTABLISHED_FORBIDDEN('atk2', "MATCH (r:SourceRef {id: 'ref-cue-v4-basement-hum'}) SET r.cueTitle = 'Night Drive' WITH 1 AS one MATCH (:Cut {id: 'cut-wad-v4'})-[e:USES_TRACK]->(:Track {id: 'trk-basement-hum'}) DELETE e");
+});
+
+test('attack 2b: forged declaredCueCount + deleted cue ref + edge delete cannot clear', async () => {
+  await ESTABLISHED_FORBIDDEN('atk2b', "MATCH (s:Source {id: 'src-cue-v4'}) SET s.declaredCueCount = 1, s.cueEntryCount = 1 WITH 1 AS one MATCH (r:SourceRef {id: 'ref-cue-v4-basement-hum'}) DETACH DELETE r WITH 1 AS two MATCH (:Cut {id: 'cut-wad-v4'})-[e:USES_TRACK]->(:Track {id: 'trk-basement-hum'}) DELETE e");
+});
+
+test('attack 3: rewriting an excerpt to say Cut v4 is detected (text no longer matches the file)', async () => {
+  await withVariant('atk3', "MATCH (r:SourceRef {id: 'ref-mail-bh-scope'}) SET r.excerpt = 'Confirmed: \"Basement Hum\" is cleared for WAD Cut v4 (festival screener) only.' WITH r MATCH (l:License {id: 'lic-basement-hum-v3'}), (c:Cut {id: 'cut-wad-v4'}) CREATE (l)-[:VALID_FOR {id: 'e-atk3', sourceRefIds: ['ref-mail-bh-scope']}]->(c)", async c => {
+    const a = await analyzeRelease(c, 't-wad', 'rel-wad');
+    assert.ok(a && a.status === 'AVAILABLE');
+    assert.notEqual(a.clearance, 'ESTABLISHED');
+    assert.equal(statusOf(a, 'ev-unverified-refs-cut-wad-v4'), 'UNKNOWN');
+    assert.ok(!a.sources.some(s => s.id === 'ref-mail-bh-scope'), 'tampered excerpt is not returned as a source');
+  });
+});
+
+test('attack 4: relabelling the current cut as v3 cannot borrow the v3 clearance (cue-sheet file says v4)', async () => {
+  await ESTABLISHED_FORBIDDEN('atk4', "MATCH (c:Cut {id: 'cut-wad-v4'}) SET c.version = 3 WITH c MATCH (l:License {id: 'lic-basement-hum-v3'}) CREATE (l)-[:VALID_FOR {id: 'e-atk4', sourceRefIds: ['ref-mail-bh-scope']}]->(c)");
+});
+
+test('attack 5: re-pointing a Source record at another real file with its true hash cannot forge scope', async () => {
+  await ESTABLISHED_FORBIDDEN('atk5', "MATCH (s:Source {id: 'src-mail-basement-hum'}) SET s.path = 'graph/seed/sources/license-basement-hum-v4.txt' WITH s MATCH (l:License {id: 'lic-basement-hum-v3'}), (c:Cut {id: 'cut-wad-v4'}) CREATE (l)-[:VALID_FOR {id: 'e-atk5', sourceRefIds: ['ref-mail-bh-scope']}]->(c)");
+});
+
+test('tenant boundary: another tenant\'s license, source and excerpt cannot clear this tenant\'s cut', async () => {
+  await withVariant('foreign', `
+    MATCH (t:Track {id: 'trk-basement-hum', tenantId: 't-wad'}), (c:Cut {id: 'cut-wad-v4', tenantId: 't-wad'})
+    CREATE (l:License {id: 'lic-foreign', tenantId: 't-other', label: 'Foreign license'}),
+           (s:Source {id: 'src-foreign', tenantId: 't-other', kind: 'license', path: 'graph/seed/sources/license-basement-hum-v4.txt', sha256: 'x'}),
+           (r1:SourceRef {id: 'ref-foreign-subject', tenantId: 't-other', excerpt: 'Composition: "Basement Hum"', startOffset: 0, endOffset: 1}),
+           (r2:SourceRef {id: 'ref-foreign-grant', tenantId: 't-other', excerpt: 'Grant: Cut v4', startOffset: 0, endOffset: 1}),
+           (r1)-[:EXCERPT_OF]->(s), (r2)-[:EXCERPT_OF]->(s), (l)-[:EVIDENCED_BY]->(s),
+           (l)-[:COVERS {id: 'e-foreign-covers', sourceRefIds: ['ref-foreign-subject']}]->(t),
+           (l)-[:VALID_FOR {id: 'e-foreign-valid', sourceRefIds: ['ref-foreign-grant']}]->(c)`, async c => {
+    const a = await analyzeRelease(c, 't-wad', 'rel-wad');
+    assert.ok(a && a.status === 'AVAILABLE');
+    assert.equal(a.clearance, 'GAP');
+    assert.equal(statusOf(a, 'ev-trk-basement-hum'), 'STALE');
+    assert.ok(!a.nodes.some(n => n.id === 'lic-foreign') && !a.edges.some(e => e.id.startsWith('e-foreign')), 'foreign records are not returned');
+  });
+});
+
+// --- Signed evidence bindings (#10) ---
+const V4_FILE = 'graph/seed/sources/license-basement-hum-v4.txt';
+async function v4Excerpt(text: string) {
+  const body = (await readFile(V4_FILE)).toString('utf8');
+  const at = body.indexOf(text);
+  const start = Array.from(body.slice(0, at)).length;
+  return { start, end: start + Array.from(text).length };
+}
+
+test('#10 negative: re-pointing a license\'s Source at the v4 file (review repro) cannot clear', async () => {
+  const sha = createHash('sha256').update(await readFile(V4_FILE)).digest('hex');
+  const grant = 'Grant: Synchronization rights for the motion picture WAD, Cut v4 (current distribution cut).';
+  const subj = 'Composition: "Basement Hum"';
+  const g = await v4Excerpt(grant); const sj = await v4Excerpt(subj);
+  await withVariant('rebind', null, async c => {
+    await ww(c, "MATCH (s:Source {id: 'src-mail-basement-hum'}) SET s.path = $p, s.sha256 = $sha, s.kind = 'license'", { p: V4_FILE, sha });
+    await ww(c, "MATCH (r:SourceRef {id: 'ref-mail-bh-scope'}) SET r.excerpt = $x, r.startOffset = $a, r.endOffset = $b", { x: grant, a: g.start, b: g.end });
+    await ww(c, "MATCH (r:SourceRef {id: 'ref-mail-bh-later'}) DETACH DELETE r");
+    await ww(c, "MATCH (:License {id: 'lic-basement-hum-v3'})-[e:VALID_FOR]->(:Cut {id: 'cut-wad-v3'}) DELETE e");
+    await ww(c, "MATCH (s:Source {id: 'src-mail-basement-hum'}) CREATE (:SourceRef {id: 'ref-atk-subj', tenantId: 't-wad', excerpt: $x, startOffset: $a, endOffset: $b})-[:EXCERPT_OF]->(s)", { x: subj, a: sj.start, b: sj.end });
+    await ww(c, "MATCH (:License {id: 'lic-basement-hum-v3'})-[e:COVERS]->() SET e.sourceRefIds = ['ref-atk-subj']");
+    await ww(c, "MATCH (l:License {id: 'lic-basement-hum-v3'}), (k:Cut {id: 'cut-wad-v4'}) CREATE (l)-[:VALID_FOR {id: 'e-rebind', sourceRefIds: ['ref-mail-bh-scope']}]->(k)");
+    const a = await analyzeRelease(c, 't-wad', 'rel-wad');
+    assert.ok(a && a.status === 'AVAILABLE');
+    assert.notEqual(a.clearance, 'ESTABLISHED');
+    assert.equal(statusOf(a, 'ev-unbound-licenses-cut-wad-v4'), 'UNKNOWN');
+    assert.notEqual(statusOf(a, 'ev-trk-basement-hum'), 'VERIFIED');
+  });
+});
+
+test('#10 negative: a new License bound to the real v4 file without a signature cannot clear', async () => {
+  const sha = createHash('sha256').update(await readFile(V4_FILE)).digest('hex');
+  const g = await v4Excerpt('Grant: Synchronization rights for the motion picture WAD, Cut v4 (current distribution cut).');
+  const sj = await v4Excerpt('Composition: "Basement Hum"');
+  await withVariant('unsigned', `
+    MATCH (t:Track {id: 'trk-basement-hum'}), (k:Cut {id: 'cut-wad-v4'})
+    CREATE (s:Source {id: 'src-forged', tenantId: 't-wad', kind: 'license', path: '${V4_FILE}', sha256: '${sha}'}),
+           (r1:SourceRef {id: 'ref-forged-subj', tenantId: 't-wad', excerpt: 'Composition: "Basement Hum"', startOffset: ${sj.start}, endOffset: ${sj.end}})-[:EXCERPT_OF]->(s),
+           (r2:SourceRef {id: 'ref-forged-grant', tenantId: 't-wad', excerpt: 'Grant: Synchronization rights for the motion picture WAD, Cut v4 (current distribution cut).', startOffset: ${g.start}, endOffset: ${g.end}})-[:EXCERPT_OF]->(s),
+           (l:License {id: 'lic-forged', tenantId: 't-wad', label: 'Forged license'})-[:EVIDENCED_BY {id: 'e-forged-ev', sig: '${'a'.repeat(64)}'}]->(s),
+           (l)-[:COVERS {id: 'e-forged-cov', sourceRefIds: ['ref-forged-subj']}]->(t),
+           (l)-[:VALID_FOR {id: 'e-forged-vf', sourceRefIds: ['ref-forged-grant']}]->(k)`, async c => {
+    const a = await analyzeRelease(c, 't-wad', 'rel-wad');
+    assert.ok(a && a.status === 'AVAILABLE');
+    assert.equal(a.clearance, 'GAP');
+    assert.equal(statusOf(a, 'ev-trk-basement-hum'), 'STALE');
+    assert.equal(statusOf(a, 'ev-unbound-licenses-cut-wad-v4'), 'UNKNOWN');
+  });
+});
+
+test('#10 negative: copying a valid signature onto another license binding does not verify', async () => {
+  await withVariant('sigcopy', `
+    MATCH (:License {id: 'lic-basement-hum-v4'})-[good:EVIDENCED_BY]->(s:Source)
+    MATCH (old:License {id: 'lic-basement-hum-v3'})-[bad:EVIDENCED_BY]->()
+    DELETE bad
+    WITH good, s, old
+    CREATE (old)-[:EVIDENCED_BY {id: 'e-copied', sig: good.sig}]->(s)
+    WITH old MATCH (k:Cut {id: 'cut-wad-v4'}), (t:Track {id: 'trk-basement-hum'})
+    MATCH (old)-[c:COVERS]->(t) SET c.sourceRefIds = ['ref-lic-bh4-composition']
+    CREATE (old)-[:VALID_FOR {id: 'e-copied-vf', sourceRefIds: ['ref-lic-bh4-grant']}]->(k)`, async c => {
+    const a = await analyzeRelease(c, 't-wad', 'rel-wad');
+    assert.ok(a && a.status === 'AVAILABLE');
+    assert.equal(statusOf(a, 'ev-unbound-licenses-cut-wad-v4'), 'UNKNOWN', 'a signature is bound to its own license id');
+  }, ['basement-hum-v4-license']);
+});
+
+test('#10 negative: re-pointing the current cut at another cut\'s signed cue sheet leaves coverage UNKNOWN', async () => {
+  await withVariant('sheetswap', "MATCH (k:Cut {id: 'cut-wad-v4'})-[e:LISTED_IN]->() MATCH (:Cut {id: 'cut-wad-v3'})-[v3:LISTED_IN]->(s3) CREATE (k)-[:LISTED_IN {id: 'e-swap', sig: v3.sig, sourceRefIds: v3.sourceRefIds}]->(s3) DELETE e", async c => {
+    const a = await analyzeRelease(c, 't-wad', 'rel-wad');
+    assert.ok(a && a.status === 'AVAILABLE');
+    assert.equal(a.clearance, 'UNKNOWN');
+    assert.match(a.evidence.find(e => e.id === 'ev-coverage-cut-wad-v4')!.statement, /not signed/);
+  });
+});
+
+test('#10 fail-closed: with no key or the wrong key, even genuine evidence never clears', async () => {
+  await withVariant('nokey', null, async c => {
+    const none = await analyzeRelease(c, 't-wad', 'rel-wad', { evidenceKey: null });
+    assert.ok(none && none.status === 'AVAILABLE');
+    assert.equal(none.clearance, 'UNKNOWN');
+    const wrong = await analyzeRelease(c, 't-wad', 'rel-wad', { evidenceKey: Buffer.from('wrong-key-wrong-key-wrong-key-wrong-key') });
+    assert.ok(wrong && wrong.status === 'AVAILABLE');
+    assert.equal(wrong.clearance, 'UNKNOWN');
+    const right = await analyzeRelease(c, 't-wad', 'rel-wad');
+    assert.ok(right && right.status === 'AVAILABLE');
+    assert.equal(right.clearance, 'ESTABLISHED');
+  }, ['basement-hum-v4-license']);
+});
+
+// --- #15: a binding signature covers the whole claim and the revision it was recorded at ---
+type Captured = { sig: string; rev: number; tracks: string[]; cuts: string[]; path: string; sha256: string };
+async function captureV4Binding(): Promise<Captured> {
+  let got: Captured | undefined;
+  await withVariant('capture', null, async c => {
+    got = (await c.read<Captured>(`MATCH (:License {id: 'lic-basement-hum-v4'})-[e:EVIDENCED_BY]->(s:Source)
+      RETURN e.sig AS sig, e.rev AS rev, e.tracks AS tracks, e.cuts AS cuts, s.path AS path, s.sha256 AS sha256`))[0];
+  }, ['basement-hum-v4-license']);
+  assert.ok(got && got.rev === 2, 'genuine v4 binding is recorded at r2');
+  return got;
+}
+// Base seed only, then: rename the v3 license to the signed id, rebind its Source to the real v4 file,
+// replay every captured binding property, and align COVERS / VALID_FOR to the v4 file text.
+async function renameReplay(cap: Captured, extra: string | null, check: (c: GraphClient) => Promise<void>, raw = false) {
+  const g = await v4Excerpt('Grant: Synchronization rights for the motion picture WAD, Cut v4 (current distribution cut).');
+  const sj = await v4Excerpt('Composition: "Basement Hum"');
+  await withVariant('rename_replay', null, async c => {
+    // raw: an attacker writing the graph directly; otherwise the change goes through the witnessed writer.
+    const wr = (q: string, p?: Parameters<GraphClient['write']>[1]) => (raw ? c.write(q, p) : ww(c, q, p));
+    await wr(`MATCH (l:License {id: 'lic-basement-hum-v3'})-[eb:EVIDENCED_BY]->(s:Source)
+      SET l.id = 'lic-basement-hum-v4', s.path = $path, s.sha256 = $sha256, s.kind = 'license'
+      DELETE eb
+      WITH l, s CREATE (l)-[:EVIDENCED_BY {id: 'e-replayed', sig: $sig, rev: $rev, tracks: $tracks, cuts: $cuts}]->(s)`, cap);
+    await wr(`MATCH (s:Source {id: 'src-mail-basement-hum'})
+      CREATE (:SourceRef {id: 'ref-rp-subj', tenantId: 't-wad', excerpt: 'Composition: "Basement Hum"', startOffset: $ss, endOffset: $se})-[:EXCERPT_OF]->(s),
+             (:SourceRef {id: 'ref-rp-grant', tenantId: 't-wad', excerpt: 'Grant: Synchronization rights for the motion picture WAD, Cut v4 (current distribution cut).', startOffset: $gs, endOffset: $ge})-[:EXCERPT_OF]->(s)`,
+      { ss: sj.start, se: sj.end, gs: g.start, ge: g.end });
+    await wr(`MATCH (l:License {id: 'lic-basement-hum-v4'})-[cov:COVERS]->(), (l)-[vf:VALID_FOR]->(), (k:Cut {id: 'cut-wad-v4'})
+      SET cov.sourceRefIds = ['ref-rp-subj'] DELETE vf
+      WITH l, k CREATE (l)-[:VALID_FOR {id: 'e-rp-vf', sourceRefIds: ['ref-rp-grant']}]->(k)`);
+    if (extra) await wr(extra);
+    await check(c);
+  });
+}
+
+test('#15 negative: renaming a license to a signed id and replaying its binding cannot clear (review repro)', async () => {
+  const cap = await captureV4Binding();
+  await renameReplay(cap, null, async c => {
+    const a = await analyzeRelease(c, 't-wad', 'rel-wad');
+    assert.ok(a && a.status === 'AVAILABLE');
+    assert.equal(a.revision, 'rel-wad@r1');
+    assert.notEqual(a.clearance, 'ESTABLISHED');
+    assert.notEqual(statusOf(a, 'ev-trk-basement-hum'), 'VERIFIED');
+    assert.equal(statusOf(a, 'ev-unbound-licenses-cut-wad-v4'), 'UNKNOWN', 'a binding recorded at r2 does not hold at r1');
+  });
+});
+
+// --- D-020: evidence state witness outside the graph ---
+const witnessStatus = (a: Awaited<ReturnType<typeof analyzeRelease>>) => {
+  assert.ok(a && a.status === 'AVAILABLE');
+  return a.evidence.find(e => e.id === 'ev-witness-rel-wad');
+};
+const assertBlocked = (a: Awaited<ReturnType<typeof analyzeRelease>>, why: RegExp) => {
+  const w = witnessStatus(a);
+  assert.ok(a && a.status === 'AVAILABLE');
+  assert.equal(a.clearance, 'UNKNOWN');
+  assert.ok(w, 'witness integrity item present');
+  assert.match(w.statement, why);
+  assert.equal(a.evidence.length, 1, 'no graph evidence is used');
+  assert.deepEqual([a.edges.length, a.sources.length, a.proposedActions.length], [0, 0, 0]);
+};
+const chainFile = (c: GraphClient) => join(ledger().dir, c.config.graphName, 't-wad.jsonl');
+
+test('D-020: replaying a captured r2 binding directly into the graph fails closed at r2, r3 and r99', async () => {
+  const cap = await captureV4Binding();
+  for (const rev of ['rel-wad@r2', 'rel-wad@r3', 'rel-wad@r99']) {
+    await renameReplay(cap, `MATCH (r:Release {id: 'rel-wad'}) SET r.revision = '${rev}'`, async c => {
+      assertBlocked(await analyzeRelease(c, 't-wad', 'rel-wad'), /not the witnessed revision/);
+    }, true);
+  }
+  // Same replay without touching the revision: the state hash differs.
+  await renameReplay(cap, null, async c => {
+    assertBlocked(await analyzeRelease(c, 't-wad', 'rel-wad'), /differs from the witnessed state/);
+  }, true);
+});
+
+test('D-020: a graph-only snapshot restore to an earlier state fails closed', async () => {
+  await withVariant('restore', null, async c => {
+    const db = await FalkorDB.connect({ socket: { host: c.config.host, port: c.config.port } });
+    const snap = `${c.config.graphName}_snap`;
+    try {
+      await db.selectGraph(c.config.graphName).copy(snap); // snapshot at r1 (GAP)
+      await seedGraph(c, process.cwd(), { bundles: ['basement-hum-v4-license'] }); // witnessed move to r2
+      assert.equal((await analyzeRelease(c, 't-wad', 'rel-wad'))?.status === 'AVAILABLE' && (await analyzeRelease(c, 't-wad', 'rel-wad') as { clearance: string }).clearance, 'ESTABLISHED');
+      await db.selectGraph(c.config.graphName).delete();
+      await db.selectGraph(snap).copy(c.config.graphName); // restore the old snapshot, graph only
+      assertBlocked(await analyzeRelease(c, 't-wad', 'rel-wad'), /not the witnessed revision \(rel-wad@r2\)/);
+    } finally {
+      await db.selectGraph(snap).delete().catch(() => undefined);
+      await db.close();
+    }
+  });
+});
+
+test('D-020: revocation holds: a revoked binding copied back fails closed even at the new revision', async () => {
+  const cap = await captureV4Binding();
+  await withVariant('revoke', null, async c => {
+    // Key holder revokes: delete the v4 binding and bump the revision, through the witnessed writer.
+    await ww(c, "MATCH (:License {id: 'lic-basement-hum-v4'})-[e:EVIDENCED_BY]->() DELETE e WITH 1 AS x MATCH (r:Release {id: 'rel-wad'}) SET r.revision = 'rel-wad@r3'");
+    const revoked = await analyzeRelease(c, 't-wad', 'rel-wad');
+    assert.ok(revoked && revoked.status === 'AVAILABLE');
+    assert.equal(revoked.clearance, 'GAP');
+    assert.equal(witnessStatus(revoked), undefined);
+    // Attacker copies the captured binding back (graph write only).
+    await c.write("MATCH (l:License {id: 'lic-basement-hum-v4'}), (s:Source {id: 'src-lic-basement-hum-v4'}) CREATE (l)-[:EVIDENCED_BY {id: 'e-lic-bh4-evidence', sig: $sig, rev: $rev, tracks: $tracks, cuts: $cuts, sourceRefIds: []}]->(s)", cap);
+    assertBlocked(await analyzeRelease(c, 't-wad', 'rel-wad'), /differs from the witnessed state/);
+  }, ['basement-hum-v4-license']);
+});
+
+test('D-020: legitimate current evidence applied through the writer clears; the writer refuses to bless a tampered graph', async () => {
+  await withVariant('legit', null, async c => {
+    const gap = await analyzeRelease(c, 't-wad', 'rel-wad');
+    assert.ok(gap && gap.status === 'AVAILABLE' && gap.clearance === 'GAP');
+    await seedGraph(c, process.cwd(), { bundles: ['basement-hum-v4-license'] });
+    const ok = await analyzeRelease(c, 't-wad', 'rel-wad');
+    assert.ok(ok && ok.status === 'AVAILABLE');
+    assert.equal(ok.clearance, 'ESTABLISHED');
+    assert.equal(ok.revision, 'rel-wad@r2');
+    await c.write("MATCH (t:Track {id: 'trk-night-drive'}) SET t.title = 'Tampered'");
+    await assert.rejects(seedGraph(c, process.cwd(), { bundles: ['basement-hum-v4-license'] }), { code: 'MISMATCH' });
+  });
+});
+
+test('D-020: missing, edited, truncated, forged, foreign or wrong-key witness fails closed and is never rebuilt silently', async () => {
+  await withVariant('tamper', null, async c => {
+    const file = chainFile(c);
+    const good = await readFile(file, 'utf8');
+    const { writeFile } = await import('node:fs/promises');
+    const cases: [string, string, RegExp][] = [
+      ['edited revision', good.replace('rel-wad@r1', 'rel-wad@r9'), /corrupt/],
+      ['partial record', good + '{"v":1', /corrupt/],
+      ['forged append', good + JSON.stringify({ ...JSON.parse(good.trim().split('\n').pop()!), seq: 1, type: 'PENDING' }) + '\n', /corrupt/],
+      ['empty', '', /corrupt/]
+    ];
+    for (const [name, body, why] of cases) {
+      await writeFile(file, body);
+      assertBlocked(await analyzeRelease(c, 't-wad', 'rel-wad'), why);
+      void name;
+    }
+    await writeFile(file, good);
+    assert.equal(witnessStatus(await analyzeRelease(c, 't-wad', 'rel-wad')), undefined, 'restored witness verifies');
+    // Wrong key: the chain's MACs do not verify.
+    assertBlocked(await analyzeRelease(c, 't-wad', 'rel-wad', { witness: { dir: ledger().dir, key: Buffer.from('another-key-another-key-another-key!!') } }), /corrupt/);
+    // No witness configured.
+    assertBlocked(await analyzeRelease(c, 't-wad', 'rel-wad', { witness: null }), /no evidence witness is configured/);
+    // Another graph's chain copied in.
+    await writeFile(file, good.replaceAll(`"graph":"${c.config.graphName}"`, '"graph":"other"'));
+    assertBlocked(await analyzeRelease(c, 't-wad', 'rel-wad'), /corrupt/);
+    // Missing: reads fail closed and an ordinary seed refuses; only an explicit init creates a chain.
+    await rm(file);
+    assertBlocked(await analyzeRelease(c, 't-wad', 'rel-wad'), /no evidence witness exists/);
+    await assert.rejects(seedGraph(c, process.cwd()), { code: 'MISSING' });
+    await seedGraph(c, process.cwd(), { initWitness: true });
+    await assert.rejects(seedGraph(c, process.cwd(), { initWitness: true }), { code: 'EXISTS' });
+    assert.equal(witnessStatus(await analyzeRelease(c, 't-wad', 'rel-wad')), undefined);
+  });
+});
+
+test('D-020: an interrupted write leaves PENDING; reads fail closed until recovery or resume', async () => {
+  const { recoverWitness } = await import('../../packages/graph/src/index.ts');
+  await withVariant('crash', null, async c => {
+    // (a) The writer dies after the graph changed: PENDING stays, reads fail closed, recover refuses, resume commits.
+    await assert.rejects(witnessedWrite(c, ledger(), 't-wad', 'seed:wad-studio-seed@6:basement-hum-v4-license', async () => {
+      await c.write("MATCH (r:Release {id: 'rel-wad'}) SET r.revision = 'rel-wad@r2'");
+      throw new Error('crash after graph write');
+    }), /crash after graph write/);
+    assertBlocked(await analyzeRelease(c, 't-wad', 'rel-wad'), /did not finish/);
+    await assert.rejects(recoverWitness(c, ledger(), 't-wad'), { code: 'PENDING' });
+    await assert.rejects(seedGraph(c, process.cwd()), { code: 'PENDING' }, 'a different write may not proceed');
+    await seedGraph(c, process.cwd(), { bundles: ['basement-hum-v4-license'], resumeWitness: true });
+    const after = await analyzeRelease(c, 't-wad', 'rel-wad');
+    assert.ok(after && after.status === 'AVAILABLE');
+    assert.equal(after.clearance, 'ESTABLISHED');
+    // (b) A failure before any graph change is aborted automatically.
+    await assert.rejects(witnessedWrite(c, ledger(), 't-wad', 'noop', async () => { throw new Error('early failure'); }), /early failure/);
+    assert.equal(witnessStatus(await analyzeRelease(c, 't-wad', 'rel-wad')), undefined);
+  });
+});
+
+test('D-020: a hard process crash after PENDING is recovered by an explicit ABORT', async () => {
+  const { spawnSync } = await import('node:child_process');
+  const { recoverWitness } = await import('../../packages/graph/src/index.ts');
+  await withVariant('hardcrash', null, async c => {
+    const script = `
+      import { GraphClient, configFromEnv, witnessedWrite, ledgerFromEnv, evidenceKeyFromEnv } from './packages/graph/src/index.ts';
+      const c = new GraphClient({ ...configFromEnv(), graphName: ${JSON.stringify(c.config.graphName)} });
+      await witnessedWrite(c, ledgerFromEnv(evidenceKeyFromEnv()), 't-wad', 'crash', async () => { process.exit(9); });`;
+    const r = spawnSync(process.execPath, ['--import', 'tsx', '--input-type=module', '-e', script], { env: process.env, encoding: 'utf8' });
+    assert.equal(r.status, 9, r.stderr);
+    assertBlocked(await analyzeRelease(c, 't-wad', 'rel-wad'), /did not finish/);
+    // The killed writer left its lock file; recovery is explicit.
+    await rm(`${chainFile(c)}.lock`, { force: true });
+    assert.equal(await recoverWitness(c, ledger(), 't-wad'), 'ABORTED');
+    const ok = await analyzeRelease(c, 't-wad', 'rel-wad');
+    assert.ok(ok && ok.status === 'AVAILABLE');
+    assert.equal(ok.clearance, 'GAP');
+    assert.equal(witnessStatus(ok), undefined);
+  });
+});
+
+test('D-020: concurrent writers are serialized and the chain stays valid', async () => {
+  const { readChain } = await import('../../packages/graph/src/index.ts');
+  await withVariant('concurrent', null, async c => {
+    const c2 = new GraphClient(c.config);
+    try {
+      await Promise.all([
+        seedGraph(c, process.cwd(), { bundles: ['basement-hum-v4-license'] }),
+        seedGraph(c2, process.cwd(), { bundles: ['basement-hum-v4-license'] }),
+        ww(c, "MATCH (t:Track {id: 'trk-night-drive'}) SET t.note = 'concurrent edit'")
+      ]);
+    } finally { await c2.close(); }
+    const chain = await readChain(ledger(), c.config.graphName, 't-wad');
+    assert.equal(chain.status, 'COMMITTED');
+    assert.equal(chain.status === 'COMMITTED' && chain.head.seq, 6, 'INIT + 3 × (PENDING, COMMIT)');
+    const a = await analyzeRelease(c, 't-wad', 'rel-wad');
+    assert.ok(a && a.status === 'AVAILABLE');
+    assert.equal(a.clearance, 'ESTABLISHED');
+  });
+});
+
+// --- #20 pattern: no graph read after the witnessed snapshot ---
+test('#20: a write landing right after the witness check cannot change the answer (ABA interleaving)', async () => {
+  await withVariant('toctou', null, async c => {
+    const attacker = new GraphClient(c.config);
+    let witnessReads = 0;
+    let readsAfterWitness = 0;
+    let fired = false;
+    const isWitnessRead = (q: string) => q.includes('ANY(l IN labels(');
+    const hooked = Object.create(c) as GraphClient;
+    hooked.read = async (q, p) => {
+      if (isWitnessRead(q)) witnessReads++;
+      else if (witnessReads > 0) {
+        readsAfterWitness++;
+        if (!fired) {
+          fired = true; // tamper between the witness check and any later read: make Basement Hum look cleared
+          await attacker.write("MATCH (:Cut {id: 'cut-wad-v4'})-[u:USES_TRACK]->(:Track {id: 'trk-basement-hum'}) DELETE u");
+        }
+      }
+      return c.read(q, p);
+    };
+    try {
+      const a = await analyzeRelease(hooked, 't-wad', 'rel-wad');
+      assert.ok(a && a.status === 'AVAILABLE');
+      assert.equal(a.clearance, 'GAP', 'answer is the witnessed state');
+      assert.equal(statusOf(a, 'ev-trk-basement-hum'), 'STALE');
+      assert.ok(witnessReads >= 1);
+      assert.equal(readsAfterWitness, 0, 'analysis performs no graph read after the witnessed snapshot');
+      // A later write is caught by the next analysis.
+      await attacker.write("MATCH (:Cut {id: 'cut-wad-v4'})-[u:USES_TRACK]->(:Track {id: 'trk-basement-hum'}) DELETE u");
+      assertBlocked(await analyzeRelease(c, 't-wad', 'rel-wad'), /differs from the witnessed state/);
+    } finally { await attacker.close(); }
+  });
+});
+
+test('#20: snapshot rows equal the Cypher READ_* rows on witnessed graphs (base and v4 bundle)', async () => {
+  const { QUERIES } = await import('../../packages/graph/src/index.ts');
+  const { readEvidenceSnapshot } = await import('../../packages/graph/src/state-ledger.ts');
+  const { SnapshotView } = await import('../../packages/graph/src/snapshot-rows.ts');
+  const norm = (rows: object[]) => rows.map(r => JSON.stringify(Object.fromEntries(Object.entries(r).sort()))).sort();
+  for (const bundles of [[], ['basement-hum-v4-license']]) {
+    await withVariant(`equiv${bundles.length}`, null, async c => {
+      const view = new SnapshotView(await readEvidenceSnapshot(c, 't-wad'));
+      const head = await c.read<Record<string, unknown>>(QUERIES.READ_RELEASE_CURRENT_CUT, { tenantId: 't-wad', releaseId: 'rel-wad' });
+      assert.deepEqual(norm(view.currentCut('rel-wad')), norm(head));
+      for (const cutId of ['cut-wad-v3', 'cut-wad-v4']) {
+        const q = await c.read<Record<string, unknown>>(QUERIES.READ_CUT_TRACK_LICENSES, { tenantId: 't-wad', cutId });
+        assert.deepEqual(norm(view.trackLicenses(cutId)), norm(q), cutId);
+      }
+      const ids = (await c.read<{ id: string }>("MATCH (r:SourceRef {tenantId: 't-wad'}) RETURN r.id AS id")).map(r => r.id);
+      const q = await c.read<Record<string, unknown>>(QUERIES.READ_SOURCE_REFS, { tenantId: 't-wad', ids });
+      assert.deepEqual(norm(view.sourceRefs(ids)), norm(q));
+    }, bundles);
+  }
+});
+
+// --- #6 review at c5f449d: durable revocation, monotonic revisions, graph-text-free blocks, torn tail ---
+test('revocation is durable: re-seeding cannot un-revoke, and revisions never go backwards', async () => {
+  const { revokeEvidence, readChain, bindingKey: key } = await import('../../packages/graph/src/index.ts');
+  await withVariant('revoke_durable', null, async c => {
+    const { revoked } = await revokeEvidence(c, ledger(), 't-wad', { licenseId: 'lic-night-drive-v4', releaseId: 'rel-wad', newRevision: 'rel-wad@r2' });
+    assert.equal(revoked.length, 1);
+    const gap = await analyzeRelease(c, 't-wad', 'rel-wad');
+    assert.ok(gap && gap.status === 'AVAILABLE');
+    assert.deepEqual([gap.clearance, gap.revision, statusOf(gap, 'ev-trk-night-drive')], ['GAP', 'rel-wad@r2', 'MISSING']);
+    // The routine base seed (r1) is refused before any write; so is it with the rollback override (tombstone).
+    await assert.rejects(seedGraph(c, process.cwd()), { code: 'ROLLBACK' });
+    await assert.rejects(seedGraph(c, process.cwd(), { allowRevisionRollback: true }), { code: 'REVOKED' });
+    // The v4 bundle (r2, not backwards) also carries the revoked Night Drive binding: refused.
+    await assert.rejects(seedGraph(c, process.cwd(), { bundles: ['basement-hum-v4-license'] }), { code: 'REVOKED' });
+    const chain = await readChain(ledger(), c.config.graphName, 't-wad');
+    assert.equal(chain.status, 'COMMITTED', 'refused before writing: nothing left pending');
+    const still = await analyzeRelease(c, 't-wad', 'rel-wad');
+    assert.ok(still && still.status === 'AVAILABLE');
+    assert.deepEqual([still.clearance, statusOf(still, 'ev-trk-night-drive')], ['GAP', 'MISSING']);
+    // A write that slips the binding back in is caught before COMMIT: left PENDING, reads blocked.
+    const sig = (await c.read<{ x: string }>("MATCH (:Cut {id: 'cut-wad-v4'})-[e:LISTED_IN]->() RETURN e.sig AS x"))[0]!.x;
+    await assert.rejects(ww(c, `MATCH (l:License {id: 'lic-night-drive-v4'}), (s:Source {id: 'src-lic-night-drive'})
+      CREATE (l)-[:EVIDENCED_BY {id: 'e-back', sig: '${sig}', rev: 1, tracks: ['trk-night-drive'], cuts: ['cut-wad-v4']}]->(s)`), { code: 'REVOKED' });
+    assertBlocked(await analyzeRelease(c, 't-wad', 'rel-wad'), /in progress or did not finish/);
+    // Operator restores the committed state and recovers.
+    await c.write("MATCH ()-[e:EVIDENCED_BY {id: 'e-back'}]->() DELETE e");
+    const { recoverWitness } = await import('../../packages/graph/src/index.ts');
+    assert.equal(await recoverWitness(c, ledger(), 't-wad'), 'ABORTED');
+    // A write that lowers the revision is refused at COMMIT the same way.
+    await assert.rejects(ww(c, "MATCH (r:Release {id: 'rel-wad'}) SET r.revision = 'rel-wad@r1'"), { code: 'ROLLBACK' });
+    await c.write("MATCH (r:Release {id: 'rel-wad'}) SET r.revision = 'rel-wad@r2'");
+    assert.equal(await recoverWitness(c, ledger(), 't-wad'), 'ABORTED');
+    // Explicit reinstatement (operator re-grant) is the only way back, and it is recorded.
+    const ndKey = key('EVIDENCED_BY', 'lic-night-drive-v4', 'graph/seed/sources/license-night-drive.txt');
+    assert.deepEqual(revoked, [ndKey]);
+    await seedGraph(c, process.cwd(), { bundles: ['basement-hum-v4-license'], reinstate: [ndKey] });
+    const back = await analyzeRelease(c, 't-wad', 'rel-wad');
+    assert.ok(back && back.status === 'AVAILABLE');
+    assert.equal(back.clearance, 'ESTABLISHED');
+    const head = await readChain(ledger(), c.config.graphName, 't-wad');
+    assert.ok(head.status === 'COMMITTED' && head.head.revoked.length === 0);
+  });
+});
+
+test('a revoke interrupted after its graph write keeps its tombstone on any resume (MAC\'d plan)', async () => {
+  const { revokeEvidence, readChain, recoverWitness } = await import('../../packages/graph/src/index.ts');
+  const REV = { licenseId: 'lic-night-drive-v4', releaseId: 'rel-wad', newRevision: 'rel-wad@r2' };
+  const intent = 'revoke:lic-night-drive-v4@rel-wad@r2';
+  for (const how of ['generic-resume', 'revoke-again'] as const) {
+    await withVariant(`crashrevoke_${how}`, null, async c => {
+      const crashing = Object.create(c) as GraphClient;
+      crashing.write = async (q, p) => { const r = await c.write(q, p); if (q.includes('DELETE e')) throw new Error('CRASH'); return r; };
+      crashing.read = (q, p) => c.read(q, p);
+      await assert.rejects(revokeEvidence(crashing, ledger(), 't-wad', REV), /CRASH/);
+      assertBlocked(await analyzeRelease(c, 't-wad', 'rel-wad'), /did not finish/);
+      await assert.rejects(recoverWitness(c, ledger(), 't-wad'), { code: 'PENDING' });
+      await assert.rejects(seedGraph(c, process.cwd(), { resumeWitness: true }), { code: 'PENDING' }, 'another intent cannot finish it');
+      if (how === 'generic-resume') {
+        // Even a resume that passes no revocation options commits the MAC'd plan.
+        await witnessedWrite(c, ledger(), 't-wad', intent, async () => undefined, { resume: true });
+      } else {
+        assert.equal((await revokeEvidence(c, ledger(), 't-wad', REV)).revoked.length, 1);
+      }
+      const chain = await readChain(ledger(), c.config.graphName, 't-wad');
+      assert.ok(chain.status === 'COMMITTED' && chain.head.revoked.length === 1, 'tombstone kept');
+      await assert.rejects(seedGraph(c, process.cwd(), { bundles: ['basement-hum-v4-license'] }), { code: 'REVOKED' });
+      const a = await analyzeRelease(c, 't-wad', 'rel-wad');
+      assert.ok(a && a.status === 'AVAILABLE');
+      assert.deepEqual([a.clearance, statusOf(a, 'ev-trk-night-drive')], ['GAP', 'MISSING']);
+    });
+  }
+});
+
+test('a tombstone survives an edited copy of the evidence file; overrides are named in the ledger intent', async () => {
+  const { revokeEvidence, readChain } = await import('../../packages/graph/src/index.ts');
+  const { cp, appendFile } = await import('node:fs/promises');
+  await withVariant('tombstone_key', null, async c => {
+    await revokeEvidence(c, ledger(), 't-wad', { licenseId: 'lic-night-drive-v4', releaseId: 'rel-wad', newRevision: 'rel-wad@r2' });
+    // A checkout whose license file differs by one trailing newline (different SHA-256) is still revoked.
+    const root = mkdtempSync(join(tmpdir(), 'cubes-root-'));
+    await cp('graph/seed/sources', join(root, 'graph/seed/sources'), { recursive: true });
+    await appendFile(join(root, 'graph/seed/sources/license-night-drive.txt'), '\n');
+    await assert.rejects(seedGraph(c, root, { bundles: ['basement-hum-v4-license'] }), { code: 'REVOKED' });
+    await assert.rejects(seedGraph(c, root, { bundles: ['basement-hum-v4-license'], allowRevisionRollback: true }), { code: 'REVOKED' });
+    // Overrides are visible: the committed intent names them.
+    const ndKey = 'EVIDENCED_BY|lic-night-drive-v4|graph/seed/sources/license-night-drive.txt';
+    await seedGraph(c, process.cwd(), { bundles: ['basement-hum-v4-license'], reinstate: [ndKey] });
+    let chain = await readChain(ledger(), c.config.graphName, 't-wad');
+    assert.ok(chain.status === 'COMMITTED' && chain.head.intent.endsWith('+reinstate') && chain.head.revoked.length === 0);
+    await seedGraph(c, process.cwd(), { allowRevisionRollback: true });
+    chain = await readChain(ledger(), c.config.graphName, 't-wad');
+    assert.ok(chain.status === 'COMMITTED' && chain.head.intent === 'seed:wad-studio-seed@6:base+allow-revision-rollback' && chain.head.revisions['rel-wad'] === 'rel-wad@r1');
+    await rm(root, { recursive: true, force: true });
+  });
+});
+
+test('a blocked answer carries no graph-derived text; a release deleted out of band is blocked, not 404', async () => {
+  await withVariant('spoof', null, async c => {
+    await c.write("MATCH (r:Release {id: 'rel-wad'}) SET r.title = 'SPOOF TITLE cleared by legal' WITH 1 AS x MATCH (k:Cut {id: 'cut-wad-v4'}) SET k.label = 'SPOOF CUT ESTABLISHED'");
+    const a = await analyzeRelease(c, 't-wad', 'rel-wad');
+    assertBlocked(a, /differs from the witnessed state/);
+    assert.ok(a && a.status === 'AVAILABLE');
+    assert.doesNotMatch(JSON.stringify(a), /SPOOF|cut-wad|@r1/);
+    assert.deepEqual([a.releaseId, a.cutId, a.revision, a.nodes.length], ['rel-wad', '', '', 0]);
+    await c.write("MATCH (r:Release {id: 'rel-wad'}) DETACH DELETE r");
+    assertBlocked(await analyzeRelease(c, 't-wad', 'rel-wad'), /not the witnessed revision \(rel-wad@r1\)/);
+    assert.equal(await analyzeRelease(c, 't-wad', 'rel-nope'), null, 'unknown to both witness and graph: 404');
+  });
+});
+
+test('a torn final append is recoverable only with the explicit repair flag', async () => {
+  const { recoverWitness, readChain } = await import('../../packages/graph/src/index.ts');
+  const { writeFile } = await import('node:fs/promises');
+  await withVariant('torn', null, async c => {
+    const file = chainFile(c);
+    // Torn COMMIT: a witnessed write whose final record was cut mid-append.
+    await ww(c, "MATCH (t:Track {id: 'trk-night-drive'}) SET t.note = 'edited'");
+    const full = await readFile(file, 'utf8');
+    await writeFile(file, full.slice(0, full.length - 40));
+    assertBlocked(await analyzeRelease(c, 't-wad', 'rel-wad'), /corrupt/);
+    await assert.rejects(recoverWitness(c, ledger(), 't-wad'), { code: 'CORRUPT' });
+    assert.equal(await recoverWitness(c, ledger(), 't-wad', { repairTornTail: true }), 'TAIL_REPAIRED');
+    assert.equal((await readChain(ledger(), c.config.graphName, 't-wad')).status, 'PENDING', 'the torn COMMIT never counted');
+    assertBlocked(await analyzeRelease(c, 't-wad', 'rel-wad'), /did not finish/);
+    // Same-intent resume commits the state the interrupted write produced.
+    await witnessedWrite(c, ledger(), 't-wad', 'test-mutation', async () => undefined, { resume: true });
+    assert.equal(witnessStatus(await analyzeRelease(c, 't-wad', 'rel-wad')), undefined);
+    // Damage that is not a torn tail is never "repaired".
+    const good = await readFile(file, 'utf8');
+    await writeFile(file, good.replace('"type":"COMMIT"', '"type":"ABORT"'));
+    await assert.rejects(recoverWitness(c, ledger(), 't-wad', { repairTornTail: true }), { code: 'CORRUPT' });
+  });
+});
+
+test('#15 unit: a binding holds only for its own claim, revision window, track and cut', () => {
+  const key = Buffer.from('unit-test-key-unit-test-key-unit-test-key');
+  const claim = { kind: 'EVIDENCED_BY' as const, tenantId: 't', releaseId: 'rel', subjectId: 'lic', path: 'p', sha256: 'h' };
+  const stored = { rev: 2, tracks: ['trk-a'], cuts: ['cut-4'] };
+  const sig = bindingSig(key, { ...claim, ...stored });
+  const holds = (s: object, cl: object, use: object) => bindingHolds(key, { sig, ...stored, ...s }, { ...claim, ...cl }, { currentRev: 2, trackId: 'trk-a', cutId: 'cut-4', ...use });
+  assert.equal(holds({}, {}, {}), true);
+  assert.equal(holds({}, {}, { currentRev: 3 }), true, 'still valid at a later revision');
+  assert.equal(holds({}, {}, { currentRev: 1 }), false, 'not before the revision it was recorded at');
+  assert.equal(holds({}, {}, { currentRev: null }), false, 'unparseable release revision');
+  assert.equal(holds({}, {}, { trackId: 'trk-b' }), false, 'track not named');
+  assert.equal(holds({}, {}, { cutId: 'cut-3' }), false, 'cut not named');
+  assert.equal(holds({ rev: 1 }, {}, {}), false, 'revision property edited');
+  assert.equal(holds({ tracks: ['trk-a', 'trk-b'] }, {}, { trackId: 'trk-b' }), false, 'track list widened');
+  assert.equal(holds({}, { releaseId: 'other' }, {}), false, 'other release');
+  assert.equal(holds({}, { subjectId: 'lic2' }, {}), false, 'other license');
+  assert.equal(bindingHolds(null, { sig, ...stored }, claim, { currentRev: 2 }), false, 'no key');
+});
+
+test('#10 seed refuses to run without an evidence key', async () => {
+  await assert.rejects(seedGraph(client, process.cwd(), { evidenceKey: null }), /GRAPH_EVIDENCE_KEY/);
+});
+
+test('witness grammar: incomplete or inconsistent cue sheets are not complete; malformed excerpts are refused', () => {
+  const ok = 'Cut: v4 (x)\nCue 1: "A"\nCue 2: "B"\nEND OF CUE SHEET. Complete listing: 2 cues.\n';
+  assert.equal(parseCueSheet(ok).complete, true);
+  assert.equal(parseCueSheet(ok.replace('2 cues', '3 cues')).complete, false);
+  assert.equal(parseCueSheet(ok.replace('Cue 2: "B"\n', '')).complete, false);
+  assert.equal(parseCueSheet(ok.replace('END OF CUE SHEET. Complete listing: 2 cues.\n', '')).complete, false);
+  assert.equal(parseCueSheet(ok.replace('Cue 2: "B"', 'Cue 3: "B"')).complete, false);
+  assert.equal(parseCueSheet(ok + 'Cut: v5 (y)\n').complete, false);
+  assert.deepEqual(refWitness('license_scope', 'cleared for WAD Cut v3 only'), { scopeCutVersion: 3, scopeTitle: null });
+  assert.throws(() => refWitness('license_scope', 'cleared for Cut v3 and Cut v4'));
+  assert.throws(() => refWitness('license_subject', 'Song: Basement Hum'));
+  assert.throws(() => refWitness('cue_entry', 'Cue one: "A"'));
+});
