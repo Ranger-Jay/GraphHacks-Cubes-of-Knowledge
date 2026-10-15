@@ -10,7 +10,7 @@ import { configFromEnv, evidenceKeyFromEnv, getHandoff, GraphClient, handoffInbo
 import type { SaveHandoffInput } from '../../packages/graph/src/index.ts';
 
 process.env['GRAPH_EVIDENCE_KEY'] ??= 'test-only-evidence-key-not-a-secret-0123456789';
-process.env['GRAPH_WITNESS_DIR'] ??= mkdtempSync(join(tmpdir(), 'cubes-witness-'));
+process.env['GRAPH_WITNESS_DIR'] = mkdtempSync(join(tmpdir(), 'cubes-witness-'));
 /** Evidence changes go through the witnessed writer (D-020). */
 const ww = (q: string) => witnessedWrite(client, ledgerFromEnv(evidenceKeyFromEnv()), 't-wad', 'test-mutation', () => client.write(q));
 const cfg = { ...configFromEnv(), graphName: `${configFromEnv().graphName}__handoff` };
@@ -124,7 +124,7 @@ test('a handoff saved at r1 reads back as stale once the release revision moves'
     const got = await getHandoff(client, ava, s.handoff.id);
     assert.ok(got.status === 'FOUND' && got.stale === true && got.currentRevision === 'rel-wad@r2');
   } finally {
-    await seedGraph(client, process.cwd());
+    await seedGraph(client, process.cwd(), { allowRevisionRollback: true }); // explicit operator override: restore r1 for later tests
   }
 });
 
