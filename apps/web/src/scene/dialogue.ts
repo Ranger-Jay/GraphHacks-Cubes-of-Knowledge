@@ -141,10 +141,15 @@ export const PHRASE_TASK_OPTIONAL: PhraseDefinition = {
   ],
 };
 
-/** Approved fixed notices. Apostrophes are U+2019, matching issue #29. */
+/**
+ * Fixed outage notices. Apostrophes are U+2019, matching issue #29.
+ * v025.00 wording-only change (needs Mara/Buddy acceptance): "disconnected" and "reconnects" are
+ * replaced with "unavailable" and "is available again" because these lines play for any
+ * GRAPH_UNAVAILABLE, including a QUERY_FAILED-only outage where the connection was not proven lost.
+ */
 export const GRAPH_OUTAGE_NOTICES: Record<AgentId, string> = {
-  roy: 'FalkorDB is disconnected. Operations are offline.',
-  ava: 'I can\u2019t access the company\u2019s knowledge. Information is unavailable until FalkorDB reconnects.',
+  roy: 'FalkorDB is unavailable. Operations are offline.',
+  ava: 'I can\u2019t access the company\u2019s knowledge. Information is unavailable until FalkorDB is available again.',
   guz: 'I can\u2019t verify any sources. I won\u2019t provide an answer without evidence.',
 };
 

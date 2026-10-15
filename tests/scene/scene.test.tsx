@@ -88,9 +88,9 @@ test('2. Dialogue trigger phrases and visemes match the exact brief specificatio
 
   // Predictable task start cycle
   assert.equal(TASK_START_CYCLE.length, 3);
-  assert.equal(TASK_START_CYCLE[0].phrase, "I'll get right on it.");
-  assert.equal(TASK_START_CYCLE[1].phrase, 'Task beginning');
-  assert.equal(TASK_START_CYCLE[2].phrase, 'Underway.');
+  assert.equal(TASK_START_CYCLE[0]!.phrase, "I'll get right on it.");
+  assert.equal(TASK_START_CYCLE[1]!.phrase, 'Task beginning');
+  assert.equal(TASK_START_CYCLE[2]!.phrase, 'Underway.');
 
   // Cycle sequence step
   const step0 = getNextTaskStartPhrase(0);
@@ -272,16 +272,29 @@ test('11. P2-B Screen-reader fallback reports honest node count without misleadi
 });
 
 test('12. P2-A Task button is disabled when onAgentTaskStart is omitted or during outage', () => {
-  // Without onAgentTaskStart -> button is disabled with 'Task Unbound'
+  // READY without onAgentTaskStart -> button is disabled with 'Task Unbound'
   const htmlUnbound = renderToStaticMarkup(
+    <CompanyCubeScene
+      data={availableData}
+      onSelectNode={() => {}}
+      reducedMotion={false}
+      runtime={{ phase: 'READY' }}
+    />
+  );
+  assert.ok(htmlUnbound.includes('Task Unbound'));
+  assert.ok(htmlUnbound.includes('disabled'));
+
+  // No runtime (fails closed to CHECKING) and no handler: reads Checking, not Task Unbound (v025.01)
+  const htmlChecking = renderToStaticMarkup(
     <CompanyCubeScene
       data={availableData}
       onSelectNode={() => {}}
       reducedMotion={false}
     />
   );
-  assert.ok(htmlUnbound.includes('Task Unbound'));
-  assert.ok(htmlUnbound.includes('disabled'));
+  assert.ok(htmlChecking.includes('Task Blocked (Checking)'));
+  assert.ok(!htmlChecking.includes('Task Unbound'));
+  assert.ok(htmlChecking.includes('disabled'));
 
   // No runtime prop fails closed. AVAILABLE evidence alone is not permission to speak or start.
   const htmlBound = renderToStaticMarkup(
@@ -455,15 +468,18 @@ test('15. P3 Synchronous lock releases cleanly if handler throws/rejects', async
 });
 
 test('16. Approved outage notices are exact and other blocked phases do not use them', () => {
-  assert.equal(GRAPH_OUTAGE_NOTICES.roy, 'FalkorDB is disconnected. Operations are offline.');
+  assert.equal(GRAPH_OUTAGE_NOTICES.roy, 'FalkorDB is unavailable. Operations are offline.');
   assert.equal(
     GRAPH_OUTAGE_NOTICES.ava,
-    'I can\u2019t access the company\u2019s knowledge. Information is unavailable until FalkorDB reconnects.'
+    'I can\u2019t access the company\u2019s knowledge. Information is unavailable until FalkorDB is available again.'
   );
   assert.equal(
     GRAPH_OUTAGE_NOTICES.guz,
     'I can\u2019t verify any sources. I won\u2019t provide an answer without evidence.'
   );
+  for (const notice of Object.values(GRAPH_OUTAGE_NOTICES)) {
+    assert.ok(!/disconnect|reconnect|sever/i.test(notice), `outage notice must not claim a lost connection: ${notice}`);
+  }
   assert.equal(normalSpeechAllowed('READY'), true);
   assert.equal(normalSpeechAllowed(undefined), false);
   assert.equal(normalSpeechAllowed('GRAPH_UNAVAILABLE'), false);
