@@ -11,5 +11,5 @@ export { evidenceKeyFromEnv, bindingSig, revisionNumber } from './evidence-key.j
 export type { BindingClaim, BindingKind } from './evidence-key.js';
 export { witnessedWrite, recoverWitness, revokeEvidence, checkWitness, witnessedSnapshot, readChain, evidenceState, readEvidenceSnapshot, bindingKey, ledgerFromEnv, WitnessError } from './state-ledger.js';
 export type { LedgerConfig, LedgerRecord, ChainState, WitnessCheck } from './state-ledger.js';
-export { seedStudio, parseCrew, parseDepartments, STUDIO_SEED_VERSION } from './studio.js';
-export type { StudioSeedResult, CrewRow, DepartmentRow } from './studio.js';
+export { seedStudio, studioOverview, parseCrew, parseDepartments, STUDIO_SEED_VERSION } from './studio.js';
+export type { StudioOverview, StudioNodeOut, StudioEdgeOut, StudioIntegrityItem, StudioSeedResult, CrewRow, DepartmentRow } from './studio.js';

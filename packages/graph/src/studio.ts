@@ -2,6 +2,8 @@ import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { GraphClient } from './client.js';
+import { GraphUnavailableError } from './client.js';
+import { QUERIES } from './queries.js';
 
 /**
  * Synthetic studio population (crew and departments). Deliberately outside the licensing evidence
@@ -133,4 +135,117 @@ export async function seedStudio(client: GraphClient, repoRoot: string, options:
     await edge(DEFINED_IN('StudioPerson'), { id: `e-${personId(p.slug)}-defined-in`, from: personId(p.slug), to: 'ssrc-crew-roster', line: p.line, excerpt: p.excerpt });
   }
   return { seedVersion: STUDIO_SEED_VERSION, tenantId, sources: 2, departments: f.departments.length, people: f.crew.length, edges };
+}
+
+export interface StudioNodeOut {
+  id: string;
+  label: 'StudioPerson' | 'Department' | 'StudioSource';
+  name: string;
+  /** Role for a person, department/service for a department, fixture kind for a source. */
+  detail: string;
+  departmentId?: string;
+  sourceId?: string;
+  line?: number;
+}
+export interface StudioEdgeOut { id: string; type: 'WORKS_IN' | 'DEFINED_IN'; from: string; to: string; line?: number; excerpt?: string }
+export interface StudioIntegrityItem { id: string; reason: string }
+export type StudioOverview =
+  | {
+    status: 'AVAILABLE';
+    tenantId: string;
+    /** Studio records are a separate domain from licensing evidence; never merged into evidence arrays. */
+    domain: 'studio';
+    origin: typeof ORIGIN;
+    nodes: StudioNodeOut[];
+    edges: StudioEdgeOut[];
+    counts: { people: number; departments: number; sources: number; edges: number };
+    /** Records withheld because their graph copy or fixture did not verify. Never served as facts. */
+    integrity: StudioIntegrityItem[];
+  }
+  | { status: 'EMPTY'; tenantId: string; domain: 'studio' }
+  | { status: 'UNAVAILABLE'; reason: 'CONNECTION_FAILED' | 'QUERY_FAILED' | 'FIXTURE_INVALID' };
+
+interface Row { id: string; labels: string[]; props: Record<string, unknown>; out: unknown[][] }
+
+/**
+ * Named read of one tenant's studio records in ONE graph query. Every returned fact is re-derived
+ * from the fixture file (hash verified against the stored record); a node or edge whose graph copy
+ * disagrees with the file is withheld and listed as an integrity item. No substitute on failure.
+ */
+export async function studioOverview(client: GraphClient, repoRoot: string, tenantId: string): Promise<StudioOverview> {
+  let rows: Row[];
+  try {
+    rows = await client.read<Row>(QUERIES.READ_STUDIO_OVERVIEW, { tenantId });
+  } catch (err) {
+    if (err instanceof GraphUnavailableError) return { status: 'UNAVAILABLE', reason: err.reason };
+    throw err;
+  }
+  if (rows.length === 0) return { status: 'EMPTY', tenantId, domain: 'studio' };
+  let f: LoadedFixtures;
+  try { f = await loadFixtures(repoRoot); } catch { return { status: 'UNAVAILABLE', reason: 'FIXTURE_INVALID' }; }
+  const integrity: StudioIntegrityItem[] = [];
+  const nodes: StudioNodeOut[] = [];
+  const served = new Map<string, StudioNodeOut>();
+  const depBySlug = new Map(f.departments.map(d => [d.slug, d]));
+  const crewBySlug = new Map(f.crew.map(c => [c.slug, c]));
+  const verifiedSource = new Set<string>();
+  const withhold = (id: string, reason: string) => { integrity.push({ id, reason }); };
+  const label = (r: Row) => r.labels[0];
+  const slugOf = (r: Row) => String(r.props['slug'] ?? '');
+  // Sources first: a record is only served when the source it cites is the allowlisted fixture with a matching hash.
+  for (const r of rows.filter(x => label(x) === 'StudioSource')) {
+    const id = String(r.props['id']);
+    const known = (FIXTURES as Record<string, { kind: string }>)[id] ? f.files[id as FixtureId] : undefined;
+    if (!known) { withhold(id, 'source is not an allowlisted fixture'); continue; }
+    if (r.props['sha256'] !== known.sha256 || r.props['path'] !== known.path) { withhold(id, 'stored source hash or path does not match the fixture file'); continue; }
+    verifiedSource.add(id);
+    const n: StudioNodeOut = { id, label: 'StudioSource', name: known.path, detail: known.kind };
+    served.set(id, n); nodes.push(n);
+  }
+  for (const r of rows.filter(x => label(x) === 'Department')) {
+    const id = String(r.props['id']); const row = depBySlug.get(slugOf(r));
+    if (!row || id !== departmentId(row.slug)) { withhold(id, 'department is not in the fixture'); continue; }
+    if (r.props['sourceId'] !== 'ssrc-departments' || !verifiedSource.has('ssrc-departments')) { withhold(id, 'department source did not verify'); continue; }
+    if (r.props['name'] !== row.name || r.props['kind'] !== row.kind || r.props['line'] !== row.line) { withhold(id, 'department fields differ from the fixture line'); continue; }
+    const n: StudioNodeOut = { id, label: 'Department', name: row.name, detail: row.kind, sourceId: 'ssrc-departments', line: row.line };
+    served.set(id, n); nodes.push(n);
+  }
+  for (const r of rows.filter(x => label(x) === 'StudioPerson')) {
+    const id = String(r.props['id']); const row = crewBySlug.get(slugOf(r));
+    if (!row || id !== personId(row.slug)) { withhold(id, 'person is not in the fixture'); continue; }
+    if (r.props['sourceId'] !== 'ssrc-crew-roster' || !verifiedSource.has('ssrc-crew-roster')) { withhold(id, 'person source did not verify'); continue; }
+    if (r.props['displayName'] !== row.displayName || r.props['role'] !== row.role || r.props['departmentId'] !== departmentId(row.departmentSlug) || r.props['line'] !== row.line) {
+      withhold(id, 'person fields differ from the fixture line'); continue;
+    }
+    const n: StudioNodeOut = { id, label: 'StudioPerson', name: row.displayName, detail: row.role, departmentId: departmentId(row.departmentSlug), sourceId: 'ssrc-crew-roster', line: row.line };
+    served.set(id, n); nodes.push(n);
+  }
+  const edges: StudioEdgeOut[] = [];
+  for (const r of rows) {
+    const from = String(r.props['id']);
+    if (!served.has(from)) continue;
+    for (const [eid, type, to, ep] of r.out) {
+      if (typeof type !== 'string' || typeof eid !== 'string' || typeof to !== 'string') continue;
+      const props = (ep ?? {}) as Record<string, unknown>;
+      const target = served.get(to);
+      if (!target) { withhold(eid, 'edge endpoint was withheld or is outside the studio domain'); continue; }
+      if (type === 'WORKS_IN') {
+        const row = crewBySlug.get(slugOf(r));
+        if (label(r) !== 'StudioPerson' || !row || to !== departmentId(row.departmentSlug)) { withhold(eid, 'WORKS_IN differs from the fixture'); continue; }
+        edges.push({ id: eid, type, from, to });
+      } else if (type === 'DEFINED_IN') {
+        const row = label(r) === 'StudioPerson' ? crewBySlug.get(slugOf(r)) : depBySlug.get(slugOf(r));
+        const sourceId = label(r) === 'StudioPerson' ? 'ssrc-crew-roster' : 'ssrc-departments';
+        if (!row || to !== sourceId || props['line'] !== row.line || props['excerpt'] !== row.excerpt) { withhold(eid, 'DEFINED_IN line or excerpt differs from the fixture'); continue; }
+        edges.push({ id: eid, type, from, to, line: row.line, excerpt: row.excerpt });
+      } else withhold(eid, 'unexpected relationship type in the studio domain');
+    }
+  }
+  nodes.sort((a, b) => a.label.localeCompare(b.label) || a.id.localeCompare(b.id));
+  edges.sort((a, b) => a.id.localeCompare(b.id));
+  integrity.sort((a, b) => a.id.localeCompare(b.id));
+  return {
+    status: 'AVAILABLE', tenantId, domain: 'studio', origin: ORIGIN, nodes, edges, integrity,
+    counts: { people: nodes.filter(n => n.label === 'StudioPerson').length, departments: nodes.filter(n => n.label === 'Department').length, sources: nodes.filter(n => n.label === 'StudioSource').length, edges: edges.length }
+  };
 }
