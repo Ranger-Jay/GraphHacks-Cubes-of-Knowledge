@@ -29,6 +29,7 @@ blockquote { border-left: 3px solid #2c3442; margin: .25rem 0; padding-left: .75
 .stage .panel { margin: 0; padding: .6rem .8rem; }
 .stage-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: .75rem; align-items: start; justify-content: center; }
 .scene-pane, .result-pane { min-width: 0; }
+.side-col { display: flex; flex-direction: column; gap: .5rem; min-width: 0; }
 .scene-pane h2, .result-pane h2 { font-size: 1rem; margin: 0 0 .35rem; }
 .sr-only, .scene-pane h2 { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 .result-pane h3 { font-size: .9rem; margin: .6rem 0 .2rem; }
@@ -40,7 +41,7 @@ blockquote { border-left: 3px solid #2c3442; margin: .25rem 0; padding-left: .75
 .result-pane .sources { margin: 0; padding-left: 1rem; font-size: .8rem; }
 @media (min-width: 1100px) {
   .stage-grid { grid-template-columns: minmax(0, 62rem) minmax(20rem, 30rem); }
-  .result-pane { max-height: calc(100dvh - 5.5rem); overflow-y: auto; }
+  .side-col { max-height: calc(100dvh - 5.5rem); overflow-y: auto; }
 }
 /* Short screens (e.g. 1280x800): tighten the outer chrome and the embedded scene's spacing so all three stay in view.
    Selectors below reach into the scene's class names; scene/ itself is untouched. */
@@ -61,5 +62,17 @@ blockquote { border-left: 3px solid #2c3442; margin: .25rem 0; padding-left: .75
   .scene-pane .human-roles-title, .scene-pane .human-roles-subtext { display: none; }
   .scene-pane .scene-text-fallback { font-size: .78rem; padding: .3rem .5rem; }
   .scene-pane nav[aria-label="Graph nodes (text alternative)"] { margin-top: .1rem; } .scene-pane .detail { margin-top: .1rem; padding-top: .1rem; }
-  .result-pane { max-height: calc(100dvh - 4.5rem); }
+  .side-col { max-height: calc(100dvh - 4.5rem); }
 }
+
+/* Status area: text-first, one place for loading / denied / missing release / unavailable / outage / recovery. */
+.status-area { border: 2px solid #a5afbd; border-radius: 8px; padding: .5rem .7rem; background: #151b25; }
+.status-area .status-label { font-size: 1rem; margin: 0 0 .15rem; }
+.status-tag { display: inline-block; padding: 0 .5em; border: 2px solid; border-radius: 4px; font-weight: 700; }
+.status-text, .status-detail { margin: .2rem 0; font-size: .9rem; } .status-detail { font-size: .8rem; }
+.status-area[data-phase="READY"] { border-color: #3fb27f; }
+.status-area[data-phase="CHECKING"] { border-color: #a5afbd; border-style: dotted; }
+.status-area[data-phase="GRAPH_UNAVAILABLE"] { border-color: #c77dff; border-style: double; border-width: 4px; }
+.status-area[data-phase="ACCESS_DENIED"] { border-color: #ffd166; border-style: dashed; }
+.status-area[data-phase="NOT_FOUND"] { border-color: #8cc8ff; border-style: dashed; }
+.status-area[data-phase="UNAVAILABLE"] { border-color: #ff6b6b; border-style: double; }

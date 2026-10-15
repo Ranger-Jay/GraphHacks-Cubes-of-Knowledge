@@ -62,16 +62,19 @@ function Available({ a }: { a: AvailableAnalysis }) {
 }
 
 /**
- * `phase` (from sceneState.ts) gates proof: evidence and paths render only in READY. When a graph failure was
- * observed in the same generation, an 'ok' read is not current proof and the panel stays empty.
+ * `phase` (from sceneState.ts) gates proof: evidence and paths render only in READY. In any other phase the panel
+ * is empty, even when an 'ok' read exists (a graph failure observed in the same generation blocks it).
  * Without `phase` the view renders the result as given (legacy callers/tests).
  */
 export function AnalysisView({ releaseId, result, phase }: { releaseId: string; result: ApiResult<AnalysisResponse> | null; phase?: ScenePhase | null }) {
-  if (phase !== undefined && phase !== 'READY' && result?.kind === 'ok') {
+  // With a phase, only READY shows proof. Every other phase leaves the panel empty; StatusArea explains why.
+  if (phase !== undefined && phase !== 'READY') {
     return (
-      <section aria-labelledby="analysis-h" className="panel" aria-busy="false">
+      <section aria-labelledby="analysis-h" className="panel result-pane" aria-busy={phase === 'CHECKING'}>
         <h2 id="analysis-h">Release analysis: {releaseId}</h2>
-        <p role="status" data-proof="empty">No current authorized result. Evidence and paths are not shown.</p>
+        {phase === 'CHECKING'
+          ? <p>Loading analysis…</p>
+          : <p data-proof="empty">No current authorized result. Evidence and paths are not shown.</p>}
       </section>);
   }
   return (

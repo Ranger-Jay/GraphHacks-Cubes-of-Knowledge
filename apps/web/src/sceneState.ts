@@ -58,3 +58,13 @@ export function currentAnalysis(phase: ScenePhase | null, analysis: AnalysisRead
   if (phase !== 'READY' || analysis === null || analysis.kind !== 'ok') return null;
   return analysis.data;
 }
+
+/**
+ * Recovery is announced only when a fresh generation reaches READY after the last SETTLED phase was
+ * GRAPH_UNAVAILABLE. CHECKING is not a settled phase. A button click alone never produces it.
+ */
+export interface RecoveryState { settled: ScenePhase | null; recovered: boolean }
+export function nextRecovery(prev: RecoveryState, phase: ScenePhase | null): RecoveryState {
+  if (phase === null || phase === 'CHECKING') return prev;
+  return { settled: phase, recovered: phase === 'READY' && prev.settled === 'GRAPH_UNAVAILABLE' };
+}

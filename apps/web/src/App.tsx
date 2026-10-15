@@ -4,7 +4,8 @@ import { getAnalysis, getGraphStatus, getHealth, type ApiResult, type Fetcher, t
 import { HealthPanel, type Loadable } from './components/HealthPanel';
 import { AnalysisView } from './components/AnalysisView';
 import { SceneMount, toSceneData, type SceneProps } from './components/SceneMount';
-import { currentAnalysis, deriveScenePhase, toRuntimeContext } from './sceneState';
+import { StatusArea } from './components/StatusArea';
+import { currentAnalysis, deriveScenePhase, nextRecovery, toRuntimeContext, type RecoveryState } from './sceneState';
 import { nextRoute, parseRoute, type Route } from './route';
 
 /** Seeded demo release (graph seed: Release rel-wad, tenant t-wad). */
@@ -12,10 +13,12 @@ export const SEEDED_RELEASE_ID = 'rel-wad';
 
 export const IDENTITY = 'Cubes of Knowledge: A company brain built on FalkorDB, with traceable decisions and persistent agent memory.';
 
-export function Shell({ route, health, graph, analysis, Scene, reducedMotion, selected, onSelect, onRequery }: {
+export function Shell({ route, health, graph, analysis, Scene, reducedMotion, selected, onSelect, onRequery, recovered = false, generation }: {
   route: Route; health: Loadable<HealthResponse>; graph: Loadable<GraphStatusResponse>;
   analysis: ApiResult<AnalysisResponse> | null; Scene: ComponentType<SceneProps> | null;
   reducedMotion: boolean; selected: string | null; onSelect: (id: string) => void; onRequery?: () => void;
+  /** Fresh READY after a settled GRAPH_UNAVAILABLE (see nextRecovery). Never set from a click alone. */
+  recovered?: boolean; generation?: number;
 }) {
   // Phase first: proof reaches the scene only in READY (authorized AVAILABLE read + healthy probe, same generation).
   const phase = route.name === 'release' ? deriveScenePhase(graph, analysis) : null;
@@ -23,7 +26,7 @@ export function Shell({ route, health, graph, analysis, Scene, reducedMotion, se
   return (
     <>
       <a className="skip" href="#main">Skip to content</a>
-      <div className="app-shell" data-phase={phase ?? 'none'}>
+      <div className="app-shell" data-phase={phase ?? 'none'} {...(generation !== undefined ? { 'data-generation': generation } : {})}>
         <header className="topbar">
           <div className="brand"><h1><a href="#/">Cubes of Knowledge</a></h1><p className="identity">{IDENTITY}</p></div>
           <HealthPanel health={health} graph={graph} />
@@ -36,7 +39,10 @@ export function Shell({ route, health, graph, analysis, Scene, reducedMotion, se
           {route.name === 'release' && (
             <div className="stage-grid">
               <SceneMount Scene={Scene} data={toSceneData(current, selected)} onSelectNode={onSelect} reducedMotion={reducedMotion} runtime={toRuntimeContext(phase ?? 'CHECKING')} />
-              <AnalysisView releaseId={route.releaseId} result={analysis} phase={phase} />
+              <div className="side-col">
+                <StatusArea phase={phase ?? 'CHECKING'} releaseId={route.releaseId} analysis={analysis} recovered={recovered} />
+                <AnalysisView releaseId={route.releaseId} result={analysis} phase={phase} />
+              </div>
             </div>)}
           {route.name === 'not_found' && (
             <section className="panel" role="alert"><h2>404: page not found</h2><p>No view for <code>{route.path}</code>. <a href="#/">Home</a></p></section>)}
@@ -102,11 +108,15 @@ export function App({ Scene, fetcher }: { Scene: ComponentType<SceneProps> | nul
 
   useEffect(() => { const h = () => setRoute(prev => nextRoute(prev, window.location.hash)); window.addEventListener('hashchange', h); return () => window.removeEventListener('hashchange', h); }, []);
   const [nonce, setNonce] = useState(0);
-  const [, setGeneration] = useState(0);
+  const [generation, setGeneration] = useState(0);
+  const [recovery, setRecovery] = useState<RecoveryState>({ settled: null, recovered: false });
   // Stable sinks object: the request gate is keyed to it, so only the newest load may write.
   const sinks = useMemo<Sinks>(() => ({ setHealth, setGraph, setAnalysis, setSelected, setGeneration }), []);
   useEffect(() => loadAll(route, fetcher, sinks), [route, fetcher, nonce, sinks]);
 
+  const phase = route.name === 'release' ? deriveScenePhase(graph, analysis) : null;
+  useEffect(() => { setRecovery(prev => { const next = nextRecovery(prev, phase); return next.settled === prev.settled && next.recovered === prev.recovered ? prev : next; }); }, [phase]);
   return <Shell route={route} health={health} graph={graph} analysis={analysis} Scene={Scene}
-    reducedMotion={reducedMotion} selected={selected} onSelect={setSelected} onRequery={() => setNonce(n => n + 1)} />;
+    reducedMotion={reducedMotion} selected={selected} onSelect={setSelected} onRequery={() => setNonce(n => n + 1)}
+    recovered={recovery.recovered && phase === 'READY'} generation={generation} />;
 }
