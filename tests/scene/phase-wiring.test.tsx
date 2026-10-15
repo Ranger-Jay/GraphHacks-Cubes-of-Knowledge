@@ -97,3 +97,26 @@ test('caption: "Systems ready" is only for READY; a caption written under anothe
   assert.equal(resolveCaption(notice, 'READY').text, SYSTEM_CAPTIONS.READY, 'an outage notice does not outlive the outage');
   assert.equal(resolveCaption(null, 'READY').speaker, 'System');
 });
+
+// v021.07 PROPOSED COPY pending Buddy's ruling.
+const CUBE_COPY: Record<ScenePhase, [string, string] | null> = {
+  READY: null,
+  CHECKING: ['CHECKING THE GRAPH...', 'No proof is shown until the checks finish.'],
+  GRAPH_UNAVAILABLE: ['GRAPH UNAVAILABLE', 'Evidence unavailable. No proof is shown.'],
+  ACCESS_DENIED: ['ACCESS DENIED', 'Analysis unauthorized. Verify credentials.'],
+  NOT_FOUND: ['RELEASE NOT FOUND', 'No matching release found in ledger.'],
+  UNAVAILABLE: ['GRAPH STATUS UNAVAILABLE', 'The current state could not be determined.'],
+};
+test('copy (PROPOSED): cube notice per phase; no "disconnected" or "severed" in any scene copy a QUERY_FAILED-only outage can show', async () => {
+  const { SYSTEM_CAPTIONS } = await import('../../apps/web/src/scene/index');
+  for (const phase of PHASES) {
+    const html = scene({ phase });
+    const want = CUBE_COPY[phase];
+    if (want) for (const t of want) assert.ok(html.includes(t), `${phase}: "${t}"`);
+    else assert.ok(!html.includes('cube-outage-overlay'), 'READY has no notice');
+    const cubeAndCaption = html.slice(html.indexOf('company-cube-stage'), html.indexOf('pyramids-deck')) + SYSTEM_CAPTIONS[phase];
+    assert.ok(!/disconnect|sever/i.test(cubeAndCaption), `${phase}: no disconnect/sever wording in the cube or System caption`);
+  }
+  assert.equal(SYSTEM_CAPTIONS.CHECKING, 'Checking the graph...');
+  assert.equal(SYSTEM_CAPTIONS.UNAVAILABLE, 'Graph status unavailable.');
+});

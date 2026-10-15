@@ -181,19 +181,19 @@ export const CompanyCube: React.FC<CompanyCubeProps> = ({
                 : phase === 'NOT_FOUND'
                 ? 'RELEASE NOT FOUND'
                 : phase === 'CHECKING'
-                ? 'CHECKING KNOWLEDGE CORE'
-                : 'INFORMATION UNAVAILABLE'}
+                ? 'CHECKING THE GRAPH...'
+                : 'GRAPH STATUS UNAVAILABLE'}
             </text>
             <text x="200" y="163" textAnchor="middle" fill="#ECEFF1" fontSize="10.5">
               {isGraphUnavailable
-                ? 'Evidence severed. Zero proof displayed.'
+                ? 'Evidence unavailable. No proof is shown.'
                 : phase === 'ACCESS_DENIED'
                 ? 'Analysis unauthorized. Verify credentials.'
                 : phase === 'NOT_FOUND'
                 ? 'No matching release found in ledger.'
                 : phase === 'CHECKING'
-                ? 'Routing cryptographic proof verification...'
-                : 'Current graph data could not be determined.'}
+                ? 'No proof is shown until the checks finish.'
+                : 'The current state could not be determined.'}
             </text>
           </g>
         )}

@@ -149,7 +149,7 @@ test('6. CompanyCube fractures and removes proof edges in UNAVAILABLE state', ()
 
   assert.ok(html.includes('company-cube-stage cube-unavailable'));
   assert.ok(html.includes('GRAPH UNAVAILABLE'));
-  assert.ok(html.includes('Evidence severed. Zero proof displayed.'));
+  assert.ok(html.includes('Evidence unavailable. No proof is shown.')); // v021.07 PROPOSED COPY (was "Evidence severed")
   assert.ok(!html.includes('graph-proof-edges'));
   assert.ok(!html.includes('Release rel-wad'));
 });

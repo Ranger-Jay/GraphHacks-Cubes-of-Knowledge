@@ -22,14 +22,15 @@ export interface SceneProps {
 /**
  * System caption per phase. Used whenever the caption on screen was written under a different phase, so a line spoken
  * in READY (or an outage notice) never lingers after the phase changes, and "Systems ready" is shown only in READY.
- * Non-READY wording reuses PR #31's blocked-phase captions; the GRAPH_UNAVAILABLE line is new (PROPOSED COPY).
+ * ACCESS_DENIED and NOT_FOUND reuse PR #31's blocked-phase captions. CHECKING, UNAVAILABLE and GRAPH_UNAVAILABLE are
+ * PROPOSED COPY pending Buddy's ruling (v021.07); neutral wording, never "disconnected" or "severed".
  */
 export const SYSTEM_CAPTIONS: Record<ScenePhase, string> = {
   READY: 'Systems ready. Standing by for command.',
-  CHECKING: 'Checking current information.',
+  CHECKING: 'Checking the graph...',
   ACCESS_DENIED: 'Access denied.',
   NOT_FOUND: 'The requested release is missing.',
-  UNAVAILABLE: 'Current information is unavailable.',
+  UNAVAILABLE: 'Graph status unavailable.',
   GRAPH_UNAVAILABLE: 'Graph unavailable. Answers and proof are unavailable.',
 };
 export interface SceneCaption { text: string; speaker: string; phase: ScenePhase }
