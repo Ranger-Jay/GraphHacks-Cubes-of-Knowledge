@@ -1,4 +1,4 @@
-import type { AnalysisResponse, AvailableAnalysis, SourceRef } from '@cubes/contracts';
+import type { AnalysisResponse, AvailableAnalysis, ScenePhase, SourceRef } from '@cubes/contracts';
 import type { ApiResult } from '../api';
 import { StatusBadge } from './StatusBadge';
 
@@ -6,7 +6,11 @@ import { StatusBadge } from './StatusBadge';
 function focusSource(e: { preventDefault: () => void }, id: string) {
   e.preventDefault();
   const el = typeof document !== 'undefined' ? document.getElementById(`source-${id}`) : null;
-  if (el) { el.setAttribute('tabindex', '-1'); el.scrollIntoView({ block: 'center' }); el.focus(); }
+  if (el) {
+    // Evidence details are collapsed by default: open every collapsed ancestor so the record can take focus.
+    for (let a = el.parentElement; a; a = a.parentElement) if (a instanceof HTMLDetailsElement) a.open = true;
+    el.setAttribute('tabindex', '-1'); el.scrollIntoView({ block: 'center' }); el.focus();
+  }
 }
 
 function Sources({ ids, byId }: { ids: string[]; byId: Map<string, SourceRef> }) {
@@ -34,29 +38,47 @@ function Available({ a }: { a: AvailableAnalysis }) {
             {e.status === 'STALE' && <span className="note"> Stale evidence is not current clearance.</span>}
             <Sources ids={e.sourceRefIds} byId={byId} />
           </li>))}</ul>}
-      <h3>Proposed actions</h3>
-      {a.proposedActions.length === 0 ? <p>None.</p> :
-        <ul className="actions">{a.proposedActions.map(p => (
-          <li key={p.id}>
-            <strong>{p.label}</strong> ({p.kind}) — <span className="approval">Needs human approval. Not executed.</span>
-            <Sources ids={p.sourceRefIds} byId={byId} />
-          </li>))}</ul>}
-      <h3>Returned graph path</h3>
-      <p className="muted">{a.nodes.length} nodes, {a.edges.length} edges from this response.</p>
-      <ul className="edges">{a.edges.map(e => <li key={e.id}>{e.from} —{e.type}→ {e.to}</li>)}</ul>
-      <h3>Source records</h3>
-      <ul className="source-records">{a.sources.map(s => (
-        <li key={s.id} id={`source-${s.id}`}>
-          <code>{s.path}</code> sha256 <code>{s.sha256.slice(0, 12)}…</code> offsets {s.startOffset}–{s.endOffset}
-          <blockquote>{s.excerpt}</blockquote>
-        </li>))}</ul>
+      <details className="detail" data-section="actions"><summary>Proposed actions ({a.proposedActions.length})</summary>
+        {a.proposedActions.length === 0 ? <p>None.</p> :
+          <ul className="actions">{a.proposedActions.map(p => (
+            <li key={p.id}>
+              <strong>{p.label}</strong> ({p.kind}) — <span className="approval">Needs human approval. Not executed.</span>
+              <Sources ids={p.sourceRefIds} byId={byId} />
+            </li>))}</ul>}
+      </details>
+      <details className="detail" data-section="path"><summary>Returned graph path ({a.nodes.length} nodes, {a.edges.length} edges)</summary>
+        <p className="muted">{a.nodes.length} nodes, {a.edges.length} edges from this response.</p>
+        <ul className="edges">{a.edges.map(e => <li key={e.id}>{e.from} —{e.type}→ {e.to}</li>)}</ul>
+      </details>
+      <details className="detail" data-section="sources"><summary>Source records ({a.sources.length})</summary>
+        <ul className="source-records">{a.sources.map(s => (
+          <li key={s.id} id={`source-${s.id}`}>
+            <code>{s.path}</code> sha256 <code>{s.sha256.slice(0, 12)}…</code> offsets {s.startOffset}–{s.endOffset}
+            <blockquote>{s.excerpt}</blockquote>
+          </li>))}</ul>
+      </details>
     </>
   );
 }
 
-export function AnalysisView({ releaseId, result }: { releaseId: string; result: ApiResult<AnalysisResponse> | null }) {
+/**
+ * `phase` (from sceneState.ts) gates proof: evidence and paths render only in READY. In any other phase the panel
+ * is empty, even when an 'ok' read exists (a graph failure observed in the same generation blocks it).
+ * Without `phase` the view renders the result as given (legacy callers/tests).
+ */
+export function AnalysisView({ releaseId, result, phase }: { releaseId: string; result: ApiResult<AnalysisResponse> | null; phase?: ScenePhase | null }) {
+  // With a phase, only READY shows proof. Every other phase leaves the panel empty; StatusArea explains why.
+  if (phase !== undefined && phase !== 'READY') {
+    return (
+      <section aria-labelledby="analysis-h" className="panel result-pane" aria-busy={phase === 'CHECKING'}>
+        <h2 id="analysis-h">Release analysis: {releaseId}</h2>
+        {phase === 'CHECKING'
+          ? <p>Loading analysis…</p>
+          : <p data-proof="empty">No current authorized result. Evidence and paths are not shown.</p>}
+      </section>);
+  }
   return (
-    <section aria-labelledby="analysis-h" className="panel" aria-busy={result === null}>
+    <section aria-labelledby="analysis-h" className="panel result-pane" aria-busy={result === null}>
       <h2 id="analysis-h">Release analysis: {releaseId}</h2>
       {result === null && <p role="status">Loading analysis…</p>}
       {result?.kind === 'ok' && result.data.status === 'AVAILABLE' && <Available a={result.data} />}
