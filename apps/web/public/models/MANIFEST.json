@@ -1,0 +1,36 @@
+{
+  "manifestVersion": "1.0.0",
+  "generator": "Blender 5.2.2 LTS (portable release d13f752e3b9c)",
+  "generatorScript": "generate_blender_assets.py",
+  "generatedAt": "2026-10-15T15:15:00Z",
+  "assets": [
+    {
+      "file": "protector_pyramid.blend",
+      "format": "blend",
+      "bytes": 90860,
+      "sha256": "96c9d2fe863ef72136cbaa6cddea6f6e1c7a7cf948689888e6cf9f1d7f4ff7f7",
+      "description": "Source Blender 5.2.2 scene containing 4-sided protector pyramid with apex crystal sensor, materials, wireframe bevels, lighting, and camera."
+    },
+    {
+      "file": "protector_pyramid.glb",
+      "format": "glb",
+      "bytes": 13456,
+      "sha256": "1dffafbdf76f598a312c0b98b6072e9d2bea25646956797fb65dbcec007a023e",
+      "description": "Uncompressed standard binary glTF/GLB export (compatible with headless bpy, Three.js, and web runtimes; Draco/MeshOpt disabled for clean zero-dependency parsing)."
+    },
+    {
+      "file": "protector_pyramid_preview.png",
+      "format": "png",
+      "bytes": 237631,
+      "sha256": "55b4c618f76b1bae3455c91e6e7f96cca585eca1100e51384d7d5015b63ce9fb",
+      "description": "Rendered 800x600 preview snapshot generated via Blender Cycles/Eevee camera."
+    },
+    {
+      "file": "generate_blender_assets.py",
+      "format": "py",
+      "bytes": 4070,
+      "sha256": "4f68bb119193420d36f4444cbfe4035cf9351a3853bdf7646c5fdab35fe97c6f",
+      "description": "Deterministic headless generation script compatible with Blender 5.2.2 LTS (blender -b -P generate_blender_assets.py)."
+    }
+  ]
+}
