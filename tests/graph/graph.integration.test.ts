@@ -716,6 +716,27 @@ test('a tombstone survives an edited copy of the evidence file; overrides are na
   });
 });
 
+test('the seed CLI passes a literal pipe-delimited --reinstate argument through', async () => {
+  const { readChain } = await import('../../packages/graph/src/index.ts');
+  const { execFile } = await import('node:child_process');
+  await withVariant('cli_reinstate', null, async c => {
+    // The real CLI as a child process, with no shell: the argument reaches it exactly as an operator's quoted one would.
+    const env = { ...process.env, FALKORDB_GRAPH: c.config.graphName };
+    const cli = (...args: string[]) => new Promise<{ code: number; out: string; err: string }>(resolve =>
+      execFile(process.execPath, ['--import', 'tsx', 'packages/graph/src/cli.ts', ...args], { env, cwd: process.cwd() },
+        (e, out, err) => resolve({ code: e ? Number((e as { code?: unknown }).code ?? 1) : 0, out, err })));
+    const ndKey = 'EVIDENCED_BY|lic-night-drive-v4|graph/seed/sources/license-night-drive.txt';
+    assert.equal((await cli('revoke', 'lic-night-drive-v4', 'rel-wad@r2')).code, 0);
+    const refused = await cli('seed', 'basement-hum-v4-license');
+    assert.notEqual(refused.code, 0, 'a seed carrying the revoked binding is refused without --reinstate');
+    assert.match(refused.err, /REVOKED|revoked/);
+    const lifted = await cli('seed', `--reinstate=${ndKey}`, 'basement-hum-v4-license');
+    assert.equal(lifted.code, 0, lifted.err);
+    const chain = await readChain(ledger(), c.config.graphName, 't-wad');
+    assert.ok(chain.status === 'COMMITTED' && chain.head.intent.endsWith('+reinstate') && chain.head.revoked.length === 0, 'the CLI flag lifted exactly the tombstone and the COMMIT names the override');
+  });
+});
+
 test('a blocked answer carries no graph-derived text; a release deleted out of band is blocked, not 404', async () => {
   await withVariant('spoof', null, async c => {
     await c.write("MATCH (r:Release {id: 'rel-wad'}) SET r.title = 'SPOOF TITLE cleared by legal' WITH 1 AS x MATCH (k:Cut {id: 'cut-wad-v4'}) SET k.label = 'SPOOF CUT ESTABLISHED'");
