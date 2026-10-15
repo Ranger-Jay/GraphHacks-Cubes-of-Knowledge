@@ -28,7 +28,8 @@ def main():
         env = {**os.environ, "FALKORDB_HOST": "127.0.0.1", "FALKORDB_PORT": str(port),
                "FALKORDB_GRAPH": "ci_" + secrets.token_hex(8), "FALKORDB_TLS": "false",
                "FALKORDB_USERNAME": "", "FALKORDB_PASSWORD": "",
-               "GRAPH_EVIDENCE_KEY": secrets.token_hex(32)}
+               "GRAPH_EVIDENCE_KEY": secrets.token_hex(32),
+               "GRAPH_WITNESS_DIR": str(Path(directory) / "witness")}
         # No existing database is touched; this process owns the fresh data directory.
         with open(Path(directory) / "server.log", "w+") as log:
             server = subprocess.Popen([str(server_binary), "--bind", "127.0.0.1", "--port", str(port),

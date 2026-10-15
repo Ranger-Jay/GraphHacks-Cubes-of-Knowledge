@@ -40,6 +40,8 @@ node --input-type=module -e "import {randomBytes} from 'node:crypto'; console.lo
 
 Store the output only in local/server secret configuration. Do not prefix it with `VITE_`, include it in the browser bundle, or reuse the disposable CI key. An unset key must fail closed; adding the variable does not establish graph integration, revocation enforcement or rollback protection. Rotation/re-signing needs the graph lane's migration procedure and independent verification.
 
+The graph lane's rollback guard also requires a server-only `GRAPH_WITNESS_DIR`: create an owner-only durable directory outside FalkorDB's data directory, then set its absolute path in server configuration. For a local sandbox, `.local/graph-witness/` is gitignored; it is not a production storage recommendation. Keep the witness across server restarts and separate from graph-only snapshot restoration. A missing, corrupt or interrupted witness must fail closed; never silently rebuild it from the current graph or delete/reinitialize it to make a failed verification pass. Initialization/recovery uses the graph lane's explicit operator procedure. Whole-host rollback that also restores the witness remains a separate limit. CI alone uses a disposable witness directory alongside its disposable database and signing key, removed at test teardown.
+
 Start local Docker on a host where Docker is actually installed:
 
 ```sh
