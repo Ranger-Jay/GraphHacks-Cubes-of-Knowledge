@@ -13,6 +13,8 @@ Types: packages/contracts/src/index.ts. These are transport types, not runtime i
 
 Identity is server-authenticated and not accepted from a caller-supplied role, actor, or tenant field. Kanny is synthetic owner; Serena is limited reader; Roy/Ava/Guz are scoped agents. Role enforcement and session issuance remain API-lane implementation work. Missing route is 404, not a fabricated product result.
 
+Handoff requests and returned handoffs require `releaseId`. The API validates a nonempty identifier and authorizes that release under the server-derived tenant and agent scope before saving or recovering state. Recovery returns the same release scope alongside its revision; possession of an ID never grants access. Earlier payloads without this field must be rejected by runtime validation rather than assigned a default release. Consumer branches must reconcile this required-field change before integration.
+
 Every mutation needs an expected revision and bounded idempotency key. Same key + same authorized request replays safely; same key + different request rejects. Current cut changes invalidate old approvals. Atomic compare/update or equivalent tested serialization must protect concurrent writers. Approval decisions never establish music license facts by themselves.
 
 Evidence sources include immutable SHA-256 plus exact excerpt/offsets. The graph lane chooses and documents offset units consistently (recommended Unicode code-point offsets). UI displays those source records; model text cannot substitute for them. Coverage must support any asserted missing path: incomplete source coverage stays UNKNOWN. STALE evidence can be shown as stale, never current clearance.
