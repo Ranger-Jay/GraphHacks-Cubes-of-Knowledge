@@ -1,10 +1,14 @@
 # Cubes of Knowledge
 
+**A company brain built on FalkorDB, with traceable decisions and persistent agent memory.**
+
+Canonical product description; implementation status and acceptance gates are recorded below.
+
 A Graph Hacks entry exploring a fictional studio's current-cut licensing, evidence, authorized actions, and recoverable agent state through FalkorDB.
 
 ## Status
 
-Typed workspace/configuration bootstrap v003.001. No working graph integration, authorization flow, agent execution, deployment, or prize qualification is claimed yet. The scenario uses synthetic data from Warnings After Dark Studios. The development API exposes liveness and an honest unavailable graph status; the browser renders a scaffold notice.
+Typed workspace/configuration bootstrap v003.002. No working graph integration, authorization flow, agent execution, deployment, or prize qualification is claimed yet. The scenario uses synthetic data from Warnings After Dark Studios. The development API exposes liveness and an honest unavailable graph status; the browser renders a scaffold notice.
 
 ## Required demonstration
 
