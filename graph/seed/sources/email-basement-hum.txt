@@ -1,0 +1,6 @@
+From: clearances@low-tide-records.example (synthetic)
+To: music@warnings-after-dark.example (synthetic)
+Subject: Basement Hum - festival use
+
+Confirmed: "Basement Hum" is cleared for WAD Cut v3 (festival screener) only.
+Any later cut or distribution release requires a new license.
