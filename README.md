@@ -52,6 +52,20 @@ npm run dev:web
 
 Web: http://127.0.0.1:5173. API: http://127.0.0.1:8787. Vite proxies /api locally; no graph credentials go to the web app. /api/health returns BOOTSTRAP with ready=false; /api/graph/status returns HTTP 503 UNAVAILABLE / NOT_IMPLEMENTED until a real query adapter lands. Other product routes are not implemented. Vite preview serves static files only; it does not supply a production API/proxy.
 
+### Web to API session (dev only)
+
+The shipped API answers `/api/releases/:id/analysis` only to a bearer token (see [API sessions](apps/api/README.md#sessions)). The browser holds no credential. In dev, the Vite proxy (`apps/web/dev-proxy.ts`, wired in `apps/web/vite.config.ts`) adds `Authorization: Bearer <API_READER_TOKEN>` to every `/api` request and drops any `Authorization` header the page sent. The token is read in the Vite Node process from the environment or the root `.env`, has no `VITE_` prefix, and is never passed to `define`, so it is not in the client bundle.
+
+1. Mint a reader token outside the repo and put the same value in the API process and the Vite process (the root `.env` serves both): `API_READER_TOKEN`.
+2. If it is unset or malformed, the proxy warns without printing the value and injects nothing. The web shell then shows "Not authorized (HTTP 401)" and no graph answer.
+3. A 403 shows "Not authorized (HTTP 403)". A network failure or a dead upstream behind the proxy (HTTP 502/504) shows an "API unreachable" error. None of these show clearance or evidence.
+
+Limits. This is a dev convenience, not an auth design: anyone who can reach the dev server on 127.0.0.1:5173 reads as the reader, so leave the host on loopback. `vite preview` and a production build have no proxy and no credential, so a deployed web app needs its own session design before it can read the API. That is unproven here.
+
+UNPROVEN: the graph status panel. `GET /api/graph/status` is still the shipped stub, HTTP 503 `NOT_IMPLEMENTED` (v013 is unbuilt), so the web shell can only show that stub, never a real graph health reading. The analysis route is proven only against a disposable FalkorDBLite graph, not against the hosted FalkorDB instance.
+
+Web unit tests: `node --import ./tests/web/register.mjs --test tests/web/*.test.tsx` (not part of `npm run verify`).
+
 The database and provider credentials remain server-side. Model execution defaults to disabled and has no provider key. No private team records or production diaries belong in this public repository.
 
 ## Verification and integration
