@@ -1,6 +1,6 @@
 {
   "version": "v001",
-  "outageVersions": { "roy": "v002", "ava": "v002" },
+  "outageVersions": { "roy": "v002", "ava": "v002", "guz": "v002" },
   "speakers": ["roy", "ava", "guz"],
   "phrases": [
     { "id": "01_greeting", "text": "Greetings, Commander" },
@@ -15,6 +15,6 @@
   "outage": {
     "roy": "FalkorDB is unavailable. Operations are offline.",
     "ava": "I can’t access the company’s knowledge. Information is unavailable until FalkorDB is available again.",
-    "guz": "I can’t verify any sources. I won’t provide an answer without evidence."
+    "guz": "I can’t verify any sources. I will not provide an answer without evidence."
   }
 }

@@ -30,12 +30,12 @@ test('27 unique clips preserve locked outage copy and omit proposed recovery lin
   assert.deepEqual(dialogue.outage, {
     roy: 'FalkorDB is unavailable. Operations are offline.',
     ava: 'I can’t access the company’s knowledge. Information is unavailable until FalkorDB is available again.',
-    guz: 'I can’t verify any sources. I won’t provide an answer without evidence.'
+    guz: 'I can’t verify any sources. I will not provide an answer without evidence.'
   });
   assert.ok(p.clips.every(c => !c.filename.includes('_10_')));
   assert.ok(p.clips.some(c => c.filename === 'roy_09_outage_v002.mp3'));
   assert.ok(p.clips.some(c => c.filename === 'ava_09_outage_v002.mp3'));
-  assert.ok(p.clips.some(c => c.filename === 'guz_09_outage_v001.mp3'));
+  assert.ok(p.clips.some(c => c.filename === 'guz_09_outage_v002.mp3'));
   assert.ok(p.clips.filter(c => !c.filename.includes('_09_')).every(c => c.filename.endsWith('_v001.mp3')));
 });
 test('invalid scope or cap and missing credentials reject before any network operation', async t => {
