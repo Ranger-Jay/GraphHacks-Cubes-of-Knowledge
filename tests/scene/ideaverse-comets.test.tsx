@@ -8,6 +8,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import {
   COMET_FLIGHT_DURATION_MS,
   COMET_IMPORT_PULL_DURATION_MS,
+  COMET_INITIAL_OPACITY,
   IDEAVERSE_MANIFEST_VERSION,
   IDEAVERSE_REFERENCE_NOW_ISO,
   IdeaVerseComets,
@@ -18,6 +19,7 @@ import {
   closeInspectedComet,
   createCometLifecycle,
   inspectComet,
+  isValidWorkspaceImportReceipt,
   recordNonPersistedImportAttempt,
   selectEligibleIdeaPool,
   setCometHiddenTab,
@@ -64,6 +66,12 @@ function loadRepoManifestItems(): IdeaVerseCometItem[] {
 
 test('manifest & 100 files: exact 100 UTF-8 files, 20-30 words each, exact hashes/byteCounts and Claude loader compatibility', () => {
   const rawManifestBytes = readFileSync(MANIFEST_PATH);
+  const manifestSha256 = createHash('sha256').update(rawManifestBytes).digest('hex');
+  assert.equal(
+    manifestSha256,
+    '85209bd70ee02f779f907addadd704a84e7867f0f77b3f4f187ecba4e5a41994',
+    'manifest.json SHA-256 matches exact committed asset pack'
+  );
   const doc = JSON.parse(rawManifestBytes.toString('utf8')) as {
     version: unknown;
     ideas: Array<Record<string, unknown>>;
@@ -72,6 +80,7 @@ test('manifest & 100 files: exact 100 UTF-8 files, 20-30 words each, exact hashe
   assert.equal(doc.version, IDEAVERSE_MANIFEST_VERSION);
   assert.ok(Array.isArray(doc.ideas));
   assert.equal(doc.ideas.length, 100, 'manifest must contain exactly 100 ideas');
+  assert.equal(doc.ideas[0]?.filename, 'idea-001-midnight-reel-archive.txt');
 
   const diskFiles = readdirSync(FILES_DIR).filter(f => f.endsWith('.txt'));
   assert.equal(diskFiles.length, 100, 'files directory must contain exactly 100 .txt files');
@@ -247,6 +256,9 @@ test('import transition: only confirmed persisted receipt triggers pull-to-cube 
 
   let state = createCometLifecycle(items, { nowMs: startMs });
   const targetId = state.activeComets[0]!.idea.id;
+  const targetSha256 = state.activeComets[0]!.idea.sha256;
+  assert.equal(state.activeComets[0]!.opacity, COMET_INITIAL_OPACITY);
+  assert.ok(COMET_INITIAL_OPACITY > 0, 'newly spawned comets start with visible opacity');
 
   // Inspection and failed/denied/outage attempts never import or start the pull transition
   state = inspectComet(state, targetId);
@@ -255,15 +267,39 @@ test('import transition: only confirmed persisted receipt triggers pull-to-cube 
   assert.equal(state.importedIds.has(targetId), false);
   assert.equal(state.activeComets.find(c => c.idea.id === targetId)?.status, 'flying');
 
-  // Confirmed persisted receipt starts gentle pull toward cube + fade
-  const receipt: PersistedImportReceipt = {
+  // Fabricated witnessHash/nodeId/edgeId or mismatched fileSha256 is rejected
+  const fabricatedWitnessReceipt = {
     ideaId: targetId,
-    sha256: state.activeComets[0]!.idea.sha256,
+    fileSha256: targetSha256,
     workspaceId: 'ws-wad-cube',
     importedAt: '2026-10-15T20:00:02.000Z',
     workspaceRevision: 1,
     membershipId: `member-ws-wad-cube-${targetId}`,
+    witnessHash: 'f'.repeat(64),
   };
+  assert.equal(isValidWorkspaceImportReceipt(fabricatedWitnessReceipt, items), false);
+  state = applyConfirmedCometImport(
+    state,
+    fabricatedWitnessReceipt as unknown as PersistedImportReceipt,
+    startMs + 1_500
+  );
+  assert.equal(state.importedIds.has(targetId), false);
+
+  // Confirmed persisted workspace-import receipt starts gentle pull toward cube + fade
+  const receipt: PersistedImportReceipt = {
+    receiptId: `rcpt-ws-wad-cube-${targetId}`,
+    ideaId: targetId,
+    filename: state.activeComets[0]!.idea.filename,
+    fileSha256: targetSha256,
+    workspaceId: 'ws-wad-cube',
+    importedAt: '2026-10-15T20:00:02.000Z',
+    importedByRole: 'owner',
+    idempotencyKey: `idem-${targetId}-1`,
+    workspaceRevision: 1,
+    membershipId: `member-ws-wad-cube-${targetId}`,
+    replayed: false,
+  };
+  assert.equal(isValidWorkspaceImportReceipt(receipt, items), true);
   state = applyConfirmedCometImport(state, receipt, startMs + 2_000);
   assert.equal(state.importedIds.has(targetId), true);
   assert.equal(state.inspectedIdeaId, null);
@@ -300,6 +336,7 @@ test('reduced-motion & all-imported markup: stationary list, manual next cycling
   const normalHtml = renderToStaticMarkup(<IdeaVerseComets ideas={items} reducedMotion={false} />);
   assert.ok(normalHtml.includes('data-testid="ideaverse-comet-flight-list"'));
   assert.ok(normalHtml.includes('data-testid="ideaverse-pause-btn"'));
+  assert.ok(normalHtml.includes(`opacity:${COMET_INITIAL_OPACITY}`), 'mounted comets render with visible opacity');
 
   const reducedHtml = renderToStaticMarkup(<IdeaVerseComets ideas={items} reducedMotion={true} />);
   assert.ok(reducedHtml.includes('data-testid="ideaverse-stationary-list"'));
