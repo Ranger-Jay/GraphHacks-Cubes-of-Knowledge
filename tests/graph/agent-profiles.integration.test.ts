@@ -118,6 +118,7 @@ test('an assignment change shows on a fresh read, survives a re-seed, and a revo
   await g.write("MATCH (a:RoleAssignment {id: 'ra-ava-ws-wad-cube', tenantId: 't-wad'}), (r:AccessRole {id: 'role-operator', tenantId: 't-wad'}) SET a.roleId = 'role-operator', a.revision = 2, a.source = 'test-operation' CREATE (a)-[:GRANTS_ROLE {id: 'e-ra-ava-grants-role-2'}]->(r)");
   let o = await ov(g); assert.equal(roleOf(o, 'ava'), 'Operator'); const a = o.assignments.find(x => x.principalKey === 'ava')!.access; assert.ok(a.state === 'ASSIGNED' && a.revision === 2 && a.source === 'test-operation');
   await seedAgentProfiles(g, root); o = await ov(g); assert.equal(roleOf(o, 'ava'), 'Operator', 're-seed does not revert a later change');
+  assert.equal(await count(g, "MATCH (:RoleAssignment {id: 'ra-ava-ws-wad-cube'})-[e:GRANTS_ROLE]->() RETURN count(e) AS n"), 1, 're-seed does not add a second role edge to a row an authorized change owns');
   await g.write("MATCH (a:RoleAssignment {id: 'ra-ava-ws-wad-cube', tenantId: 't-wad'}) SET a.status = 'REVOKED', a.revision = 3");
   o = await ov(g); const rv = o.assignments.find(x => x.principalKey === 'ava')!.access; assert.ok(rv.state === 'UNASSIGNED' && rv.reason === 'revoked');
   assert.ok(o.profiles.find(p => p.actorKey === 'ava')!.access.state === 'UNASSIGNED', 'the profile card reflects the revoke on the next read');
@@ -215,4 +216,88 @@ test('other slices are unaffected and do not raise false alarms: licensing witne
   await seedGraph(g, root); // the witnessed licensing seed still accepts the combined graph
   const s = await studioOverview(g, root, T); assert.ok(s.status === 'AVAILABLE' && s.integrity.length === 0 && s.counts.people === 20);
   assert.equal((await ov(g)).integrity.length, 0);
+});
+
+// ---- repair slice (v028.08-.12): Cora B1-B6 ----
+test('an owner fixture change reaches the display after a re-seed; a stale fixture-sourced row is UNKNOWN, never shown under the old owner decision', async () => {
+  const g = await fresh('b4');
+  const tmp = await copyFixtures((n, d) => { if (n === 'role-assignments.json') { const a = d['assignments'] as Record<string, unknown>[]; a[3]!['roleId'] = 'role-operator'; a.splice(4, 1); (d['provenance'] as Record<string, unknown>)['decidedAt'] = '2026-10-17T01:00:00Z'; } });
+  try {
+    // Changed on disk but NOT re-seeded: the old rows still say "fixture" and must not be shown as the owner's decision.
+    let o = await ov(g, tmp);
+    const stale = o.assignments.find(x => x.principalKey === 'ava')!.access;
+    assert.ok(stale.state === 'UNKNOWN' && /current fixture/.test(stale.reason), JSON.stringify(stale));
+    assert.ok(o.assignments.find(x => x.principalKey === 'guz')!.access.state === 'UNKNOWN', 'a principal the fixture no longer lists is UNKNOWN until re-seeded');
+    assert.ok(o.integrity.some(i => i.id === 'ra-ava-ws-wad-cube'));
+    // Re-seeded: the owner's change is applied to the rows the fixture manages.
+    await seedAgentProfiles(g, tmp); o = await ov(g, tmp);
+    const ava = o.assignments.find(x => x.principalKey === 'ava')!.access;
+    assert.ok(ava.state === 'ASSIGNED' && ava.role.name === 'Operator' && ava.revision === 2 && ava.assignedAt === '2026-10-17T01:00:00Z' && ava.source === 'fixture', JSON.stringify(ava));
+    const guz = o.assignments.find(x => x.principalKey === 'guz')!.access; assert.ok(guz.state === 'UNASSIGNED' && guz.reason === 'revoked');
+    assert.deepEqual(o.integrity, []);
+    assert.equal(await count(g, "MATCH (:RoleAssignment {id: 'ra-ava-ws-wad-cube'})-[e:GRANTS_ROLE]->() RETURN count(e) AS n"), 1);
+    assert.equal(roleOf(o, 'roy'), 'Administrator', 'unchanged rows are unchanged');
+    await seedAgentProfiles(g, tmp); assert.equal(roleOf(await ov(g, tmp), 'ava'), 'Operator', 'repeat re-seed is stable');
+  } finally { await rm(tmp, { recursive: true, force: true }); }
+});
+
+test('a row an authorized change owns is left alone by a re-seed even when the fixture differs', async () => {
+  const g = await fresh('b4auth');
+  await g.write("MATCH (a:RoleAssignment {id: 'ra-ava-ws-wad-cube', tenantId: 't-wad'})-[e:GRANTS_ROLE]->() DELETE e");
+  await g.write("MATCH (a:RoleAssignment {id: 'ra-ava-ws-wad-cube', tenantId: 't-wad'}), (r:AccessRole {id: 'role-administrator', tenantId: 't-wad'}) SET a.roleId = 'role-administrator', a.revision = 2, a.source = 'server-operation' CREATE (a)-[:GRANTS_ROLE {id: 'e-authorized'}]->(r)");
+  const tmp = await copyFixtures((n, d) => { if (n === 'role-assignments.json') (d['assignments'] as Record<string, unknown>[])[3]!['roleId'] = 'role-operator'; });
+  try { await seedAgentProfiles(g, tmp); const o = await ov(g, tmp); assert.equal(roleOf(o, 'ava'), 'Administrator'); assert.deepEqual(o.integrity.filter(i => i.id.startsWith('ra-ava')), []); } finally { await rm(tmp, { recursive: true, force: true }); }
+});
+
+test('a row that still says "fixture" but was changed in the graph is UNKNOWN (no label-lie, including Owner for an agent)', async () => {
+  const g1 = await fresh('b1a'); // repoint Roy to Owner with a matching edge, source untouched
+  await g1.write("MATCH (:RoleAssignment {id: 'ra-roy-ws-wad-cube'})-[e:GRANTS_ROLE]->() DELETE e");
+  await g1.write("MATCH (a:RoleAssignment {id: 'ra-roy-ws-wad-cube'}), (r:AccessRole {id: 'role-owner', tenantId: 't-wad'}) SET a.roleId = 'role-owner', a.assignedBy = 'Kanny (owner approval, enforced)' CREATE (a)-[:GRANTS_ROLE {id: 'e-x'}]->(r)");
+  const o1 = await ov(g1); const roy1 = o1.assignments.find(x => x.principalKey === 'roy')!.access; assert.ok(roy1.state === 'UNKNOWN' && !('role' in roy1));
+  assert.ok(o1.profiles.find(p => p.actorKey === 'roy')!.access.state === 'UNKNOWN');
+  const g2 = await fresh('b1b'); // a legitimate-looking role change with revision bumped but the source label left as fixture
+  await g2.write("MATCH (:RoleAssignment {id: 'ra-ava-ws-wad-cube'})-[e:GRANTS_ROLE]->() DELETE e");
+  await g2.write("MATCH (a:RoleAssignment {id: 'ra-ava-ws-wad-cube'}), (r:AccessRole {id: 'role-operator', tenantId: 't-wad'}) SET a.roleId = 'role-operator', a.revision = 2 CREATE (a)-[:GRANTS_ROLE {id: 'e-y'}]->(r)");
+  const ava = (await ov(g2)).assignments.find(x => x.principalKey === 'ava')!.access; assert.ok(ava.state === 'UNKNOWN' && /changed after seeding/.test(ava.reason), JSON.stringify(ava));
+  const g3 = await fresh('b1c'); // Owner for an agent even from a non-fixture source
+  await g3.write("MATCH (:RoleAssignment {id: 'ra-guz-ws-wad-cube'})-[e:GRANTS_ROLE]->() DELETE e");
+  await g3.write("MATCH (a:RoleAssignment {id: 'ra-guz-ws-wad-cube'}), (r:AccessRole {id: 'role-owner', tenantId: 't-wad'}) SET a.roleId = 'role-owner', a.revision = 2, a.source = 'server-operation' CREATE (a)-[:GRANTS_ROLE {id: 'e-z'}]->(r)");
+  const guz = (await ov(g3)).assignments.find(x => x.principalKey === 'guz')!.access; assert.ok(guz.state === 'UNKNOWN' && /synthetic agent/.test(guz.reason), JSON.stringify(guz));
+});
+
+test('a phantom principal is refused; a real, linked principal with an authorized assignment is served', async () => {
+  const g = await fresh('b2', { licensing: true });
+  await g.write("MATCH (r:AccessRole {id: 'role-owner', tenantId: 't-wad'}), (w:Workspace {tenantId: 't-wad'}) CREATE (a:RoleAssignment {id: 'ra-mallory-ws-wad-cube', tenantId: 't-wad', principalId: 'mallory', roleId: 'role-owner', workspaceId: 'ws-wad-cube', status: 'ACTIVE', enforcement: 'NOT_ENFORCED', revision: 2, assignedAt: '2026-10-16T02:39:00Z', assignedBy: 'x', source: 'server-operation'}) CREATE (a)-[:GRANTS_ROLE {id: 'e-m1'}]->(r) CREATE (a)-[:IN_WORKSPACE {id: 'e-m2'}]->(w)");
+  let o = await ov(g); const mal = o.assignments.find(x => x.principalKey === 'mallory')!.access;
+  assert.ok(mal.state === 'UNKNOWN' && /neither in the fixture nor an existing Principal/.test(mal.reason), JSON.stringify(mal));
+  await g.write("CREATE (:Principal {id: 'wren', kind: 'human', displayName: 'Wren'})");
+  await g.write("MATCH (r:AccessRole {id: 'role-reader', tenantId: 't-wad'}), (w:Workspace {tenantId: 't-wad'}), (p:Principal {id: 'wren'}) CREATE (a:RoleAssignment {id: 'ra-wren-ws-wad-cube', tenantId: 't-wad', principalId: 'wren', roleId: 'role-reader', workspaceId: 'ws-wad-cube', status: 'ACTIVE', enforcement: 'NOT_ENFORCED', revision: 2, assignedAt: '2026-10-16T02:39:00Z', assignedBy: 'owner', source: 'server-operation'}) CREATE (a)-[:GRANTS_ROLE {id: 'e-w1'}]->(r) CREATE (a)-[:IN_WORKSPACE {id: 'e-w2'}]->(w) CREATE (a)-[:FOR_PRINCIPAL {id: 'e-w3'}]->(p)");
+  o = await ov(g); assert.equal(roleOf(o, 'wren'), 'Reader');
+});
+
+test('an extra role edge or workspace edge, or a duplicated profile node, is flagged and never silently picked', async () => {
+  const g = await fresh('b3b5');
+  await g.write("MATCH (a:RoleAssignment {id: 'ra-ava-ws-wad-cube'}), (r:AccessRole {id: 'role-owner', tenantId: 't-wad'}) CREATE (a)-[:GRANTS_ROLE {id: 'e-extra-role'}]->(r)");
+  await g.write("MATCH (a:RoleAssignment {id: 'ra-guz-ws-wad-cube'}), (w:Workspace {tenantId: 't-wad'}) CREATE (a)-[:IN_WORKSPACE {id: 'e-extra-ws'}]->(w)");
+  // An exact copy of the real node (so a row-order pick would serve it) plus nothing else: the duplicate id itself must be flagged.
+  const real = (await g.read<{ p: Record<string, never> }>("MATCH (n:AgentProfile {id: 'agentprofile-agent012', tenantId: 't-wad'}) RETURN properties(n) AS p"))[0]!.p;
+  await g.write('CREATE (m:AgentProfile) SET m = $p', { p: real });
+  assert.equal(await count(g, "MATCH (n:AgentProfile {id: 'agentprofile-agent012'}) RETURN count(n) AS n"), 2, 'the copy exists');
+  const o = await ov(g);
+  assert.equal(o.assignments.find(x => x.principalKey === 'ava')!.access.state, 'UNKNOWN');
+  assert.equal(o.assignments.find(x => x.principalKey === 'guz')!.access.state, 'UNKNOWN');
+  assert.ok(!o.profiles.some(p => p.agentId === 'Agent012'), 'neither node is served, whatever the row order');
+  assert.ok(o.integrity.some(i => i.id === 'agentprofile-agent012' && /more than one AgentProfile node/.test(i.reason)));
+  assert.equal(o.profiles.length, 2);
+});
+
+test('a directory symlink inside the repo cannot make a resource PRESENT', async () => {
+  const tmp = await mkdtemp(join(tmpdir(), 'agent-symdir-'));
+  try {
+    await mkdir(join(tmp, 'graph/seed'), { recursive: true }); await writeFile(join(tmp, 'graph/seed/skills.md'), 'not a skills file');
+    await mkdir(join(tmp, 'nodes/agents'), { recursive: true }); await symlink(join(tmp, 'graph/seed'), join(tmp, 'nodes/agents/agent012'));
+    assert.equal((await resolveResource(tmp, 'x', 'nodes/agents/agent012/skills.md', 'skills')).status, 'UNVERIFIED');
+    await mkdir(join(tmp, 'nodes/agents/agent013'), { recursive: true }); await writeFile(join(tmp, 'nodes/agents/agent013/skills.md'), 'ok');
+    assert.equal((await resolveResource(tmp, 'x', 'nodes/agents/agent013/skills.md', 'skills')).status, 'PRESENT');
+  } finally { await rm(tmp, { recursive: true, force: true }); }
 });
