@@ -1,6 +1,6 @@
 {
   "version": "agent-profiles@1",
-  "note": "Owner-authored synthetic agent profiles, preserved verbatim, except two spelling mistakes the owner confirmed and asked us to correct on 2026-10-16 (aggreeable to agreeable, relucant to reluctant). Fictional. No distribution license is claimed. declaredAccessLevel is source provenance only: no query, API or UI reads it for authorization. Voice ids are provider identifiers, not credentials. Listed roles, skills and memory are intended responsibilities, not proof that anything is implemented or loaded.",
+  "note": "Owner-authored synthetic agent profiles, preserved verbatim, except spelling mistakes the owner confirmed and asked us to correct on 2026-10-16 (aggreeable to agreeable, relucant to reluctant, and FalkorDb to FalkorDB in two assignment lines). Fictional. No distribution license is claimed. declaredAccessLevel is source provenance only: no query, API or UI reads it for authorization. Voice ids are provider identifiers, not credentials. Listed roles, skills and memory are intended responsibilities, not proof that anything is implemented or loaded.",
   "profiles": [
     {
       "agentId": "Agent012", "actorKey": "ava", "name": "Ava", "gender": "Female", "species": "AI Agent", "apparentAge": 28,
@@ -19,7 +19,7 @@
       "color": "#FFD700", "emoji": "🐬", "emojiName": "Blue Dolphin",
       "role": "Software Engineering, FalkorDB Builder & Execution.",
       "personality": "Serious, focused, & conservative.",
-      "assignment": "Database Administrator of FalkorDb WAD Studios Cube",
+      "assignment": "Database Administrator of FalkorDB WAD Studios Cube",
       "knownFor": "Caution and reluctant to deviate from source of truth.",
       "declaredAccessLevel": "Administrator",
       "voice": { "provider": "ElevenLabs", "voiceId": "fPIfC3elMLbN9tNwMXkw", "voiceName": "Viraj (Indian-American)" },
@@ -31,7 +31,7 @@
       "color": "#00E676", "emoji": "🦁", "emojiName": "Lion",
       "role": "Cyber Security Auditor.",
       "personality": "Steadfast, deeply faithful, and authoritative mentor.",
-      "assignment": "Cyber Security Auditor for FalkorDb WAD Studios Cube",
+      "assignment": "Cyber Security Auditor for FalkorDB WAD Studios Cube",
       "knownFor": "Philosophical and poetic mentorship on cyber security.",
       "declaredAccessLevel": "Administrator",
       "voice": { "provider": "ElevenLabs", "voiceId": "U7wWSnxIJwCjioxt86mk", "voiceName": "Olaniyi (Nigerian-English)" },
