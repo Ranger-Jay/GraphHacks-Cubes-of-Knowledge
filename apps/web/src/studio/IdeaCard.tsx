@@ -65,7 +65,10 @@ export function IdeaCardView({ idea, state, detail = 'ready', addBlockedReason, 
   );
 }
 
-export interface IdeaCardProps extends Omit<IdeaCardViewProps, 'titleId' | 'bodyId'> {}
+export interface IdeaCardProps extends Omit<IdeaCardViewProps, 'titleId' | 'bodyId'> {
+  /** Element id to focus on close when the opener no longer exists (e.g. the pool item left after Added). */
+  returnFocusTo?: string;
+}
 
 /**
  * Accessible inspect card, CONTROLLED: all import state, attempts and async work live in the studio controller, which
@@ -73,15 +76,19 @@ export interface IdeaCardProps extends Omit<IdeaCardViewProps, 'titleId' | 'body
  * open and returns to the opener on close; Escape closes. UNPROVEN until the real-browser proof (see PR body).
  */
 export function IdeaCard(props: IdeaCardProps) {
-  const { idea, onClose } = props;
+  const { idea, onClose, returnFocusTo, ...viewProps } = props;
   const openerRef = useRef<Element | null>(null);
   const titleId = `idea-title-${idea.id}`;
   const bodyId = `idea-body-${idea.id}`;
   useEffect(() => {
     openerRef.current = document.activeElement;
     document.getElementById(titleId)?.focus();
-    return () => { (openerRef.current as HTMLElement | null)?.focus?.(); };
-  }, [titleId]);
+    return () => {
+      const opener = openerRef.current as HTMLElement | null;
+      if (opener && opener.isConnected && opener !== document.body) opener.focus?.();
+      else if (returnFocusTo) document.getElementById(returnFocusTo)?.focus();
+    };
+  }, [titleId, returnFocusTo]);
   const closeRef = useRef(onClose);
   closeRef.current = onClose;
   useEffect(() => {
@@ -89,5 +96,5 @@ export function IdeaCard(props: IdeaCardProps) {
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
   }, []);
-  return <IdeaCardView {...props} titleId={titleId} bodyId={bodyId} />;
+  return <IdeaCardView idea={idea} onClose={onClose} {...viewProps} titleId={titleId} bodyId={bodyId} />;
 }

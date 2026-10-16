@@ -305,3 +305,14 @@ test('attempt tuples are frozen and exposed read-only', async () => {
   assert.ok(ctl instanceof IdeaStudioController && !(ctl as unknown as { disposed: boolean }).disposed);
   void FakeServer;
 });
+
+test('callbacks work when handed to React unbound (onClick={controller.add}): a bare method call must not lose `this`', async () => {
+  const { ctl, server, added } = makeStudio();
+  const { open, close, add, recheck, newAttempt, setEnv } = ctl;
+  setEnv({ phase: 'READY', access: 'OWNER' }); await settleAll();
+  await open('idea-001'); await settleAll();
+  add(); await settleAll();
+  assert.equal(phaseOf(ctl), 'added'); assert.equal(added.length, 1); assert.equal(server.calls.imports.length, 1);
+  recheck(); newAttempt(); close(); await settleAll();
+  assert.equal(ctl.getSnapshot().open, null);
+});

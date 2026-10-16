@@ -92,3 +92,12 @@ blockquote { border-left: 3px solid #2c3442; margin: .25rem 0; padding-left: .75
 .idea-card[data-import-phase="error"] .idea-card-status { border-left: 4px double #ff6b6b; padding-left: .5rem; }
 .idea-card[data-import-phase="added"] .idea-card-status { border-left: 4px solid #3fb27f; padding-left: .5rem; }
 .idea-card-actions { display: flex; gap: .5rem; } .idea-card-actions button:disabled { opacity: .6; cursor: not-allowed; }
+
+/* IdeaVerse studio panel (v025.18): the single shell surface for the one IdeaCard. */
+.studio-panel .idea-pool { display: flex; flex-wrap: wrap; gap: .4rem; margin: .4rem 0; padding: 0; list-style: none; }
+.studio-panel .idea-pool-item { max-width: 100%; overflow-wrap: anywhere; text-align: left; }
+.studio-panel .idea-pool-item[aria-pressed="true"] { outline: 2px solid #8cc8ff; }
+.idea-card-detail { display: block; opacity: .9; }
+.idea-card-help { margin: .2rem 0; font-size: .8rem; opacity: .9; }
+.idea-card[data-import-phase="present"] .idea-card-status { border-left: 4px solid #3fb27f; padding-left: .5rem; }
+.idea-card[data-import-phase="unconfirmed"] .idea-card-status, .idea-card[data-import-phase="checking"] .idea-card-status { border-left: 4px dashed #ffd166; padding-left: .5rem; }

@@ -63,7 +63,13 @@ export class IdeaStudioController {
   private listeners = new Set<() => void>();
   private snap: StudioSnapshot;
 
-  constructor(private readonly deps: StudioDeps) { this.snap = this.build(); }
+  constructor(private readonly deps: StudioDeps) {
+    // These are handed to React as bare callbacks (onClick={controller.add}); an unbound `this` would throw in the browser.
+    this.open = this.open.bind(this); this.close = this.close.bind(this); this.add = this.add.bind(this);
+    this.recheck = this.recheck.bind(this); this.newAttempt = this.newAttempt.bind(this); this.refreshPool = this.refreshPool.bind(this);
+    this.setEnv = this.setEnv.bind(this); this.setAccess = this.setAccess.bind(this);
+    this.snap = this.build();
+  }
 
   subscribe = (l: () => void): (() => void) => { this.listeners.add(l); return () => { this.listeners.delete(l); }; };
   getSnapshot = (): StudioSnapshot => this.snap;
