@@ -205,7 +205,7 @@ export async function importStatus(client: GraphClient, tenantId: string, idempo
 
 export interface IdeaverseIdea { id: string; filename: string; sha256: string; byteCount: number; submittedAt: string; touchedAt: string; synthetic: true; classification: 'proposal'; imported: boolean; importedAt?: string; membershipId?: string }
 export type IdeaverseOverview =
-  | { status: 'AVAILABLE'; tenantId: string; domain: 'studio'; workspace: { id: string; revision: number }; ideas: IdeaverseIdea[]; counts: { ideas: number; imported: number }; integrity: { id: string; reason: string }[] }
+  | { status: 'AVAILABLE'; tenantId: string; domain: 'studio'; workspace: { id: string; revision: number | null }; ideas: IdeaverseIdea[]; counts: { ideas: number; imported: number }; integrity: { id: string; reason: string }[] }
   | { status: 'EMPTY'; tenantId: string; domain: 'studio' }
   | { status: 'UNAVAILABLE'; reason: 'CONNECTION_FAILED' | 'QUERY_FAILED' | 'MANIFEST_INVALID' };
 
@@ -263,7 +263,8 @@ RETURN id(w) AS wid, id(i) AS iid, w.revision AS revision, i.id AS id, propertie
   // `iid`/`wid` (internal node ids) keep identical nodes as separate rows. More than one workspace node, or two idea nodes with one id,
   // make the import state ambiguous: nothing is served for them and each is flagged once.
   if (new Set(rows.map(r => r.wid)).size > 1) {
-    return { status: 'AVAILABLE', tenantId, domain: 'studio', workspace: { id: WORKSPACE_ID, revision }, ideas: [], counts: { ideas: 0, imported: 0 }, integrity: [{ id: WORKSPACE_ID, reason: 'more than one workspace node has this id' }] };
+    // The workspace identity is ambiguous, so NO revision is served: any value would come from whichever node the row order picked.
+    return { status: 'AVAILABLE', tenantId, domain: 'studio', workspace: { id: WORKSPACE_ID, revision: null }, ideas: [], counts: { ideas: 0, imported: 0 }, integrity: [{ id: WORKSPACE_ID, reason: 'more than one workspace node has this id' }] };
   }
   const idCount = new Map<string, number>();
   for (const r of rows) if (r.id !== null) idCount.set(r.id, (idCount.get(r.id) ?? 0) + 1);
