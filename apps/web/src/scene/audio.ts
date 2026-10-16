@@ -4,6 +4,7 @@ import {
   AUDIO_BASE_PATH,
   findClipByAgentRole,
   findClipByAgentTranscript,
+  findClipByFile,
   normalizeTranscript,
   type AudioClip,
   type AudioClipRole,
@@ -72,6 +73,15 @@ function gateAllows(clip: AudioClip, phase: ScenePhase | undefined, recoveryAuth
   return phase === 'READY' && recoveryAuthorized === true;
 }
 
+/** Cancel the active WAV when the current phase no longer allows that clip. */
+export function enforcePhaseGate(phase: ScenePhase | undefined, recoveryAuthorized = false): void {
+  if (!activeClipFile) return;
+  const clip = findClipByFile(activeClipFile);
+  if (!clip || !gateAllows(clip, phase, recoveryAuthorized)) {
+    cancelSpeech();
+  }
+}
+
 function playClip(clip: AudioClip, onEnd?: () => void): () => void {
   // WAV playback needs Audio; headless tests inject FakeAudio. Mute still refuses.
   if (audioMuted || typeof Audio === 'undefined') {
@@ -86,10 +96,10 @@ function playClip(clip: AudioClip, onEnd?: () => void): () => void {
     activeClipFile = clip.file;
 
     const finish = () => {
-      if (activeAudio === audio) {
-        activeAudio = null;
-        activeClipFile = null;
-      }
+      // Cancelled or superseded clips must not fire onEnd (AbortError after pause).
+      if (activeAudio !== audio) return;
+      activeAudio = null;
+      activeClipFile = null;
       onEnd?.();
     };
 
@@ -148,9 +158,9 @@ export function speakRecoveryClip(
   onEnd?: () => void
 ): () => void {
   if (!recoveryAuthorized || phase !== 'READY') return () => {};
-  const role: AudioClipRole = agentId === 'ava' ? 'reconnect_check' : agentId === 'roy' ? 'ready' : 'ready';
   // Guz has no recovery master in the accepted 29; refuse rather than invent.
   if (agentId === 'guz') return () => {};
+  const role: AudioClipRole = agentId === 'ava' ? 'reconnect_check' : 'ready';
   const options: SpeakOptions = { recoveryAuthorized: true };
   if (onEnd) options.onEnd = onEnd;
   return speakAuthorizedClip(agentId, role, phase, options);

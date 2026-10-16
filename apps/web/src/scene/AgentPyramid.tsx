@@ -10,7 +10,7 @@ import {
   agentPhrase,
 } from './dialogue';
 import { AgentPortrait } from './AgentPortrait';
-import { speakAuthorizedPhrase, cancelSpeech } from './audio';
+import { speakAuthorizedPhrase, cancelSpeech, enforcePhaseGate } from './audio';
 import type { PhraseDefinition } from './types';
 
 // Module-level session greeting set (persists across remounts within the same session)
@@ -182,9 +182,12 @@ export const AgentPyramid: React.FC<AgentPyramidProps> = ({
     };
   }, [isOpen, agent.id, phase]);
 
-  // Leave READY: cancel stale speech. Graph loss shows only the approved notice.
+  // Phase change: drop clips the new phase does not allow (outage must stop on READY).
+  // Blocked phases still show only the approved notice.
   useEffect(() => {
-    if (!isOpen || normalSpeechAllowed(phase)) return;
+    if (!isOpen) return;
+    enforcePhaseGate(phase);
+    if (normalSpeechAllowed(phase)) return;
     showBlockedCaption();
   }, [isOpen, phase, agent.id]);
 

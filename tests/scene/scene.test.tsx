@@ -26,6 +26,7 @@ import {
   isAudioMuted,
   setAudioMuted,
   cancelSpeech,
+  enforcePhaseGate,
   speakAuthorizedPhrase,
   speakAuthorizedClip,
   speakRecoveryClip,
@@ -637,13 +638,20 @@ test('21. WAV gates: mute default, READY ordinary, outage-only on GRAPH_UNAVAILA
   setAudioMuted(true);
 });
 
-test('22. Phase change cancellation clears the active WAV', () => {
+test('22. Phase change away from the active clip gate cancels the WAV', () => {
   playedSources.length = 0;
   setAudioMuted(false);
-  speakAuthorizedClip('ava', 'greeting', 'READY');
-  assert.equal(getActiveClipFile(), 'ava_01_greeting_v001.wav');
-  cancelSpeech();
-  assert.equal(getActiveClipFile(), null);
+  speakAuthorizedClip('ava', 'outage', 'GRAPH_UNAVAILABLE');
+  assert.equal(getActiveClipFile(), 'ava_09_outage_v002.wav');
+  enforcePhaseGate('READY');
+  assert.equal(getActiveClipFile(), null, 'outage must stop when phase returns to READY');
+
+  speakAuthorizedClip('roy', 'greeting', 'READY');
+  assert.equal(getActiveClipFile(), 'roy_01_greeting_v001.wav');
+  enforcePhaseGate('READY');
+  assert.equal(getActiveClipFile(), 'roy_01_greeting_v001.wav', 'ordinary stays while READY');
+  enforcePhaseGate('GRAPH_UNAVAILABLE');
+  assert.equal(getActiveClipFile(), null, 'ordinary stops when READY is lost');
   setAudioMuted(true);
 });
 
