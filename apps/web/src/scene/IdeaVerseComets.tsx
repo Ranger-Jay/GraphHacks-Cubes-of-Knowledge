@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 
 /**
  * Issue #39 (v024): 100 IdeaVerse ideas, inspectable comets and calm replacement lifecycle.
@@ -599,6 +599,13 @@ export function applyConfirmedCometImport(
   }
 
   const targetId = receipt.ideaId;
+  const existingSlot = state.activeComets.find(slot => slot.idea.id === targetId);
+  if (existingSlot && existingSlot.status === 'importing') {
+    return state;
+  }
+  if (state.importedIds.has(targetId) && !existingSlot) {
+    return state;
+  }
   const nextImported = new Set(state.importedIds);
   nextImported.add(targetId);
 
@@ -725,6 +732,11 @@ export const IdeaVerseComets: React.FC<IdeaVerseCometsProps> = ({
   receipt,
   onMembershipRefreshed,
 }) => {
+  const nowRef = useRef(now);
+  nowRef.current = now;
+
+  const appliedReceiptKeyRef = useRef<string | null>(null);
+
   const [lifecycle, setLifecycle] = useState<CometLifecycleState>(() => {
     const initial = createCometLifecycle(ideas, {
       nowMs: now(),
@@ -746,24 +758,24 @@ export const IdeaVerseComets: React.FC<IdeaVerseCometsProps> = ({
   useEffect(() => {
     const onVisChange = () => {
       const hidden = typeof document !== 'undefined' && document.visibilityState === 'hidden';
-      setLifecycle(prev => setCometHiddenTab(prev, hidden, now()));
+      setLifecycle(prev => setCometHiddenTab(prev, hidden, nowRef.current()));
     };
     if (typeof document !== 'undefined') {
       document.addEventListener('visibilitychange', onVisChange);
       return () => document.removeEventListener('visibilitychange', onVisChange);
     }
     return undefined;
-  }, [now]);
+  }, []);
 
   useEffect(() => {
     if (reducedMotion || lifecycle.paused || lifecycle.tabHidden) {
       return undefined;
     }
     const timer = setInterval(() => {
-      setLifecycle(prev => tickCometLifecycle(prev, now()));
+      setLifecycle(prev => tickCometLifecycle(prev, nowRef.current()));
     }, COMET_TICK_INTERVAL_MS);
     return () => clearInterval(timer);
-  }, [reducedMotion, lifecycle.paused, lifecycle.tabHidden, now]);
+  }, [reducedMotion, lifecycle.paused, lifecycle.tabHidden]);
 
   useEffect(() => {
     setLifecycle(prev => (effectiveInspectedId ? inspectComet(prev, effectiveInspectedId) : closeInspectedComet(prev)));
@@ -771,10 +783,15 @@ export const IdeaVerseComets: React.FC<IdeaVerseCometsProps> = ({
 
   useEffect(() => {
     if (activeConfirmed && isValidWorkspaceImportReceipt(activeConfirmed, lifecycle.allIdeas)) {
-      setLifecycle(prev => applyConfirmedCometImport(prev, activeConfirmed, now()));
+      const receiptKey = `${activeConfirmed.ideaId}:${activeConfirmed.sha256}:${activeConfirmed.membershipId}:${activeConfirmed.workspaceRevision}`;
+      if (appliedReceiptKeyRef.current === receiptKey) {
+        return;
+      }
+      appliedReceiptKeyRef.current = receiptKey;
+      setLifecycle(prev => applyConfirmedCometImport(prev, activeConfirmed, nowRef.current()));
       onMembershipRefreshed?.(activeConfirmed);
     }
-  }, [activeConfirmed, now, onMembershipRefreshed]);
+  }, [activeConfirmed, onMembershipRefreshed]);
 
   const handleSelectComet = (idea: IdeaVerseCometItem) => {
     if (controlledInspectedId === undefined) {
