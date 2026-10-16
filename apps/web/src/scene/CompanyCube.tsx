@@ -24,21 +24,68 @@ export const CompanyCube: React.FC<CompanyCubeProps> = ({
   const edges = isReady ? data.edges : [];
 
   // Isometric 3D Projection coordinates for graph nodes
-  // Arrange nodes inside the luminous lattice space with generous vertical separation
-  const getNodeCoordinates = (index: number, total: number) => {
+  // Tiered topological and radial distribution avoiding Sun at (326, 58) and eliminating label collisions
+  const getNodeCoordinates = (index: number, total: number, node?: GraphNode) => {
     if (total === 0) return { cx: 200, cy: 150 };
-    const angle = (index / Math.max(total, 1)) * 2 * Math.PI - Math.PI / 2;
-    const rx = 112;
-    const ry = 60;
-    const cx = 200 + rx * Math.cos(angle);
-    const cy = 150 + ry * Math.sin(angle);
+
+    if (node) {
+      const id = node.id.toLowerCase();
+      const kind = (node.kind || '').toLowerCase();
+      const label = (node.label || '').toLowerCase();
+
+      if (kind === 'release' || id.includes('rel-')) {
+        return { cx: 165, cy: 46 }; // Top left away from Sun at (326, 58)
+      }
+      if (id.includes('cue') || label.includes('cue')) {
+        return { cx: 275, cy: 92 }; // Upper right below Sun
+      }
+      if (id === 'cut-wad-v4' || (kind === 'cut' && label.includes('v4'))) {
+        return { cx: 78, cy: 88 }; // Upper left
+      }
+      if (id === 'cut-wad-v3' || (kind === 'cut' && label.includes('v3'))) {
+        return { cx: 68, cy: 224 }; // Lower left
+      }
+      if (id === 'trk-night-drive' || label.includes('night drive')) {
+        return { cx: 334, cy: 152 }; // Far right
+      }
+      if (id === 'trk-basement-hum' || label.includes('basement hum')) {
+        return { cx: 72, cy: 156 }; // Mid left
+      }
+      if (id.includes('lic-night-drive') || (kind === 'license' && label.includes('night drive'))) {
+        return { cx: 310, cy: 236 }; // Lower right
+      }
+      if (id.includes('lic-basement') || (kind === 'license' && label.includes('basement'))) {
+        return { cx: 155, cy: 268 }; // Bottom center-left
+      }
+      if (id.includes('src-lic') || label.includes('license evidence')) {
+        return { cx: 255, cy: 265 }; // Bottom center-right
+      }
+    }
+
+    // Dynamic distributed layout for arbitrary or test nodes
+    const angleStep = (2 * Math.PI) / Math.max(total, 1);
+    const startAngle = Math.PI * 0.75;
+    const angle = startAngle + index * angleStep;
+    const rx = 132;
+    const ry = 88;
+    const cx = Math.round(200 + rx * Math.cos(angle));
+    const cy = Math.round(150 + ry * Math.sin(angle));
     return { cx, cy };
   };
 
   const nodePosMap = new Map<string, { cx: number; cy: number }>();
   nodes.forEach((node, i) => {
-    nodePosMap.set(node.id, getNodeCoordinates(i, nodes.length));
+    nodePosMap.set(node.id, getNodeCoordinates(i, nodes.length, node));
   });
+
+  // Split long labels (e.g. "Basement Hum festival clearance (email)") into clean multi-line segments
+  const formatNodeLabel = (label: string): string[] => {
+    if (label.length <= 18) return [label];
+    const words = label.split(' ');
+    if (words.length <= 1) return [label];
+    const mid = Math.ceil(words.length / 2);
+    return [words.slice(0, mid).join(' '), words.slice(mid).join(' ')];
+  };
 
   return (
     <div
@@ -265,10 +312,18 @@ export const CompanyCube: React.FC<CompanyCubeProps> = ({
               const fromPos = nodePosMap.get(edge.from);
               const toPos = nodePosMap.get(edge.to);
               if (!fromPos || !toPos) return null;
-              const t = 0.36 + (edgeIndex % 3) * 0.14;
-              const labelX = fromPos.cx + (toPos.cx - fromPos.cx) * t;
-              const labelY =
-                fromPos.cy + (toPos.cy - fromPos.cy) * t + (edgeIndex % 2 === 0 ? -7 : 9);
+
+              const dx = toPos.cx - fromPos.cx;
+              const dy = toPos.cy - fromPos.cy;
+              const dist = Math.hypot(dx, dy) || 1;
+              const nx = -dy / dist;
+              const ny = dx / dist;
+
+              // True midpoint between nodes, offset perpendicularly to avoid line & stay far from node circles
+              const perp = (edgeIndex % 2 === 0 ? 9 : -9);
+              const labelX = (fromPos.cx + toPos.cx) / 2 + nx * perp;
+              const labelY = (fromPos.cy + toPos.cy) / 2 + ny * perp + 3;
+
               return (
                 <g key={edge.id} className="evidence-edge-group">
                   <line
@@ -280,16 +335,18 @@ export const CompanyCube: React.FC<CompanyCubeProps> = ({
                     strokeWidth="2"
                     strokeOpacity="0.85"
                   />
-                  {/* Staggered directional edge type label to prevent center overlap */}
+                  {/* Directional edge type label at midpoint with dark halo */}
                   <text
                     x={labelX}
                     y={labelY}
                     textAnchor="middle"
                     fill="#FF8A80"
-                    fontSize="8.5"
+                    fontSize="8"
+                    fontWeight="600"
                     paintOrder="stroke"
                     stroke="#060911"
-                    strokeWidth="2.5"
+                    strokeWidth="3.5"
+                    strokeLinejoin="round"
                     className="edge-type-label"
                   >
                     {edge.type}
@@ -306,7 +363,34 @@ export const CompanyCube: React.FC<CompanyCubeProps> = ({
             {nodes.map((node) => {
               const pos = nodePosMap.get(node.id) || { cx: 200, cy: 150 };
               const isSelected = data.selectedNodeId === node.id;
-              const labelY = pos.cy < 150 ? pos.cy - 13 : pos.cy + 20;
+              const lines = formatNodeLabel(node.label);
+
+              // Directional label anchor and placement to eliminate node and edge collisions
+              let anchor: 'start' | 'middle' | 'end' = 'middle';
+              let textX = pos.cx;
+              let startY: number;
+
+              if (pos.cy < 100) {
+                // Upper tier: place above node circle
+                startY = pos.cy - 12 - (lines.length - 1) * 11;
+                anchor = pos.cx > 260 ? 'end' : pos.cx < 140 ? 'start' : 'middle';
+              } else if (pos.cy > 210) {
+                // Lower tier: place below node circle
+                startY = pos.cy + 18;
+                anchor = pos.cx > 260 ? 'end' : pos.cx < 140 ? 'start' : 'middle';
+              } else {
+                // Mid tier: place to left or right flank
+                if (pos.cx < 160) {
+                  anchor = 'end';
+                  textX = pos.cx - 12;
+                  startY = pos.cy - (lines.length > 1 ? 4 : 0);
+                } else {
+                  anchor = 'start';
+                  textX = pos.cx + 12;
+                  startY = pos.cy - (lines.length > 1 ? 4 : 0);
+                }
+              }
+
               return (
                 <g
                   key={node.id}
@@ -330,20 +414,29 @@ export const CompanyCube: React.FC<CompanyCubeProps> = ({
                   )}
                   {/* Node Body (Red Evidence Node #FF1744) */}
                   <circle cx={pos.cx} cy={pos.cy} r="8" fill="url(#evidence-glow)" stroke="#FF5252" strokeWidth="1.5" />
-                  {/* Radial Node Label (never overlaps inward edges) */}
+                  {/* Non-overlapping multi-line label with high-contrast halo */}
                   <text
-                    x={pos.cx}
-                    y={labelY}
-                    textAnchor="middle"
+                    x={textX}
+                    y={startY}
+                    textAnchor={anchor}
                     fill="#FFFFFF"
-                    fontSize="10"
+                    fontSize="9.5"
                     fontWeight={isSelected ? 'bold' : 'normal'}
                     paintOrder="stroke"
                     stroke="#060911"
-                    strokeWidth="3"
+                    strokeWidth="3.5"
+                    strokeLinejoin="round"
                     className="node-svg-label"
                   >
-                    {node.label}
+                    {lines.map((line, lIdx) => (
+                      <tspan
+                        key={lIdx}
+                        x={textX}
+                        dy={lIdx === 0 ? 0 : 11}
+                      >
+                        {line}
+                      </tspan>
+                    ))}
                   </text>
                 </g>
               );

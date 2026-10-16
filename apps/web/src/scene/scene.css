@@ -160,6 +160,7 @@
 }
 
 .agent-pyramid-slot {
+  flex: 0 0 auto;
   background: #0d121c;
   border: 1px solid #1f2a3f;
   border-radius: 6px;
