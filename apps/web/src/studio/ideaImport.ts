@@ -206,6 +206,8 @@ export type ImportEvent =
   /** Start a read-only status check (no receipt known yet). Never writes. */
   | { type: 'check' }
   | { type: 'checked'; requestId: number; result: CheckResult }
+  /** The fresh overview read that pins an attempt (or a status check) shows the idea already in the cube. Nothing was added by this card. */
+  | { type: 'observed-present'; requestId: number }
   /** The card was closed or the phase left READY while a request was in flight: the completion is stale, the attempt stays unresolved. */
   | { type: 'abandon' }
   /** A NEW attempt starts from scratch (explicit fresh overview + new key happened outside this reducer). */
@@ -251,6 +253,9 @@ export function importReducer(state: ImportState, event: ImportEvent): ImportSta
     case 'recheck':
       if (state.phase !== 'unconfirmed' || state.receipt === null) return state;
       return { phase: 'verifying', requestId: state.requestId + 1, receipt: state.receipt, via: 'recheck' };
+    case 'observed-present':
+      if ((state.phase !== 'pending' && state.phase !== 'checking') || event.requestId !== state.requestId) return state;
+      return { phase: 'present', requestId: state.requestId, receipt: null };
     case 'abandon':
       if (!isBusy(state)) return state;
       return { phase: 'unconfirmed', requestId: state.requestId + 1, reason: 'unresolved', receipt: state.phase === 'verifying' && state.via !== 'existing' ? state.receipt : null };
@@ -323,10 +328,10 @@ export const IMPORT_UNBOUND_COPY = 'Adding to the cube is not connected yet.';
  * say `present` (the idea is listed as imported, cleanly) or `not-observed`. It never calls an import function.
  */
 export async function checkAttempt(
-  idea: IdeaSummary, attempt: ImportAttempt, checkImport: CheckImport | undefined, readOverview: ReadOverview | undefined,
+  idea: IdeaSummary, attempt: ImportAttempt | null, checkImport: CheckImport | undefined, readOverview: ReadOverview | undefined,
 ): Promise<CheckResult> {
   try {
-    if (checkImport) return await checkImport(attempt);
+    if (checkImport && attempt) return await checkImport(attempt);
     if (!readOverview) return { kind: 'unavailable' };
     const o = await readOverview();
     if (o.status !== 'AVAILABLE') return { kind: o.status === 'EMPTY' ? 'not-observed' : 'unavailable' };
