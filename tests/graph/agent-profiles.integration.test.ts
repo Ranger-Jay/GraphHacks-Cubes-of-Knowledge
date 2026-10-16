@@ -301,3 +301,18 @@ test('a directory symlink inside the repo cannot make a resource PRESENT', async
     assert.equal((await resolveResource(tmp, 'x', 'nodes/agents/agent013/skills.md', 'skills')).status, 'PRESENT');
   } finally { await rm(tmp, { recursive: true, force: true }); }
 });
+
+// ---- P3 follow-up (v028.17): fixture-sourced rows carry exactly their seeded provenance ----
+test('a fixture-sourced assignment with forged provenance or a wrong DEFINED_IN edge count is UNKNOWN', async () => {
+  const g1 = await fresh('p3a'); await g1.write("MATCH (a:RoleAssignment {id: 'ra-ava-ws-wad-cube', tenantId: 't-wad'}) SET a.assignedBy = 'Kanny (owner approval, enforced)'");
+  const a1 = (await ov(g1)).assignments.find(x => x.principalKey === 'ava')!.access; assert.ok(a1.state === 'UNKNOWN' && /provenance the seed did not write/.test(a1.reason), JSON.stringify(a1));
+  const g2 = await fresh('p3b'); await g2.write("MATCH (a:RoleAssignment {id: 'ra-ava-ws-wad-cube', tenantId: 't-wad'}), (s:ProfileSource {id: 'psrc-role-assignments', tenantId: 't-wad'}) CREATE (a)-[:DEFINED_IN {id: 'e-extra-defined'}]->(s)");
+  const a2 = (await ov(g2)).assignments.find(x => x.principalKey === 'ava')!.access; assert.ok(a2.state === 'UNKNOWN' && /exactly one DEFINED_IN/.test(a2.reason), JSON.stringify(a2));
+  const g3 = await fresh('p3c'); await g3.write("MATCH (:RoleAssignment {id: 'ra-ava-ws-wad-cube', tenantId: 't-wad'})-[e:DEFINED_IN]->() DELETE e");
+  assert.equal((await ov(g3)).assignments.find(x => x.principalKey === 'ava')!.access.state, 'UNKNOWN');
+  // An authorized row (own source) is not required to carry the fixture provenance.
+  const g4 = await fresh('p3d');
+  await g4.write("MATCH (:RoleAssignment {id: 'ra-ava-ws-wad-cube', tenantId: 't-wad'})-[e:GRANTS_ROLE|DEFINED_IN]->() DELETE e");
+  await g4.write("MATCH (a:RoleAssignment {id: 'ra-ava-ws-wad-cube', tenantId: 't-wad'}), (r:AccessRole {id: 'role-operator', tenantId: 't-wad'}) SET a.roleId = 'role-operator', a.revision = 2, a.source = 'server-operation', a.assignedBy = 'owner' CREATE (a)-[:GRANTS_ROLE {id: 'e-authorized-2'}]->(r)");
+  assert.equal(roleOf(await ov(g4), 'ava'), 'Operator');
+});
