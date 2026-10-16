@@ -345,6 +345,31 @@ test('import transition: only confirmed persisted receipt triggers pull-to-cube 
   };
   assert.equal(isValidWorkspaceImportReceipt(dualHashReceipt, items), false, 'receipt carrying fileSha256 must be rejected');
 
+  // Padded sha256 is strictly rejected (no padding allowed)
+  const paddedSha256Receipt = {
+    ideaId: targetId,
+    sha256: ` ${targetSha256} `,
+    workspaceId: 'ws-wad-cube',
+    importedAt: '2026-10-15T20:00:02.000Z',
+    workspaceRevision: 1,
+    membershipId: `member-ws-wad-cube-${targetId}`,
+  };
+  assert.equal(isValidWorkspaceImportReceipt(paddedSha256Receipt, items), false, 'padded sha256 must be rejected');
+
+  // Unknown extra fields (receiptId, replayed, idempotencyKey) are strictly rejected (#40/#48/v030)
+  const extraFieldsReceipt = {
+    ideaId: targetId,
+    sha256: targetSha256,
+    workspaceId: 'ws-wad-cube',
+    importedAt: '2026-10-15T20:00:02.000Z',
+    workspaceRevision: 1,
+    membershipId: `member-ws-wad-cube-${targetId}`,
+    receiptId: 'rcpt-123',
+    replayed: false,
+    idempotencyKey: 'idem-123',
+  };
+  assert.equal(isValidWorkspaceImportReceipt(extraFieldsReceipt, items), false, 'receipt with extra fields must be rejected');
+
   // Confirmed persisted canonical workspace-import receipt produced by Claude's 366eb56 loader
   // Contract: exactly { ideaId, sha256, workspaceId, importedAt, workspaceRevision, membershipId }
   const realClaudeReceipt: PersistedImportReceipt = {

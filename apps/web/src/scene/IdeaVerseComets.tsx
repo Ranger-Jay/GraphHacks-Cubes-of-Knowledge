@@ -47,21 +47,12 @@ export interface IdeaVerseCometItem {
  * Canonical hash property is sha256 (#40/#48); fileSha256 is strictly rejected.
  */
 export interface PersistedImportReceipt {
-  receiptId?: string | undefined;
   ideaId: string;
-  filename?: string | undefined;
   sha256: string;
-  fileSha256?: never;
   workspaceId: string;
   membershipId: string;
   importedAt: string;
-  importedByRole?: string | undefined;
-  idempotencyKey?: string | undefined;
   workspaceRevision: number;
-  replayed?: boolean | undefined;
-  witnessHash?: never;
-  nodeId?: never;
-  edgeId?: never;
 }
 
 const SHA256_HEX_RE = /^[a-f0-9]{64}$/;
@@ -484,11 +475,21 @@ export function recordNonPersistedImportAttempt(state: CometLifecycleState): Com
   return state;
 }
 
+const CANONICAL_RECEIPT_KEYS = new Set([
+  'ideaId',
+  'sha256',
+  'workspaceId',
+  'membershipId',
+  'importedAt',
+  'workspaceRevision',
+]);
+
 /**
- * Validate that a receipt matches the persisted workspace-import receipt contract (#40/#48):
- * - Must carry ideaId, 64-hex sha256 (or fileSha256 alias), workspaceId, membershipId, valid UTC importedAt, and integer workspaceRevision >= 1.
- * - Must NEVER carry a licensing witnessHash, nodeId, or edgeId (import membership is outside the licensing witness).
- * - If the idea exists in allIdeas, receipt sha256 (or fileSha256) must match idea.sha256.
+ * Validate that a receipt matches the persisted workspace-import receipt contract (#40/#48/v030):
+ * - Must carry EXACTLY the six canonical fields: ideaId, 64-hex sha256, workspaceId, membershipId, valid UTC importedAt, and integer workspaceRevision >= 1.
+ * - Extra unknown fields (receiptId, replayed, idempotencyKey, fileSha256, witnessHash, nodeId, edgeId, etc.) are strictly rejected.
+ * - sha256 must be strict unpadded 64-hex lowercase; whitespace padding is rejected.
+ * - If the idea exists in allIdeas, receipt sha256 must match idea.sha256.
  */
 export function isValidWorkspaceImportReceipt(
   receipt: unknown,
@@ -496,17 +497,17 @@ export function isValidWorkspaceImportReceipt(
 ): receipt is PersistedImportReceipt {
   if (!receipt || typeof receipt !== 'object') return false;
   const r = receipt as Record<string, unknown>;
-  if ('witnessHash' in r && r.witnessHash !== undefined) return false;
-  if ('nodeId' in r && r.nodeId !== undefined) return false;
-  if ('edgeId' in r && r.edgeId !== undefined) return false;
-  if ('fileSha256' in r && r.fileSha256 !== undefined) return false;
-  if (typeof r.ideaId !== 'string' || !r.ideaId.trim()) return false;
-  
-  // Canonical hash field is sha256 (#40/#48/v030); fileSha256 is strictly rejected
-  if (typeof r.sha256 !== 'string' || !r.sha256.trim() || !SHA256_HEX_RE.test(r.sha256.trim())) {
+  const keys = Object.keys(r);
+  if (keys.length !== 6 || !keys.every(k => CANONICAL_RECEIPT_KEYS.has(k))) {
     return false;
   }
-  const hash = r.sha256.trim();
+  if (typeof r.ideaId !== 'string' || !r.ideaId.trim()) return false;
+  
+  // Canonical hash field is sha256 (#40/#48/v030); must be strict unpadded 64-hex lowercase
+  if (typeof r.sha256 !== 'string' || !SHA256_HEX_RE.test(r.sha256)) {
+    return false;
+  }
+  const hash = r.sha256;
 
   if (typeof r.workspaceId !== 'string' || !r.workspaceId.trim()) return false;
   if (typeof r.membershipId !== 'string' || !r.membershipId.trim()) return false;
