@@ -59,3 +59,27 @@ test('duplicate keys do not depend on label order: an extra first label or a sec
   assert.ok(o.nodes.some(n => n.id === 'sp-editor' && n.name === 'Lucinda Frayne'), 'the real, single-label editor is still served with its fixture values');
   assert.equal(o.counts.people, 19);
 });
+
+const sha = (b: Buffer) => createHash('sha256').update(b).digest('hex');
+const ideaRoot = async () => {
+  const tmp = await mkdtemp(join(tmpdir(), 'p3-ideas-')); await mkdir(join(tmp, 'graph/seed/ideaverse/files'), { recursive: true });
+  const ideas = ['idea-a', 'idea-b'].map((id, i) => ({ id, filename: `${id}.txt`, b: Buffer.from(`A short fictional idea number ${i} about a compass.\n`) }));
+  for (const i of ideas) await writeFile(join(tmp, 'graph/seed/ideaverse/files', i.filename), i.b);
+  await writeFile(join(tmp, 'graph/seed/ideaverse/manifest.json'), JSON.stringify({ version: 'p3@test', ideas: ideas.map(i => ({ id: i.id, filename: i.filename, path: `graph/seed/ideaverse/files/${i.filename}`, byteCount: i.b.length, sha256: sha(i.b), submittedAt: '2026-10-14T09:00:00Z', touchedAt: '2026-10-15T09:00:00Z', synthetic: true, origin: 'x', licenseStatus: 'none claimed' })) }));
+  return tmp;
+};
+const req = (ideaId: string, key: string, expectedRevision: number) => ({ tenantId: 't-wad', ideaId, idempotencyKey: key, expectedRevision });
+
+test('an ambiguous workspace serves no revision (never an attacker-chosen one), whichever duplicate comes first', async () => {
+  const tmp = await ideaRoot(); const g = await fresh('wsrev');
+  try {
+    await seedIdeaverse(g, tmp);
+    await g.write("CREATE (w:Workspace {id: 'ws-wad-cube', tenantId: 't-wad', revision: 999, name: 'forged', synthetic: true})");
+    const o = await ideaverseOverview(g, tmp, 't-wad'); assert.equal(o.status, 'AVAILABLE'); if (o.status !== 'AVAILABLE') return;
+    assert.equal(o.workspace.revision, null); assert.deepEqual(o.ideas, []); assert.deepEqual(o.integrity, [{ id: 'ws-wad-cube', reason: 'more than one workspace node has this id' }]);
+    const g2 = await fresh('wsrev2'); await seedIdeaverse(g2, tmp); // the forged node created BEFORE the real revision moved still gives null
+    await g2.write("MATCH (w:Workspace {id: 'ws-wad-cube'}) SET w.revision = 5"); await g2.write("CREATE (w:Workspace {id: 'ws-wad-cube', tenantId: 't-wad', revision: 0})");
+    const o2 = await ideaverseOverview(g2, tmp, 't-wad'); assert.ok(o2.status === 'AVAILABLE' && o2.workspace.revision === null);
+    const clean = await fresh('wsclean'); await seedIdeaverse(clean, tmp); const c = await ideaverseOverview(clean, tmp, 't-wad'); assert.ok(c.status === 'AVAILABLE' && c.workspace.revision === 0, 'the unambiguous path still serves the revision');
+  } finally { await rm(tmp, { recursive: true, force: true }); }
+});
