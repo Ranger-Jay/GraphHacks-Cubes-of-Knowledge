@@ -1,6 +1,6 @@
-// Operator CLI for the graph lane: health | seed-studio [tenantId] | studio-overview [tenantId] | seed [--init-witness] [--resume] [bundle...] | witness-recover | analyze <releaseId> [tenantId].
+// Operator CLI for the graph lane: health | seed-studio [tenantId] | studio-overview [tenantId] | seed-agent-profiles [tenantId] | agent-profiles [tenantId] | seed [--init-witness] [--resume] [bundle...] | witness-recover | analyze <releaseId> [tenantId].
 // Run from the repository root: node --env-file-if-exists=.env --import tsx packages/graph/src/cli.ts <command>
-import { analyzeRelease, configFromEnv, evidenceKeyFromEnv, graphHealth, GraphClient, ledgerFromEnv, recoverWitness, revokeEvidence, seedGraph, seedStudio, studioOverview } from './index.js';
+import { analyzeRelease, configFromEnv, evidenceKeyFromEnv, graphHealth, GraphClient, ledgerFromEnv, recoverWitness, revokeEvidence, seedGraph, seedStudio, studioOverview, seedAgentProfiles, agentProfileOverview } from './index.js';
 
 const [command, arg1, arg2] = process.argv.slice(2);
 const rest = process.argv.slice(3);
@@ -20,6 +20,13 @@ try {
     const o = await studioOverview(client, process.cwd(), arg1 ?? 't-wad');
     console.log(JSON.stringify(o.status === 'AVAILABLE' ? { ...o, nodes: o.nodes.length, edges: o.edges.length } : o));
     process.exitCode = o.status === 'AVAILABLE' && o.integrity.length === 0 ? 0 : 1;
+  } else if (command === 'seed-agent-profiles') {
+    // Agent profiles, voices, resources, roles and DISPLAY-ONLY role assignments. Never creates a Principal. arg1 = tenantId (default t-wad).
+    console.log(JSON.stringify(await seedAgentProfiles(client, process.cwd(), arg1 ? { tenantId: arg1 } : {})));
+  } else if (command === 'agent-profiles') {
+    const o = await agentProfileOverview(client, process.cwd(), arg1 ?? 't-wad');
+    console.log(JSON.stringify(o.status === 'AVAILABLE' ? { status: o.status, enforcement: o.enforcement, profiles: o.profiles.map(p => ({ agent: p.agentId, name: p.name, access: p.access.state === 'ASSIGNED' ? `${p.access.role.name} (intended, not enforced)` : p.access.state, skills: p.resources.skills.status, memory: p.resources.memory.status })), integrity: o.integrity } : o));
+    process.exitCode = o.status === 'AVAILABLE' && o.integrity.length === 0 ? 0 : 1;
   } else if (command === 'revoke' && arg1 && arg2) {
     // revoke <licenseId> <newRevision> [releaseId]
     console.log(JSON.stringify(await revokeEvidence(client, ledgerFromEnv(evidenceKeyFromEnv()), 't-wad', { licenseId: arg1, newRevision: arg2, releaseId: process.argv[5] ?? 'rel-wad' })));
@@ -33,7 +40,7 @@ try {
     console.log(JSON.stringify(result ?? { status: 'NOT_FOUND', releaseId: arg1 }, null, 2));
     process.exitCode = result?.status === 'AVAILABLE' ? 0 : 1;
   } else {
-    console.error('usage: cli.ts health | seed-studio [tenantId] | studio-overview [tenantId] | seed [--init-witness] [--resume] [--allow-revision-rollback] [\'--reinstate=<kind|subject|path>\'] [bundle...] | revoke <licenseId> <newRevision> [releaseId] | witness-recover [tenantId] [--repair-torn-tail] | analyze <releaseId> [tenantId]');
+    console.error('usage: cli.ts health | seed-studio [tenantId] | studio-overview [tenantId] | seed-agent-profiles [tenantId] | agent-profiles [tenantId] | seed [--init-witness] [--resume] [--allow-revision-rollback] [\'--reinstate=<kind|subject|path>\'] [bundle...] | revoke <licenseId> <newRevision> [releaseId] | witness-recover [tenantId] [--repair-torn-tail] | analyze <releaseId> [tenantId]');
     process.exitCode = 2;
   }
 } finally {
