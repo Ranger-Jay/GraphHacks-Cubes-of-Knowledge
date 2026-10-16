@@ -38,7 +38,9 @@ test('reducer: submit -> pending disables repeated submits; persisted receipt ->
   const html = view(p);
   assert.match(html, /<button[^>]*class="idea-card-add"[^>]*disabled/);
   assert.ok(html.includes('aria-busy="true"') && html.includes('Adding to the cube...'));
-  const a = importReducer(p, { type: 'settled', requestId: p.requestId, outcome: { kind: 'persisted', receipt } });
+  const v = importReducer(p, { type: 'settled', requestId: p.requestId, outcome: { kind: 'persisted', receipt } });
+  assert.equal(v.phase, 'verifying', 'a persisted outcome alone is never Added (fresh read-back required)');
+  const a = importReducer(v, { type: 'verified', requestId: v.requestId, result: { ok: true } });
   assert.equal(a.phase, 'added');
   assert.equal(importReducer(a, { type: 'submit' }), a, 'no second submit after added');
   assert.ok(view(a).includes('Added to the cube.'));

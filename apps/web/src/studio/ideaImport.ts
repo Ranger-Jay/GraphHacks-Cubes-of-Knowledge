@@ -93,38 +93,111 @@ export type ImportIdea = (idea: IdeaSummary, idempotencyKey: string) => Promise<
 
 export type ImportFailure = Exclude<ImportOutcome['kind'], 'persisted'>;
 
+/**
+ * Why a completed-looking import is NOT shown as Added. `receipt-invalid`: the adapter's receipt is not the canonical
+ * shape. `readback-*`: the fresh overview read failed or has no workspace. `not-found` / `not-imported`: the fresh
+ * read has no imported entry for this idea. `duplicate` / `integrity`: the read-back lists the idea twice or withholds
+ * it with an integrity item. `mismatch`: id, workspace, membership, timestamp, revision or hash disagree.
+ */
+export type UnconfirmedReason =
+  | 'receipt-invalid' | 'readback-unavailable' | 'readback-empty'
+  | 'not-found' | 'not-imported' | 'duplicate' | 'integrity' | 'mismatch';
+
+export type VerifyResult = { ok: true } | { ok: false; reason: UnconfirmedReason };
+
+/**
+ * Join a receipt to a FRESH `ideaverseOverview` read (issue #40 ruling, comment 6206859588). An HTTP success or a
+ * receipt alone never counts. The overview exposes no receipt rows, so "exactly one matching receipt" is what the graph
+ * enforces before it will list an idea as imported at all (it withholds duplicate/receipt-less/stale-hash ideas under
+ * `integrity`); here we require: exactly one listed entry, flagged imported, with the receipt's membershipId,
+ * importedAt and sha256, the card's own sha256 when known, the receipt's workspace, a workspace revision that has
+ * reached the receipt's, and no integrity item naming the idea. Anything else is unconfirmed, never success.
+ */
+export function verifyImportReadback(idea: IdeaSummary, receipt: ImportReceipt, overview: IdeaverseOverviewView): VerifyResult {
+  if (overview.status === 'UNAVAILABLE') return { ok: false, reason: 'readback-unavailable' };
+  if (overview.status !== 'AVAILABLE') return { ok: false, reason: 'readback-empty' };
+  if (receipt.ideaId !== idea.id || receipt.workspaceId !== overview.workspace.id) return { ok: false, reason: 'mismatch' };
+  const flagged = overview.integrity.filter(i => i.id === idea.id);
+  if (flagged.length > 0) return { ok: false, reason: flagged.some(i => /duplicate/i.test(i.reason)) ? 'duplicate' : 'integrity' };
+  const listed = overview.ideas.filter(i => i.id === idea.id);
+  if (listed.length === 0) return { ok: false, reason: 'not-found' };
+  if (listed.length > 1) return { ok: false, reason: 'duplicate' };
+  const m = listed[0]!;
+  if (m.imported !== true || typeof m.membershipId !== 'string' || typeof m.importedAt !== 'string') return { ok: false, reason: 'not-imported' };
+  if (m.membershipId !== receipt.membershipId || m.importedAt !== receipt.importedAt || m.sha256 !== receipt.sha256) return { ok: false, reason: 'mismatch' };
+  if (idea.sha256 !== undefined && idea.sha256 !== m.sha256) return { ok: false, reason: 'mismatch' };
+  if (!Number.isInteger(overview.workspace.revision) || overview.workspace.revision < receipt.workspaceRevision) return { ok: false, reason: 'mismatch' };
+  return { ok: true };
+}
+
+/**
+ * `verifying`: the server reported a persisted receipt; a fresh overview read is in flight. NOT a success state.
+ * `unconfirmed`: the outcome is not proven. `receipt` is kept (when the adapter's receipt was valid) so a re-check can
+ * read again without resubmitting.
+ */
 export type ImportState =
   | { phase: 'idle'; requestId: number }
   | { phase: 'pending'; requestId: number }
+  | { phase: 'verifying'; requestId: number; receipt: ImportReceipt }
   | { phase: 'added'; requestId: number; receipt: ImportReceipt }
+  | { phase: 'unconfirmed'; requestId: number; reason: UnconfirmedReason; receipt: ImportReceipt | null }
   | { phase: 'error'; requestId: number; reason: ImportFailure };
 
 export type ImportEvent =
   | { type: 'submit' }
   | { type: 'settled'; requestId: number; outcome: ImportOutcome }
+  /** Result of the fresh read-back for the current `verifying` request. */
+  | { type: 'verified'; requestId: number; result: VerifyResult }
+  /** Read the overview again for a kept receipt, without resubmitting. */
+  | { type: 'recheck' }
   /** The card was closed or the idea changed: any in-flight completion is now stale. */
   | { type: 'reset' };
 
 export const initialImportState: ImportState = { phase: 'idle', requestId: 0 };
 
 /**
- * `submit` is ignored while pending or once added (no repeated submits). A completion whose requestId is not the
- * current one is discarded (stale after close/reset). Success only comes from a `persisted` outcome.
+ * `submit` is ignored while pending, verifying or once added (no repeated submits). A completion whose requestId is not
+ * the current one is discarded (stale after close/reset). `added` is reachable ONLY from `verifying` through a
+ * `verified` event whose result is ok; a `persisted` outcome only moves to `verifying` (or `unconfirmed` when the
+ * receipt is not the canonical shape).
  */
 export function importReducer(state: ImportState, event: ImportEvent): ImportState {
   switch (event.type) {
     case 'submit':
-      if (state.phase === 'pending' || state.phase === 'added') return state;
+      if (state.phase === 'pending' || state.phase === 'verifying' || state.phase === 'added') return state;
       return { phase: 'pending', requestId: state.requestId + 1 };
-    case 'settled':
+    case 'settled': {
       if (state.phase !== 'pending' || event.requestId !== state.requestId) return state;
-      return event.outcome.kind === 'persisted'
-        ? { phase: 'added', requestId: state.requestId, receipt: event.outcome.receipt }
-        : { phase: 'error', requestId: state.requestId, reason: event.outcome.kind };
+      if (event.outcome.kind !== 'persisted') return { phase: 'error', requestId: state.requestId, reason: event.outcome.kind };
+      const receipt = parseImportReceipt(event.outcome.receipt);
+      return receipt
+        ? { phase: 'verifying', requestId: state.requestId, receipt }
+        : { phase: 'unconfirmed', requestId: state.requestId, reason: 'receipt-invalid', receipt: null };
+    }
+    case 'verified':
+      if (state.phase !== 'verifying' || event.requestId !== state.requestId) return state;
+      return event.result.ok
+        ? { phase: 'added', requestId: state.requestId, receipt: state.receipt }
+        : { phase: 'unconfirmed', requestId: state.requestId, reason: event.result.reason, receipt: state.receipt };
+    case 'recheck':
+      if (state.phase !== 'unconfirmed' || state.receipt === null) return state;
+      return { phase: 'verifying', requestId: state.requestId + 1, receipt: state.receipt };
     case 'reset':
       return { phase: 'idle', requestId: state.requestId + 1 };
   }
 }
+
+/** Plain-language reasons an import is not shown as Added. None of them claims it was or was not saved. */
+export const UNCONFIRMED_COPY: Record<UnconfirmedReason, string> = {
+  'receipt-invalid': 'The server reply was not in the expected form, so this could not be confirmed.',
+  'readback-unavailable': 'Could not re-read the cube to confirm this right now.',
+  'readback-empty': 'The cube has no workspace to confirm this against yet.',
+  'not-found': 'The cube does not list this idea yet, so it is not confirmed.',
+  'not-imported': 'The cube lists this idea but not as added, so it is not confirmed.',
+  duplicate: 'The cube shows this idea more than once, so it is not confirmed.',
+  integrity: 'The cube flagged this idea for a consistency problem, so it is not confirmed.',
+  mismatch: 'The cube record does not match the receipt, so it is not confirmed.',
+};
 
 /** Honest, plain-language reasons. None of them claims anything was saved. */
 export const IMPORT_FAILURE_COPY: Record<ImportFailure, string> = {
