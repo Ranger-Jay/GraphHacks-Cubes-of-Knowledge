@@ -1,0 +1,1 @@
+A fictional playback operator feeds live audio waveforms into twelve CRT oscilloscopes stacked behind the scientist desk so dials react to voice.
