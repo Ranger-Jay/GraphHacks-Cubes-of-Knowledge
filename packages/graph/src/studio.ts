@@ -185,18 +185,25 @@ export async function studioOverview(client: GraphClient, repoRoot: string, tena
   try { f = await loadFixtures(repoRoot); } catch { return { status: 'UNAVAILABLE', reason: 'FIXTURE_INVALID' }; }
   const integrity: StudioIntegrityItem[] = [];
   // Two nodes with one label and id are never served (the pick would depend on row order); each such id is flagged once.
+  // The domain label is found by membership, not by position: label order is not stable, so `labels[0]` could hide a node
+  // (Extra:StudioPerson) or let a node with two studio labels (StudioSource:StudioPerson) escape the duplicate key.
+  const DOMAIN = ['StudioPerson', 'Department', 'StudioSource'];
+  const domainOf = (r: Row): string | undefined => { const d = r.labels.filter(l => DOMAIN.includes(l)); return d.length === 1 ? d[0] : undefined; };
+  const multi = rows.filter(r => r.labels.filter(l => DOMAIN.includes(l)).length > 1);
+  for (const r of multi) integrity.push({ id: String(r.props['id']), reason: 'node carries more than one studio label' });
+  rows = rows.filter(r => !multi.includes(r));
   const seen = new Map<string, number>();
-  for (const r of rows) { const k = `${r.labels[0]}|${String(r.props['id'])}`; seen.set(k, (seen.get(k) ?? 0) + 1); }
+  for (const r of rows) { const k = `${domainOf(r)}|${String(r.props['id'])}`; seen.set(k, (seen.get(k) ?? 0) + 1); }
   const dup = new Set([...seen].filter(([, n]) => n > 1).map(([k]) => k));
   for (const k of [...dup].sort()) integrity.push({ id: k.split('|')[1]!, reason: `more than one ${k.split('|')[0]} node has this id` });
-  rows = rows.filter(r => !dup.has(`${r.labels[0]}|${String(r.props['id'])}`));
+  rows = rows.filter(r => !dup.has(`${domainOf(r)}|${String(r.props['id'])}`));
   const nodes: StudioNodeOut[] = [];
   const served = new Map<string, StudioNodeOut>();
   const depBySlug = new Map(f.departments.map(d => [d.slug, d]));
   const crewBySlug = new Map(f.crew.map(c => [c.slug, c]));
   const verifiedSource = new Set<string>();
   const withhold = (id: string, reason: string) => { integrity.push({ id, reason }); };
-  const label = (r: Row) => r.labels[0];
+  const label = (r: Row) => domainOf(r);
   const slugOf = (r: Row) => String(r.props['slug'] ?? '');
   // Sources first: a record is only served when the source it cites is the allowlisted fixture with a matching hash.
   for (const r of rows.filter(x => label(x) === 'StudioSource')) {
