@@ -23,42 +23,154 @@ export const CompanyCube: React.FC<CompanyCubeProps> = ({
   const nodes = isReady ? data.nodes : [];
   const edges = isReady ? data.edges : [];
 
+  interface NodeLayout {
+    cx: number;
+    cy: number;
+    anchor: 'start' | 'middle' | 'end';
+    textX: number;
+    startY: number;
+  }
+
+  const EXACT_NODE_LAYOUTS: Record<string, NodeLayout> = {
+    'rel-wad': {
+      cx: 180,
+      cy: 42,
+      anchor: 'middle',
+      textX: 180,
+      startY: 28, // 14px above node circle
+    },
+    'cut-wad-v4': {
+      cx: 118,
+      cy: 90,
+      anchor: 'end',
+      textX: 104,
+      startY: 88, // Left-aligned within [5, 104]
+    },
+    'src-cue-v4': {
+      cx: 245,
+      cy: 85,
+      anchor: 'middle',
+      textX: 245,
+      startY: 71, // Above node circle
+    },
+    'trk-basement-hum': {
+      cx: 90,
+      cy: 165,
+      anchor: 'end',
+      textX: 76,
+      startY: 168, // Left-aligned within [6, 76]
+    },
+    'trk-night-drive': {
+      cx: 320,
+      cy: 155,
+      anchor: 'middle',
+      textX: 320,
+      startY: 141, // Above node circle within [288, 352]
+    },
+    'cut-wad-v3': {
+      cx: 110,
+      cy: 235,
+      anchor: 'end',
+      textX: 96,
+      startY: 233, // Left-aligned within [3, 96]
+    },
+    'lic-basement-hum-v3': {
+      cx: 175,
+      cy: 265,
+      anchor: 'middle',
+      textX: 175,
+      startY: 281, // Below node circle, perfectly centered within [114, 236]
+    },
+    'src-mail-basement-hum': {
+      cx: 155,
+      cy: 205,
+      anchor: 'middle',
+      textX: 155,
+      startY: 191, // Above node circle within [108, 202]
+    },
+    'lic-night-drive-v4': {
+      cx: 310,
+      cy: 240,
+      anchor: 'middle',
+      textX: 310,
+      startY: 256, // Below node circle within [265, 355]
+    },
+    'src-lic-night-drive': {
+      cx: 270,
+      cy: 195,
+      anchor: 'middle',
+      textX: 270,
+      startY: 181, // Above node circle within [223, 317]
+    },
+    'lic-basement-hum-v4': {
+      cx: 150,
+      cy: 150,
+      anchor: 'middle',
+      textX: 150,
+      startY: 166,
+    },
+  };
+
+  const EXACT_EDGE_POSITIONS: Record<string, { x: number; y: number }> = {
+    'e-rel-current-cut': { x: 149, y: 62 },
+    'CURRENT_CUT': { x: 149, y: 62 },
+    'e-lic-bh-covers': { x: 125, y: 215 },
+    'e-lic-nd-covers': { x: 300, y: 198 },
+    'e-lic-bh-valid-v3': { x: 135, y: 250 },
+    'e-lic-nd-valid-v4': { x: 214, y: 165 },
+    'e-v4-uses-basement-hum': { x: 116, y: 132 },
+    'e-v4-uses-night-drive': { x: 219, y: 135 },
+    'e-v4-listed-in': { x: 181, y: 98 },
+    'e-lic-bh-evidence': { x: 168, y: 235 },
+    'e-lic-nd-evidence': { x: 290, y: 218 },
+  };
+
   // Isometric 3D Projection coordinates for graph nodes
   // Tiered topological and radial distribution avoiding Sun at (326, 58) and eliminating label collisions
-  const getNodeCoordinates = (index: number, total: number, node?: GraphNode) => {
-    if (total === 0) return { cx: 200, cy: 150 };
+  const getNodeLayout = (index: number, total: number, node?: GraphNode): NodeLayout => {
+    if (total === 0) {
+      return { cx: 200, cy: 150, anchor: 'middle', textX: 200, startY: 136 };
+    }
 
     if (node) {
       const id = node.id.toLowerCase();
       const kind = (node.kind || '').toLowerCase();
       const label = (node.label || '').toLowerCase();
 
-      if (kind === 'release' || id.includes('rel-')) {
-        return { cx: 165, cy: 46 }; // Top left away from Sun at (326, 58)
+      // Explicit dictionary lookup first
+      const exactMatch = EXACT_NODE_LAYOUTS[id];
+      if (exactMatch) {
+        return exactMatch;
       }
-      if (id.includes('cue') || label.includes('cue')) {
-        return { cx: 275, cy: 92 }; // Upper right below Sun
+
+      // Match lic-* rules FIRST before track names to avoid substring collision
+      if (id.startsWith('lic-') || kind === 'license') {
+        if (id.includes('night') || label.includes('night drive')) {
+          return EXACT_NODE_LAYOUTS['lic-night-drive-v4']!;
+        }
+        return EXACT_NODE_LAYOUTS['lic-basement-hum-v3']!;
+      }
+
+      if (id.startsWith('rel-') || kind === 'release') {
+        return EXACT_NODE_LAYOUTS['rel-wad']!;
       }
       if (id === 'cut-wad-v4' || (kind === 'cut' && label.includes('v4'))) {
-        return { cx: 78, cy: 88 }; // Upper left
+        return EXACT_NODE_LAYOUTS['cut-wad-v4']!;
       }
       if (id === 'cut-wad-v3' || (kind === 'cut' && label.includes('v3'))) {
-        return { cx: 68, cy: 224 }; // Lower left
+        return EXACT_NODE_LAYOUTS['cut-wad-v3']!;
       }
-      if (id === 'trk-night-drive' || label.includes('night drive')) {
-        return { cx: 334, cy: 152 }; // Far right
+      if (id.includes('cue') || label.includes('cue')) {
+        return EXACT_NODE_LAYOUTS['src-cue-v4']!;
       }
-      if (id === 'trk-basement-hum' || label.includes('basement hum')) {
-        return { cx: 72, cy: 156 }; // Mid left
+      if (id.includes('mail') || id.includes('src-lic') || kind === 'source') {
+        return id.includes('night') ? EXACT_NODE_LAYOUTS['src-lic-night-drive']! : EXACT_NODE_LAYOUTS['src-mail-basement-hum']!;
       }
-      if (id.includes('lic-night-drive') || (kind === 'license' && label.includes('night drive'))) {
-        return { cx: 310, cy: 236 }; // Lower right
+      if (id.includes('night-drive') || label.includes('night drive')) {
+        return EXACT_NODE_LAYOUTS['trk-night-drive']!;
       }
-      if (id.includes('lic-basement') || (kind === 'license' && label.includes('basement'))) {
-        return { cx: 155, cy: 268 }; // Bottom center-left
-      }
-      if (id.includes('src-lic') || label.includes('license evidence')) {
-        return { cx: 255, cy: 265 }; // Bottom center-right
+      if (id.includes('basement-hum') || label.includes('basement hum')) {
+        return EXACT_NODE_LAYOUTS['trk-basement-hum']!;
       }
     }
 
@@ -70,17 +182,23 @@ export const CompanyCube: React.FC<CompanyCubeProps> = ({
     const ry = 88;
     const cx = Math.round(200 + rx * Math.cos(angle));
     const cy = Math.round(150 + ry * Math.sin(angle));
-    return { cx, cy };
+    const anchor: 'start' | 'middle' | 'end' = cx < 160 ? 'end' : cx > 240 ? 'start' : 'middle';
+    const textX = anchor === 'end' ? cx - 12 : anchor === 'start' ? cx + 12 : cx;
+    const startY = cy < 100 ? cy - 14 : cy > 200 ? cy + 18 : cy;
+    return { cx, cy, anchor, textX, startY };
   };
 
   const nodePosMap = new Map<string, { cx: number; cy: number }>();
+  const nodeLayoutMap = new Map<string, NodeLayout>();
   nodes.forEach((node, i) => {
-    nodePosMap.set(node.id, getNodeCoordinates(i, nodes.length, node));
+    const layout = getNodeLayout(i, nodes.length, node);
+    nodeLayoutMap.set(node.id, layout);
+    nodePosMap.set(node.id, { cx: layout.cx, cy: layout.cy });
   });
 
   // Split long labels (e.g. "Basement Hum festival clearance (email)") into clean multi-line segments
   const formatNodeLabel = (label: string): string[] => {
-    if (label.length <= 18) return [label];
+    if (label.length <= 16) return [label];
     const words = label.split(' ');
     if (words.length <= 1) return [label];
     const mid = Math.ceil(words.length / 2);
@@ -313,16 +431,22 @@ export const CompanyCube: React.FC<CompanyCubeProps> = ({
               const toPos = nodePosMap.get(edge.to);
               if (!fromPos || !toPos) return null;
 
-              const dx = toPos.cx - fromPos.cx;
-              const dy = toPos.cy - fromPos.cy;
-              const dist = Math.hypot(dx, dy) || 1;
-              const nx = -dy / dist;
-              const ny = dx / dist;
+              const exact = EXACT_EDGE_POSITIONS[edge.id] || EXACT_EDGE_POSITIONS[edge.type];
+              let labelX = exact?.x;
+              let labelY = exact?.y;
 
-              // True midpoint between nodes, offset perpendicularly to avoid line & stay far from node circles
-              const perp = (edgeIndex % 2 === 0 ? 9 : -9);
-              const labelX = (fromPos.cx + toPos.cx) / 2 + nx * perp;
-              const labelY = (fromPos.cy + toPos.cy) / 2 + ny * perp + 3;
+              if (labelX === undefined || labelY === undefined) {
+                const dx = toPos.cx - fromPos.cx;
+                const dy = toPos.cy - fromPos.cy;
+                const dist = Math.hypot(dx, dy) || 1;
+                const nx = -dy / dist;
+                const ny = dx / dist;
+
+                // True midpoint between nodes, offset perpendicularly to avoid line & stay far from node circles
+                const perp = (edgeIndex % 2 === 0 ? 10 : -10);
+                labelX = (fromPos.cx + toPos.cx) / 2 + nx * perp;
+                labelY = (fromPos.cy + toPos.cy) / 2 + ny * perp + 3;
+              }
 
               return (
                 <g key={edge.id} className="evidence-edge-group">
@@ -361,35 +485,13 @@ export const CompanyCube: React.FC<CompanyCubeProps> = ({
         {isAvailable && (
           <g className="graph-evidence-nodes">
             {nodes.map((node) => {
-              const pos = nodePosMap.get(node.id) || { cx: 200, cy: 150 };
+              const layout = nodeLayoutMap.get(node.id) || { cx: 200, cy: 150, anchor: 'middle', textX: 200, startY: 136 };
+              const pos = { cx: layout.cx, cy: layout.cy };
               const isSelected = data.selectedNodeId === node.id;
               const lines = formatNodeLabel(node.label);
-
-              // Directional label anchor and placement to eliminate node and edge collisions
-              let anchor: 'start' | 'middle' | 'end' = 'middle';
-              let textX = pos.cx;
-              let startY: number;
-
-              if (pos.cy < 100) {
-                // Upper tier: place above node circle
-                startY = pos.cy - 12 - (lines.length - 1) * 11;
-                anchor = pos.cx > 260 ? 'end' : pos.cx < 140 ? 'start' : 'middle';
-              } else if (pos.cy > 210) {
-                // Lower tier: place below node circle
-                startY = pos.cy + 18;
-                anchor = pos.cx > 260 ? 'end' : pos.cx < 140 ? 'start' : 'middle';
-              } else {
-                // Mid tier: place to left or right flank
-                if (pos.cx < 160) {
-                  anchor = 'end';
-                  textX = pos.cx - 12;
-                  startY = pos.cy - (lines.length > 1 ? 4 : 0);
-                } else {
-                  anchor = 'start';
-                  textX = pos.cx + 12;
-                  startY = pos.cy - (lines.length > 1 ? 4 : 0);
-                }
-              }
+              const anchor = layout.anchor;
+              const textX = layout.textX;
+              const startY = layout.startY;
 
               return (
                 <g
