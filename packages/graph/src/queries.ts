@@ -36,11 +36,11 @@ RETURN sr.id AS id, s.id AS sourceId, s.path AS path, s.sha256 AS sha256, s.kind
        sr.excerpt AS excerpt, sr.startOffset AS startOffset, sr.endOffset AS endOffset
 ORDER BY id`,
 
-  /** One tenant's studio records (crew, departments, crew/department fixture sources) and their outgoing studio edges, in one read. Not licensing evidence. The IdeaVerse manifest source belongs to ideaverseOverview. */
+  /** One tenant's studio records (crew, departments, crew/department fixture sources) and their outgoing studio edges, in one read. `iid` keeps two identical nodes as two rows (the aggregation would otherwise merge them). Not licensing evidence. The IdeaVerse manifest source belongs to ideaverseOverview. */
   READ_STUDIO_OVERVIEW: `
 MATCH (n {tenantId: $tenantId}) WHERE n:StudioPerson OR n:Department OR (n:StudioSource AND n.kind <> 'ideaverse_manifest')
 OPTIONAL MATCH (n)-[e]->(b {tenantId: $tenantId})
-RETURN n.id AS id, labels(n) AS labels, properties(n) AS props,
+RETURN id(n) AS iid, n.id AS id, labels(n) AS labels, properties(n) AS props,
        collect([e.id, type(e), b.id, properties(e)]) AS out`
 } as const;
 

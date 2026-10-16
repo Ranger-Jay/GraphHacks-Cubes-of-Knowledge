@@ -165,7 +165,7 @@ export type StudioOverview =
   | { status: 'EMPTY'; tenantId: string; domain: 'studio' }
   | { status: 'UNAVAILABLE'; reason: 'CONNECTION_FAILED' | 'QUERY_FAILED' | 'FIXTURE_INVALID' };
 
-interface Row { id: string; labels: string[]; props: Record<string, unknown>; out: unknown[][] }
+interface Row { iid: number; id: string; labels: string[]; props: Record<string, unknown>; out: unknown[][] }
 
 /**
  * Named read of one tenant's studio records in ONE graph query. Every returned fact is re-derived
@@ -184,6 +184,12 @@ export async function studioOverview(client: GraphClient, repoRoot: string, tena
   let f: LoadedFixtures;
   try { f = await loadFixtures(repoRoot); } catch { return { status: 'UNAVAILABLE', reason: 'FIXTURE_INVALID' }; }
   const integrity: StudioIntegrityItem[] = [];
+  // Two nodes with one label and id are never served (the pick would depend on row order); each such id is flagged once.
+  const seen = new Map<string, number>();
+  for (const r of rows) { const k = `${r.labels[0]}|${String(r.props['id'])}`; seen.set(k, (seen.get(k) ?? 0) + 1); }
+  const dup = new Set([...seen].filter(([, n]) => n > 1).map(([k]) => k));
+  for (const k of [...dup].sort()) integrity.push({ id: k.split('|')[1]!, reason: `more than one ${k.split('|')[0]} node has this id` });
+  rows = rows.filter(r => !dup.has(`${r.labels[0]}|${String(r.props['id'])}`));
   const nodes: StudioNodeOut[] = [];
   const served = new Map<string, StudioNodeOut>();
   const depBySlug = new Map(f.departments.map(d => [d.slug, d]));
