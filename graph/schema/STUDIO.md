@@ -22,7 +22,7 @@ The witness hashes only the evidence labels (Release, Cut, Track, License, Sourc
 2. A person or department is served only if its stored fields and `line` equal the fixture line they cite. Served values are the fixture's.
 3. An edge is served only if both endpoints are served and its `WORKS_IN` target or `DEFINED_IN` line and excerpt equal the fixture.
 
-Anything else is **withheld** and listed under `integrity`; it is never served as a fact. An invalid fixture returns `UNAVAILABLE / FIXTURE_INVALID`; an unreachable graph returns `UNAVAILABLE` with the graph reason and no records. An unseeded tenant returns `EMPTY`.
+Anything else is **withheld** and listed under `integrity`; it is never served as a fact. Two nodes with one label and id (even an exact copy) are flagged and never served: the read returns the internal node id so the aggregation cannot merge them (v023.15). An invalid fixture returns `UNAVAILABLE / FIXTURE_INVALID`; an unreachable graph returns `UNAVAILABLE` with the graph reason and no records. An unseeded tenant returns `EMPTY`.
 
 ## Operations
 
