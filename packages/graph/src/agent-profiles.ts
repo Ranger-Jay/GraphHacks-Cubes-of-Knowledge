@@ -352,6 +352,7 @@ export async function agentProfileOverview(client: GraphClient, repoRoot: string
   // tag (it may legitimately differ from the seed fixture after an authorized change), but it is never trusted blindly.
   const UTC_RE = UTC; const KEY_RE = KEY;
   const assignmentRows = by('RoleAssignment');
+  const fixtureFor = new Map(f.assignments.map(a => [a.principalKey, a.roleId]));
   interface Assn { id: string; principalKey: string; reason: string | null; status: string; roleId: string; revision: number; assignedAt: string; assignedBy: string; source: string }
   const assns: Assn[] = assignmentRows.map(r => {
     const p = r.props; const e = edgesOf(r); const id = String(p['id']); const principalKey = typeof p['principalId'] === 'string' ? p['principalId'] : '';
@@ -366,6 +367,15 @@ export async function agentProfileOverview(client: GraphClient, repoRoot: string
     else if (status !== 'ACTIVE' && status !== 'REVOKED') reason = 'assignment status is invalid';
     else if (typeof p['revision'] !== 'number' || !Number.isInteger(p['revision']) || p['revision'] < 1) reason = 'assignment revision is invalid';
     else if (typeof p['assignedAt'] !== 'string' || !UTC_RE.test(p['assignedAt'])) reason = 'assignment timestamp is invalid';
+    else if (p['source'] === 'fixture') {
+      // A row that says it came from the owner fixture must still match it and be untouched since seeding. Otherwise the
+      // label would claim an owner decision the fixture no longer says (re-seed to apply an owner change; an authorized
+      // change must set its own source).
+      const managed = ((p['fixtureRevision'] ?? 1) === p['revision']);
+      if (!managed) reason = 'assignment claims the fixture as its source but was changed after seeding';
+      else if (status === 'ACTIVE' && (fixtureFor.get(principalKey) !== roleId || p['assignedAt'] !== f.assignmentProvenance.decidedAt)) reason = 'fixture-sourced assignment differs from the current fixture (re-seed to apply an owner change)';
+      else if (status === 'ACTIVE' && !fixtureFor.has(principalKey)) reason = 'fixture-sourced assignment is for a principal the fixture no longer lists';
+    }
     if (reason) flag(id, reason);
     return { id, principalKey, reason, status, roleId, revision: typeof p['revision'] === 'number' ? p['revision'] : 0, assignedAt: String(p['assignedAt'] ?? ''), assignedBy: String(p['assignedBy'] ?? ''), source: String(p['source'] ?? '') };
   });
