@@ -147,7 +147,7 @@ export async function importIdea(client: GraphClient, repoRoot: string, req: Imp
   const keyHash = sha(`${req.tenantId}\n${req.idempotencyKey}`);
   const fingerprint = sha(JSON.stringify([req.tenantId, WORKSPACE_ID, idea.id, idea.sha256, req.expectedRevision]));
   const receiptId = `rcpt-${keyHash.slice(0, 24)}`;
-  const membershipId = `member-${WORKSPACE_ID}-${idea.id}`;
+  const membershipId = memberIdOf(idea.id);
   const settle = (existing: ReceiptRow | null): ImportResult | null => existing
     ? (existing.fingerprint === fingerprint ? { status: 'IMPORTED', replayed: true, receipt: toReceipt(existing) } : { status: 'CONFLICT', reason: 'KEY_REUSED' })
     : null;
@@ -199,20 +199,46 @@ export type IdeaverseOverview =
   | { status: 'EMPTY'; tenantId: string; domain: 'studio' }
   | { status: 'UNAVAILABLE'; reason: 'CONNECTION_FAILED' | 'QUERY_FAILED' | 'MANIFEST_INVALID' };
 
+const memberIdOf = (ideaId: string) => `member-${WORKSPACE_ID}-${ideaId}`;
+
+/**
+ * Why an idea's import state cannot be trusted, or null when it is exactly one consistent membership
+ * and one matching receipt (or neither). An idea is "imported" only when ALL of these hold: one
+ * IMPORTED_INTO edge with the id this idea's import writes, one receipt for the idea, the edge's
+ * receiptId is that receipt, the receipt names the same membership, workspace and idea, its hash equals
+ * the CURRENT verified manifest hash, and its timestamp and revision are well formed.
+ */
+function importIntegrity(ideaId: string, manifestSha: string, workspaceRevision: number, edges: { id: string; receiptId: unknown }[], receipts: Record<string, unknown>[]): string | null {
+  if (edges.length === 0 && receipts.length === 0) return null;
+  if (edges.length > 1) return 'duplicate membership edges';
+  if (receipts.length > 1) return 'duplicate import receipts';
+  if (edges.length === 0) return 'import receipt without a membership edge';
+  if (receipts.length === 0) return 'membership edge without an import receipt';
+  const e = edges[0]!; const r = receipts[0]!;
+  if (e.id !== memberIdOf(ideaId) || r['membershipId'] !== e.id || r['id'] !== e.receiptId) return 'membership edge and receipt do not match';
+  if (r['ideaId'] !== ideaId || r['workspaceId'] !== WORKSPACE_ID) return 'receipt names a different idea or workspace';
+  if (r['sha256'] !== manifestSha) return 'imported content differs from the current manifest';
+  const rev = r['workspaceRevision'];
+  if (typeof r['importedAt'] !== 'string' || !UTC.test(r['importedAt']) || typeof rev !== 'number' || !Number.isInteger(rev) || rev < 1 || rev > workspaceRevision) return 'receipt timestamp or revision is invalid';
+  return null;
+}
+
 /**
  * Read of the tenant's idea metadata and import membership in one query, re-verified against the
- * manifest. The comet pool excludes `imported` ideas; a stored hash that differs from the manifest
- * withholds that idea (integrity item) instead of serving it.
+ * manifest. The comet pool excludes `imported` ideas. An idea whose metadata differs from the manifest,
+ * or whose import state is not exactly one consistent receipt and membership (receipt-less, duplicated,
+ * stale-content), is withheld with an integrity item rather than served or counted.
  */
 export async function ideaverseOverview(client: GraphClient, repoRoot: string, tenantId: string, options: { manifestPath?: string } = {}): Promise<IdeaverseOverview> {
-  let rows: { revision: number; id: string | null; props: Record<string, unknown> | null; importedAt: string | null; membershipId: string | null }[];
+  let rows: { revision: number; id: string | null; props: Record<string, unknown> | null; edges: [unknown, unknown][]; receipts: Record<string, unknown>[] }[];
   try {
     rows = await client.read(`
 MATCH (w:Workspace {id: $workspaceId, tenantId: $tenantId})
 OPTIONAL MATCH (i:IdeaFile {tenantId: $tenantId})
 OPTIONAL MATCH (i)-[m:IMPORTED_INTO]->(w)
-OPTIONAL MATCH (r:ImportReceipt {tenantId: $tenantId, membershipId: m.id})
-RETURN w.revision AS revision, i.id AS id, properties(i) AS props, r.importedAt AS importedAt, m.id AS membershipId`, { workspaceId: WORKSPACE_ID, tenantId });
+WITH w, i, collect([m.id, m.receiptId]) AS edges
+OPTIONAL MATCH (r:ImportReceipt {tenantId: $tenantId, ideaId: i.id})
+RETURN w.revision AS revision, i.id AS id, properties(i) AS props, edges, collect(properties(r)) AS receipts`, { workspaceId: WORKSPACE_ID, tenantId });
   } catch (err) {
     if (err instanceof GraphUnavailableError) return { status: 'UNAVAILABLE', reason: err.reason };
     throw err;
@@ -221,6 +247,7 @@ RETURN w.revision AS revision, i.id AS id, properties(i) AS props, r.importedAt 
   let manifest: IdeaManifest;
   try { manifest = await loadIdeaManifest(repoRoot, options.manifestPath); } catch { return { status: 'UNAVAILABLE', reason: 'MANIFEST_INVALID' }; }
   const byId = new Map(manifest.ideas.map(i => [i.id, i]));
+  const revision = rows[0]!.revision;
   const integrity: { id: string; reason: string }[] = [];
   const ideas: IdeaverseIdea[] = [];
   for (const r of rows) {
@@ -231,11 +258,14 @@ RETURN w.revision AS revision, i.id AS id, properties(i) AS props, r.importedAt 
     if (p['sha256'] !== m.sha256 || p['filename'] !== m.filename || p['byteCount'] !== m.byteCount || p['submittedAt'] !== m.submittedAt || p['touchedAt'] !== m.touchedAt) {
       integrity.push({ id: r.id, reason: 'stored idea metadata differs from the manifest' }); continue;
     }
-    const imported = r.membershipId !== null;
-    ideas.push({ id: m.id, filename: m.filename, sha256: m.sha256, byteCount: m.byteCount, submittedAt: m.submittedAt, touchedAt: m.touchedAt, synthetic: true, classification: 'proposal', imported,
-      ...(imported && r.importedAt ? { importedAt: r.importedAt } : {}), ...(imported && r.membershipId ? { membershipId: r.membershipId } : {}) });
+    const edges = r.edges.filter(([id]) => typeof id === 'string').map(([id, receiptId]) => ({ id: id as string, receiptId }));
+    const bad = importIntegrity(m.id, m.sha256, revision, edges, r.receipts);
+    if (bad) { integrity.push({ id: r.id, reason: bad }); continue; }
+    const receipt = r.receipts[0];
+    ideas.push({ id: m.id, filename: m.filename, sha256: m.sha256, byteCount: m.byteCount, submittedAt: m.submittedAt, touchedAt: m.touchedAt, synthetic: true, classification: 'proposal', imported: !!receipt,
+      ...(receipt ? { importedAt: receipt['importedAt'] as string, membershipId: receipt['membershipId'] as string } : {}) });
   }
   ideas.sort((a, b) => a.id.localeCompare(b.id));
   integrity.sort((a, b) => a.id.localeCompare(b.id));
-  return { status: 'AVAILABLE', tenantId, domain: 'studio', workspace: { id: WORKSPACE_ID, revision: rows[0]!.revision }, ideas, counts: { ideas: ideas.length, imported: ideas.filter(i => i.imported).length }, integrity };
+  return { status: 'AVAILABLE', tenantId, domain: 'studio', workspace: { id: WORKSPACE_ID, revision }, ideas, counts: { ideas: ideas.length, imported: ideas.filter(i => i.imported).length }, integrity };
 }
