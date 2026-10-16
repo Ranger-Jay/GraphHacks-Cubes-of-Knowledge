@@ -28,11 +28,15 @@ test('27 unique clips preserve locked outage copy and omit proposed recovery lin
   const p = buildPlan(dialogue, config, 'all');
   assert.equal(p.clips.length, 27); assert.equal(new Set(p.clips.map(c => c.filename)).size, 27);
   assert.deepEqual(dialogue.outage, {
-    roy: 'FalkorDB is disconnected. Operations are offline.',
-    ava: 'I can’t access the company’s knowledge. Information is unavailable until FalkorDB reconnects.',
+    roy: 'FalkorDB is unavailable. Operations are offline.',
+    ava: 'I can’t access the company’s knowledge. Information is unavailable until FalkorDB is available again.',
     guz: 'I can’t verify any sources. I won’t provide an answer without evidence.'
   });
   assert.ok(p.clips.every(c => !c.filename.includes('_10_')));
+  assert.ok(p.clips.some(c => c.filename === 'roy_09_outage_v002.mp3'));
+  assert.ok(p.clips.some(c => c.filename === 'ava_09_outage_v002.mp3'));
+  assert.ok(p.clips.some(c => c.filename === 'guz_09_outage_v001.mp3'));
+  assert.ok(p.clips.filter(c => !c.filename.includes('_09_')).every(c => c.filename.endsWith('_v001.mp3')));
 });
 test('invalid scope or cap and missing credentials reject before any network operation', async t => {
   assert.throws(() => parseArgs(['--scope', 'recovery']));
@@ -50,7 +54,7 @@ test('synthetic successful responses get receipts; second run verifies instead o
     assert.equal(init.redirect, 'error'); return fakeAudio();
   } };
   await run(args, options); assert.equal(calls, 3);
-  const receipt = await readFile(join(dir, 'out', 'roy_09_outage_v001.mp3.json'), 'utf8');
+  const receipt = await readFile(join(dir, 'out', 'roy_09_outage_v002.mp3.json'), 'utf8');
   assert.ok(!receipt.includes(env.ELEVENLABS_API_KEY));
   assert.equal(JSON.parse(receipt).playbackVerified, false);
   await run(args, options); assert.equal(calls, 3);
@@ -63,7 +67,7 @@ test('an ambiguous provider failure prevents retry and retains the attempt for r
   await assert.rejects(run(args, options), /EEXIST/);
   assert.equal(calls, 1);
   const files = await readdir(join(dir, 'out'));
-  assert.ok(files.includes('roy_09_outage_v001.mp3.attempt.json'));
+  assert.ok(files.includes('roy_09_outage_v002.mp3.attempt.json'));
   assert.ok(files.includes('.generation-lock'));
 });
 test('HTTP error stops without saving it as speech or leaking the body', async t => {
