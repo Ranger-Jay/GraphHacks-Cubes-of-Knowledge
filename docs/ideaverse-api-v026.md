@@ -1,6 +1,21 @@
 # IdeaVerse HTTP contract for the v026 adapter (v030.00)
 
-Status: published integration specification; implementation and independent acceptance remain pending. This document does not expose a route or authorize a deployment. It resolves #40 and the mount checklist at `479458f9c6ad6b233377d93f848c3d39d2cd024a`. Transport declarations are in `packages/contracts/src/ideaverse.ts`. Types do not perform runtime validation or establish persistence.
+Status: published integration specification; implementation and independent acceptance remain pending. This document does not expose a route or authorize a deployment. It specifies the resolution for #40 and the mount checklist at `479458f9c6ad6b233377d93f848c3d39d2cd024a`; #40 is not complete through specification alone. Transport declarations are in `packages/contracts/src/ideaverse.ts`. Types do not perform runtime validation or establish persistence.
+
+## Implementation ownership and version allocation (v030.01)
+
+The table records technical lane ownership; active contributor routing remains in the private coordination record. Preserve all reviewed heads and historical version labels. Publish repairs on separate follow-up branches, one concern per commit. A lane author cannot accept their own change.
+
+| Lane / owned paths | Deliverable | Allocated slots / branch | Independent gate |
+| --- | --- | --- | --- |
+| Scene: `apps/web/src/scene/CompanyCube.tsx`, `scene.css` | Exact-ID fixture layout, readable node/edge labels, bounds; retain deck/core fixes | v029.00–v029.09, `gem/visual-layout-v029`, from `d7da9ea1cc4a608e426b99d9264578c6133d81ff` | Web-lane real browser review at both specified sizes; separate evidence/meta check |
+| Scene: `apps/web/src/scene/IdeaVerseComets.tsx`, scene tests | Single-card scene boundary, canonical-only input, confirmed-event animation and elapsed clamp | v029.10–v029.19, `gem/comet-boundary-v029`, from `0883c9217f2bd9e67d3148cae814d5fc30fc5dae` | Web-lane lifecycle/forgery/clock and browser review; separate meta check |
+| API: `apps/api/src/`, `tests/api/` | v026 routes/adapters, verified text detail, owner rehearsal credential path, real read-back/retry/denial tests | v026.00–v026.019, `mara/ideaverse-api-v026`; consume this contract and graph `366eb56c59da7c084d540cee00b86ba041e15600` | Graph-lane independent API/live-graph review; separate meta check |
+| Web: `apps/web/src/studio/`, `App.tsx`, web adapters/tests | Single card, pinned attempt tuple, read-only Re-check, READY/access guard, stale completion and pool refresh | v025.13–v025.19, `cora/ideaverse-mount-v025`, from `d74518bc55e8a10feb8574407848d72f62413aba`; v025.12 is already occupied by checklist `479458f9c6ad6b233377d93f848c3d39d2cd024a` | Non-author UI/adapter review and combined-head browser proof |
+| Graph: `packages/graph/`, graph tests/docs | Bounded read-only key/request/receipt verification and verified text operation if needed by API | v023.15–v023.19, separate follow-up preserving `366eb56c59da7c084d540cee00b86ba041e15600`; coordinate before exhausting slots | Opposing-lane graph review and separate evidence meta-review |
+| Integration: `packages/contracts/`, `docs/contracts.md`, candidate manifest | Shared contract, combined-head conflict resolution and reconciliation | v030.00 contract; v030.01 ownership/precision follow-up; subsequent v030 revisions for reconciliation | Non-author exact-head review; combined-head browser/graph proof; final human release authority |
+
+The separate v028 profile lane is outside this import contract. Its unresolved findings do not authorize changing these frozen graph/import inputs. No owner token, production grant or route exposure is established by an assignment.
 
 ## Frozen inputs
 
