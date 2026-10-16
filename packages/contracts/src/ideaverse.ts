@@ -19,7 +19,7 @@ export interface IdeaverseIdeaView {
 }
 export type IdeaverseUnavailableReason = 'CONNECTION_FAILED' | 'QUERY_FAILED' | 'MANIFEST_INVALID';
 export type IdeaverseOverviewResponse =
-  | { status: 'AVAILABLE'; tenantId: string; domain: 'studio'; workspace: { id: string; revision: number }; ideas: IdeaverseIdeaView[]; counts: { ideas: number; imported: number }; integrity: { id: string; reason: string }[] }
+  | { status: 'AVAILABLE'; tenantId: string; domain: 'studio'; workspace: { id: string; revision: number | null }; ideas: IdeaverseIdeaView[]; counts: { ideas: number; imported: number }; integrity: { id: string; reason: string }[] }
   | { status: 'EMPTY'; tenantId: string; domain: 'studio' }
   | { status: 'UNAVAILABLE'; reason: IdeaverseUnavailableReason };
 export type IdeaImportConflict = {
@@ -27,7 +27,7 @@ export type IdeaImportConflict = {
   currentRevision?: number; receipt?: IdeaImportReceipt;
 };
 export type IdeaImportRejection = {
-  status: 'REJECTED'; reason: 'INVALID_REQUEST' | 'UNKNOWN_IDEA' | 'SOURCE_MISMATCH' | 'NOT_SEEDED';
+  status: 'REJECTED'; reason: 'INVALID_REQUEST' | 'UNKNOWN_IDEA' | 'SOURCE_MISMATCH' | 'NOT_SEEDED' | 'AMBIGUOUS_IDENTITY';
 };
 /** Reserved for a candidate reconciled on the SERVER against a new graph overview.
  * Consumers still read back before a success effect. A structural type cannot prove this invariant.

@@ -160,7 +160,7 @@ export function verifyImportReadback(idea: IdeaSummary, receipt: ImportReceipt, 
   if (m.imported !== true || typeof m.membershipId !== 'string' || typeof m.importedAt !== 'string') return { ok: false, reason: 'not-imported' };
   if (m.membershipId !== receipt.membershipId || m.importedAt !== receipt.importedAt || m.sha256 !== receipt.sha256) return { ok: false, reason: 'mismatch' };
   if (idea.sha256 !== undefined && idea.sha256 !== m.sha256) return { ok: false, reason: 'mismatch' };
-  if (!Number.isInteger(overview.workspace.revision) || overview.workspace.revision < receipt.workspaceRevision) return { ok: false, reason: 'mismatch' };
+  if (typeof overview.workspace.revision !== 'number' || !Number.isInteger(overview.workspace.revision) || overview.workspace.revision < receipt.workspaceRevision) return { ok: false, reason: 'mismatch' };
   return { ok: true };
 }
 

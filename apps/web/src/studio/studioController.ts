@@ -195,6 +195,7 @@ export class IdeaStudioController {
       const entry = ov?.status === 'AVAILABLE' ? ov.ideas.find(i => i.id === id) : undefined;
       if (!ov || ov.status !== 'AVAILABLE' || !entry || ov.integrity.some(f => f.id === id)) { this.settle(id, requestId, { kind: 'not-started' }, idea); return; }
       if (entry.imported) { this.dispatch(id, { type: 'observed-present', requestId }); this.emit(); void this.refreshPool(); return; }
+      if (typeof ov.workspace.revision !== 'number') { this.settle(id, requestId, { kind: 'not-started' }, idea); return; }
       try { ses.attempt = createImportAttempt(id, (this.deps.newKey ?? defaultKey)(), ov.workspace.revision); }
       catch { this.settle(id, requestId, { kind: 'not-started' }, idea); return; }
       this.emit();
@@ -278,6 +279,7 @@ export class IdeaStudioController {
     const entry = ov?.status === 'AVAILABLE' ? ov.ideas.find(i => i.id === id) : undefined;
     if (!ov || ov.status !== 'AVAILABLE' || !entry || ov.integrity.some(f => f.id === id)) { this.settle(id, requestId, { kind: 'not-started' }, idea); return; }
     if (entry.imported) { this.dispatch(id, { type: 'observed-present', requestId }); this.emit(); void this.refreshPool(); return; }
+    if (typeof ov.workspace.revision !== 'number') { this.settle(id, requestId, { kind: 'not-started' }, idea); return; }
     try { this.session(id).attempt = createImportAttempt(id, (this.deps.newKey ?? defaultKey)(), ov.workspace.revision); }
     catch { this.settle(id, requestId, { kind: 'not-started' }, idea); return; }
     this.dispatch(id, { type: 'reset' });
