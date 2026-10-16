@@ -43,8 +43,9 @@ test('fixtures: owner text is verbatim apart from two owner-confirmed spelling f
   assert.equal(by['ava']!.personality, 'Warm, delightful, & agreeable.');
   assert.equal(by['roy']!.knownFor, 'Caution and reluctant to deviate from source of truth.');
   const doc = JSON.parse(await readFile(join(root, 'graph/seed/agents/agent-profiles.json'), 'utf8')) as { profiles: Record<string, unknown>[] };
-  assert.ok(!doc.profiles.some(p => /aggreeable|relucant/.test(JSON.stringify(p))), 'the corrected misspellings are gone from every profile (the fixture note records the change)');
-  assert.equal(by['roy']!.assignment, 'Database Administrator of FalkorDb WAD Studios Cube');
+  assert.ok(!doc.profiles.some(p => /aggreeable|relucant|FalkorDb/.test(JSON.stringify(p))), 'the corrected misspellings are gone from every profile (the fixture note records the change)');
+  assert.equal(by['roy']!.assignment, 'Database Administrator of FalkorDB WAD Studios Cube');
+  assert.equal(by['guz']!.assignment, 'Cyber Security Auditor for FalkorDB WAD Studios Cube');
   assert.equal(by['ava']!.skills.declaredPath, '..nodes/agents/agent012/skills.md');
   assert.equal(by['ava']!.skills.proposedPath, 'nodes/agents/agent012/skills.md');
   assert.deepEqual(f.profiles.map(p => p.declaredAccessLevel), ['Administrator', 'Administrator', 'Administrator']);
