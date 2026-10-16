@@ -216,6 +216,9 @@ export class IdeaStudioController {
     this.emit();
     if (next.phase === 'verifying') void this.verify(id, idea, next.requestId, next.receipt);
     else if (next.phase === 'error' && outcome.kind !== 'not-started') void this.refreshPool();
+    // Direct unconfirmed (the reply itself is not a usable receipt, or a bare ALREADY_IMPORTED): there is no verify step to
+    // refresh the pool, yet a write may have committed. Re-read so a committed idea leaves the pool. Still no success effect.
+    else if (next.phase === 'unconfirmed') void this.refreshPool();
   }
 
   private async verify(id: string, idea: IdeaSummary, requestId: number, receipt: ImportReceipt): Promise<void> {
