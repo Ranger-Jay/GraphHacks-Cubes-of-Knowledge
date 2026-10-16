@@ -35,7 +35,7 @@ export function buildPlan(dialogue, config, scope) {
   if (!config || typeof config.modelId !== 'string' || !config.modelId.trim()) throw new Error('A modelId is required');
   const clips = [];
   for (const speaker of dialogue.speakers) {
-    const phrases = [{ id: '09_outage', text: dialogue.outage[speaker] }];
+    const phrases = [{ id: '09_outage', text: dialogue.outage[speaker], version: dialogue.outageVersions?.[speaker] ?? dialogue.version }];
     if (scope === 'all') phrases.push(...dialogue.phrases);
     for (const phrase of phrases) {
       const request = {
@@ -45,7 +45,7 @@ export function buildPlan(dialogue, config, scope) {
         ...(config.pronunciationDictionaries?.length ? { pronunciation_dictionary_locators: config.pronunciationDictionaries } : {})
       };
       const voiceId = config.voices?.[speaker] || '';
-      clips.push({ speaker, text: phrase.text, filename: `${speaker}_${phrase.id}_${dialogue.version}.mp3`,
+      clips.push({ speaker, text: phrase.text, filename: `${speaker}_${phrase.id}_${phrase.version ?? dialogue.version}.mp3`,
         voiceId, request, requestHash: hash(JSON.stringify([voiceId, request])) });
     }
   }

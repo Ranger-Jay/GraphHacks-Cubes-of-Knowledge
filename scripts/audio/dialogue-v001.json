@@ -1,5 +1,6 @@
 {
   "version": "v001",
+  "outageVersions": { "roy": "v002", "ava": "v002" },
   "speakers": ["roy", "ava", "guz"],
   "phrases": [
     { "id": "01_greeting", "text": "Greetings, Commander" },
@@ -12,8 +13,8 @@
     { "id": "08_task_optional", "text": "On it." }
   ],
   "outage": {
-    "roy": "FalkorDB is disconnected. Operations are offline.",
-    "ava": "I can’t access the company’s knowledge. Information is unavailable until FalkorDB reconnects.",
+    "roy": "FalkorDB is unavailable. Operations are offline.",
+    "ava": "I can’t access the company’s knowledge. Information is unavailable until FalkorDB is available again.",
     "guz": "I can’t verify any sources. I won’t provide an answer without evidence."
   }
 }
