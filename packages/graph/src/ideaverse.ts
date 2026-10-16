@@ -116,14 +116,16 @@ const sha = (s: string) => createHash('sha256').update(s).digest('hex');
 const RECEIPT_FIELDS = 'r.ideaId AS ideaId, r.sha256 AS sha256, r.workspaceId AS workspaceId, r.importedAt AS importedAt, r.workspaceRevision AS workspaceRevision, r.membershipId AS membershipId, r.fingerprint AS fingerprint';
 
 /**
- * ONE write query: every precondition (tenant on both endpoints, expected workspace revision, stored
- * file hash equals the verified manifest hash, idea not yet a member, key not yet used) is a guard of
- * the same statement that bumps the revision, creates the receipt and the membership edge. The graph
- * serializes writes, so concurrent requests cannot both pass the guards. No row means nothing changed.
+ * ONE write query. Every precondition is a guard of the same statement that bumps the revision and
+ * creates the receipt and the membership edge: tenant on both endpoints, expected workspace revision,
+ * every stored field the overview checks (hash, filename, size, timestamps) equal to the verified
+ * manifest, idea not yet a member, key not yet used. The graph serializes writes, so concurrent
+ * requests cannot both pass the guards. No row means nothing changed.
  */
 export const IMPORT_WRITE_QUERY = `
 MATCH (w:Workspace {id: $workspaceId, tenantId: $tenantId}), (i:IdeaFile {id: $ideaId, tenantId: $tenantId})
-WHERE w.revision = $expectedRevision AND i.sha256 = $sha256 AND NOT (i)-[:IMPORTED_INTO]->(w)
+WHERE w.revision = $expectedRevision AND i.sha256 = $sha256 AND i.filename = $filename AND i.byteCount = $byteCount
+  AND i.submittedAt = $submittedAt AND i.touchedAt = $touchedAt AND NOT (i)-[:IMPORTED_INTO]->(w)
 OPTIONAL MATCH (x:ImportReceipt {tenantId: $tenantId, keyHash: $keyHash})
 WITH w, i, x WHERE x IS NULL
 SET w.revision = w.revision + 1
@@ -163,19 +165,21 @@ export async function importIdea(client: GraphClient, repoRoot: string, req: Imp
     const importedAt = (options.now?.() ?? new Date()).toISOString();
     const rows = await client.write<ImportReceipt>(IMPORT_WRITE_QUERY, {
       tenantId: req.tenantId, workspaceId: WORKSPACE_ID, ideaId: idea.id, sha256: idea.sha256, expectedRevision: req.expectedRevision,
-      keyHash, receiptId, fingerprint, importedAt, membershipId
+      keyHash, receiptId, fingerprint, importedAt, membershipId,
+      filename: idea.filename, byteCount: idea.byteCount, submittedAt: idea.submittedAt, touchedAt: idea.touchedAt
     });
     if (rows[0]) return { status: 'IMPORTED', replayed: false, receipt: toReceipt(rows[0] as ReceiptRow) };
     // No row: nothing changed. Classify why from a fresh read.
     const raced = settle(await receiptByKey(client, req.tenantId, keyHash));
     if (raced) return raced;
-    const state = await client.read<{ revision: number | null; storedSha: string | null; exists: boolean }>(
+    const state = await client.read<{ revision: number | null; props: Record<string, unknown> | null; exists: boolean }>(
       `OPTIONAL MATCH (w:Workspace {id: $workspaceId, tenantId: $tenantId})
        OPTIONAL MATCH (i:IdeaFile {id: $ideaId, tenantId: $tenantId})
-       RETURN w.revision AS revision, i.sha256 AS storedSha, (w IS NOT NULL AND i IS NOT NULL) AS exists`, { workspaceId: WORKSPACE_ID, ideaId: idea.id, tenantId: req.tenantId });
+       RETURN w.revision AS revision, properties(i) AS props, (w IS NOT NULL AND i IS NOT NULL) AS exists`, { workspaceId: WORKSPACE_ID, ideaId: idea.id, tenantId: req.tenantId });
     const s = state[0];
     if (!s || !s.exists) return { status: 'REJECTED', reason: 'NOT_SEEDED' };
-    if (s.storedSha !== idea.sha256) return { status: 'REJECTED', reason: 'SOURCE_MISMATCH' };
+    const p = s.props ?? {};
+    if (p['sha256'] !== idea.sha256 || p['filename'] !== idea.filename || p['byteCount'] !== idea.byteCount || p['submittedAt'] !== idea.submittedAt || p['touchedAt'] !== idea.touchedAt) return { status: 'REJECTED', reason: 'SOURCE_MISMATCH' };
     const member = (await client.read<ReceiptRow>(
       `MATCH (:IdeaFile {id: $ideaId, tenantId: $tenantId})-[m:IMPORTED_INTO]->(:Workspace {id: $workspaceId, tenantId: $tenantId})
        MATCH (r:ImportReceipt {tenantId: $tenantId, membershipId: m.id}) RETURN ${RECEIPT_FIELDS}`, { ideaId: idea.id, tenantId: req.tenantId, workspaceId: WORKSPACE_ID }))[0];
