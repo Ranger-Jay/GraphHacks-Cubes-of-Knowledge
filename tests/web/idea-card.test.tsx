@@ -12,7 +12,7 @@ const idea: IdeaSummary = {
   id: 'idea-fixture-001', filename: 'fixture-idea.txt', submittedAt: '2026-10-14T03:30:00Z', touchedAt: '2026-10-15T22:05:00Z',
   text: 'A fictional fixture idea used only by the unit tests.',
 };
-const receipt: ImportReceipt = { ideaId: idea.id, fileHash: 'f'.repeat(64), workspaceId: 'ws', importedAt: '2026-10-15T23:00:00Z', workspaceRevision: 2, membershipId: 'm1' };
+const receipt: ImportReceipt = { ideaId: idea.id, sha256: 'f'.repeat(64), workspaceId: 'ws', importedAt: '2026-10-15T23:00:00Z', workspaceRevision: 2, membershipId: 'm1' };
 const view = (state: ImportState, bound = true) =>
   renderToStaticMarkup(<IdeaCardView idea={idea} state={state} bound={bound} onAdd={() => {}} onClose={() => {}} titleId="t" bodyId="b" />);
 const FAILURES: Array<Exclude<ImportOutcome['kind'], 'persisted'>> = ['denied', 'unavailable', 'conflict', 'ambiguous', 'failed'];
@@ -38,7 +38,9 @@ test('reducer: submit -> pending disables repeated submits; persisted receipt ->
   const html = view(p);
   assert.match(html, /<button[^>]*class="idea-card-add"[^>]*disabled/);
   assert.ok(html.includes('aria-busy="true"') && html.includes('Adding to the cube...'));
-  const a = importReducer(p, { type: 'settled', requestId: p.requestId, outcome: { kind: 'persisted', receipt } });
+  const v = importReducer(p, { type: 'settled', requestId: p.requestId, outcome: { kind: 'persisted', receipt } });
+  assert.equal(v.phase, 'verifying', 'a persisted outcome alone is never Added (fresh read-back required)');
+  const a = importReducer(v, { type: 'verified', requestId: v.requestId, result: { ok: true } });
   assert.equal(a.phase, 'added');
   assert.equal(importReducer(a, { type: 'submit' }), a, 'no second submit after added');
   assert.ok(view(a).includes('Added to the cube.'));
@@ -55,7 +57,7 @@ test('reducer: every non-persisted outcome is an error with its own honest copy 
     assert.ok(html.includes('Retry Add to cube'), 'card preserved for retry');
     assert.notEqual(importReducer(e, { type: 'submit' }).phase, 'error', 'retry allowed');
   }
-  for (const kind of ['denied', 'unavailable', 'failed'] as const) assert.match(IMPORT_FAILURE_COPY[kind], /Nothing was saved/);
+  for (const kind of FAILURES) assert.doesNotMatch(IMPORT_FAILURE_COPY[kind], /nothing was saved|not saved|was not added/i, kind);
 });
 
 test('reducer: a completion for a stale request, after reset, or outside pending is discarded', () => {
