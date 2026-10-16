@@ -385,6 +385,9 @@ export async function agentProfileOverview(client: GraphClient, repoRoot: string
       if (!managed) reason = 'assignment claims the fixture as its source but was changed after seeding';
       else if (status === 'ACTIVE' && (fixtureFor.get(principalKey) !== roleId || p['assignedAt'] !== f.assignmentProvenance.decidedAt)) reason = 'fixture-sourced assignment differs from the current fixture (re-seed to apply an owner change)';
       else if (status === 'ACTIVE' && !fixtureFor.has(principalKey)) reason = 'fixture-sourced assignment is for a principal the fixture no longer lists';
+      // A fixture-sourced row carries exactly its seeded provenance: the seeded assignedBy and one DEFINED_IN edge to the assignments fixture source.
+      else if (p['assignedBy'] !== 'owner decision (fixture)') reason = 'fixture-sourced assignment carries provenance the seed did not write';
+      else if (e.filter(x => x.type === 'DEFINED_IN').length !== 1 || !e.some(x => x.type === 'DEFINED_IN' && x.to === PROFILE_SOURCE_IDS.assignments && inTenant(x))) reason = 'fixture-sourced assignment must have exactly one DEFINED_IN edge to the assignments fixture';
     }
     if (!reason && dupIds.has(`RoleAssignment|${id}`)) reason = 'more than one assignment node has this id';
     if (reason && !(dupIds.has(`RoleAssignment|${id}`) && reason.startsWith('more than one'))) flag(id, reason);
