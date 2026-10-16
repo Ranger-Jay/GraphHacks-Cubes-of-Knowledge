@@ -13,6 +13,7 @@ export const RECENT_WINDOW_MS = 48 * 60 * 60 * 1000; // 48 hours in ms
 export const COMET_FLIGHT_DURATION_MS = 60 * 1000; // 60 seconds active unpaused flight
 export const COMET_IMPORT_PULL_DURATION_MS = 900; // Gentle pull toward cube + fade after confirmed receipt
 export const MAX_ACTIVE_COMETS = 3;
+export const MAX_TICK_CLAMP_MS = 45_000; // Elapsed-time clamp: 90s clock jump never retires all comets at once (#40/#48)
 
 const UTC_ISO_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,3})?Z$/;
 
@@ -36,14 +37,14 @@ export interface IdeaVerseCometItem {
  * Import membership is outside the licensing witness: must carry idea/file hash,
  * workspace and membership identity, imported timestamp, and workspace revision,
  * and must NEVER fabricate a licensing witnessHash.
- * Canonical hash property is sha256 (#40/#48); fileSha256 supported as backward-compatible alias.
+ * Canonical hash property is sha256 (#40/#48); fileSha256 is not accepted.
  */
 export interface PersistedImportReceipt {
   receiptId?: string | undefined;
   ideaId: string;
   filename?: string | undefined;
-  sha256?: string | undefined;
-  fileSha256?: string | undefined;
+  sha256: string;
+  fileSha256?: never;
   workspaceId: string;
   membershipId: string;
   importedAt: string;
@@ -339,13 +340,17 @@ export function tickCometLifecycle(state: CometLifecycleState, nowMs: number): C
     };
   }
 
+  // Elapsed-time clamp: prevent large clock jumps (e.g. 90-second tab freeze or system time jump)
+  // from retiring all three comets at once (#40/#48)
+  const clampedDelta = Math.min(rawDelta, MAX_TICK_CLAMP_MS);
+
   const surviving: ActiveCometSlot[] = [];
   let lastRetiredIdeaId = state.lastRetiredIdeaId;
   let membershipRefreshCount = state.membershipRefreshCount;
 
   for (const slot of state.activeComets) {
     if (slot.status === 'importing') {
-      const nextPullMs = slot.importPullMs + rawDelta;
+      const nextPullMs = slot.importPullMs + clampedDelta;
       if (nextPullMs >= COMET_IMPORT_PULL_DURATION_MS) {
         // Confirmed import pull-to-cube + fade finished: refresh membership & replace comet
         lastRetiredIdeaId = slot.idea.id;
@@ -368,7 +373,7 @@ export function tickCometLifecycle(state: CometLifecycleState, nowMs: number): C
       continue;
     }
 
-    const nextFlightMs = slot.activeFlightMs + rawDelta;
+    const nextFlightMs = slot.activeFlightMs + clampedDelta;
     if (nextFlightMs >= COMET_FLIGHT_DURATION_MS) {
       // Ignored comet flew for 60s of active unpaused flight: retire and replace
       lastRetiredIdeaId = slot.idea.id;
@@ -455,9 +460,10 @@ export function recordNonPersistedImportAttempt(state: CometLifecycleState): Com
 
 /**
  * Validate that a receipt matches the persisted workspace-import receipt contract (#40/#48):
- * - Must carry ideaId, 64-hex sha256 (or fileSha256 alias), workspaceId, membershipId, valid UTC importedAt, and integer workspaceRevision >= 1.
+ * - Must carry ideaId, exact 64-hex lowercase sha256 (no empty strings and fileSha256 is NOT accepted),
+ *   workspaceId, membershipId, valid UTC importedAt, and integer workspaceRevision >= 1.
  * - Must NEVER carry a licensing witnessHash, nodeId, or edgeId (import membership is outside the licensing witness).
- * - If the idea exists in allIdeas, receipt sha256 (or fileSha256) must match idea.sha256.
+ * - If the idea exists in allIdeas, receipt sha256 must match idea.sha256.
  */
 export function isValidWorkspaceImportReceipt(
   receipt: unknown,
@@ -468,13 +474,14 @@ export function isValidWorkspaceImportReceipt(
   if ('witnessHash' in r && r.witnessHash !== undefined) return false;
   if ('nodeId' in r && r.nodeId !== undefined) return false;
   if ('edgeId' in r && r.edgeId !== undefined) return false;
+  if ('fileSha256' in r && r.fileSha256 !== undefined) return false;
   if (typeof r.ideaId !== 'string' || !r.ideaId.trim()) return false;
   
-  // Canonical hash field is sha256 (#40/#48); fileSha256 accepted as backward-compat alias
-  const hash =
-    (typeof r.sha256 === 'string' && r.sha256.trim()) ||
-    (typeof r.fileSha256 === 'string' && r.fileSha256.trim());
-  if (!hash || !SHA256_HEX_RE.test(hash)) return false;
+  // Only canonical sha256 is accepted; reject empty string, whitespace, or fileSha256 alias (#40/#48)
+  if (typeof r.sha256 !== 'string' || !r.sha256.trim() || !SHA256_HEX_RE.test(r.sha256.trim())) {
+    return false;
+  }
+  const hash = r.sha256.trim();
 
   if (typeof r.workspaceId !== 'string' || !r.workspaceId.trim()) return false;
   if (typeof r.membershipId !== 'string' || !r.membershipId.trim()) return false;
@@ -491,6 +498,61 @@ export function isValidWorkspaceImportReceipt(
     if (!matchedIdea || matchedIdea.sha256 !== hash) return false;
   }
   return true;
+}
+
+/**
+ * Verifies a persisted receipt against a fresh server ideaverseOverview read-back (#40/#48).
+ * Ensures:
+ * 1. Overview status is AVAILABLE.
+ * 2. Overview reports zero integrity issues for this idea.
+ * 3. Exactly one matching idea exists with imported: true, matching sha256, and matching membershipId.
+ */
+export function verifyOverviewReceiptMatch(
+  receipt: PersistedImportReceipt,
+  overview: {
+    status: string;
+    ideas?: Array<{ id: string; imported?: boolean; sha256: string; membershipId?: string }>;
+    integrity?: Array<{ id: string; reason: string }>;
+  }
+): { verified: boolean; matchingReceiptCount: number; reason?: string } {
+  if (overview.status !== 'AVAILABLE' || !overview.ideas) {
+    return {
+      verified: false,
+      matchingReceiptCount: 0,
+      reason: 'Server overview is not available. Outcome is unconfirmed.',
+    };
+  }
+
+  const integrityIssue = overview.integrity?.find(i => i.id === receipt.ideaId);
+  if (integrityIssue) {
+    return {
+      verified: false,
+      matchingReceiptCount: 0,
+      reason: `Server read-back integrity check failed: ${integrityIssue.reason}. Outcome is unconfirmed.`,
+    };
+  }
+
+  const matching = overview.ideas.filter(
+    i => i.id === receipt.ideaId && i.imported === true && i.sha256 === receipt.sha256 && (!receipt.membershipId || i.membershipId === receipt.membershipId)
+  );
+
+  if (matching.length === 1) {
+    return { verified: true, matchingReceiptCount: 1 };
+  }
+
+  if (matching.length === 0) {
+    return {
+      verified: false,
+      matchingReceiptCount: 0,
+      reason: 'Server read-back did not find confirmed imported idea. Outcome is unconfirmed.',
+    };
+  }
+
+  return {
+    verified: false,
+    matchingReceiptCount: matching.length,
+    reason: `Server read-back found ${matching.length} matching imported entries (duplicate). Outcome is unconfirmed.`,
+  };
 }
 
 /**
@@ -607,10 +669,26 @@ export interface IdeaVerseCometsProps {
   now?: () => number;
   onInspectIdea?: (idea: IdeaVerseCometItem) => void;
   onRequestImport?: (idea: IdeaVerseCometItem) => Promise<{
-    status: 'IMPORTED' | 'DENIED' | 'UNAVAILABLE' | 'CONFLICT' | 'FAILED';
+    status: 'IMPORTED' | 'DENIED' | 'UNAVAILABLE' | 'CONFLICT' | 'FAILED' | 'REJECTED' | 'ERROR';
     receipt?: PersistedImportReceipt;
     message?: string;
+    readBackOverview?: {
+      status: string;
+      ideas?: Array<{ id: string; imported?: boolean; sha256: string; membershipId?: string }>;
+      integrity?: Array<{ id: string; reason: string }>;
+    };
   }>;
+  /**
+   * Server read-back verification hook (#40/#48):
+   * Shape + hash check alone is NOT proof of Added.
+   * A fresh read-back (e.g. ideaverseOverview showing exactly one matching receipt)
+   * must verify the receipt before the UI claims 'added'.
+   */
+  onVerifyReadBack?: (receipt: PersistedImportReceipt) => Promise<{
+    verified: boolean;
+    matchingReceiptCount?: number;
+    reason?: string;
+  } | boolean>;
   onMembershipRefreshed?: (receipt: PersistedImportReceipt) => void;
 }
 
@@ -622,6 +700,7 @@ export const IdeaVerseComets: React.FC<IdeaVerseCometsProps> = ({
   now = () => Date.now(),
   onInspectIdea,
   onRequestImport,
+  onVerifyReadBack,
   onMembershipRefreshed,
 }) => {
   const [lifecycle, setLifecycle] = useState<CometLifecycleState>(() =>
@@ -682,7 +761,7 @@ export const IdeaVerseComets: React.FC<IdeaVerseCometsProps> = ({
     if (!onRequestImport) {
       setImportStatusState({
         phase: 'error',
-        message: 'Adding to the cube requires an authorized import connection. Nothing was saved.',
+        message: 'Adding to the cube requires an authorized import connection. Outcome is unconfirmed.',
       });
       return;
     }
@@ -691,6 +770,36 @@ export const IdeaVerseComets: React.FC<IdeaVerseCometsProps> = ({
     try {
       const res = await onRequestImport(inspectedIdea);
       if (res.status === 'IMPORTED' && res.receipt && isValidWorkspaceImportReceipt(res.receipt, lifecycle.allIdeas)) {
+        // Server read-back verification: shape + hash alone is not proof of Added (#40/#48)
+        let verified = false;
+        let failReason: string | undefined;
+
+        if (onVerifyReadBack) {
+          const verifyRes = await onVerifyReadBack(res.receipt);
+          if (typeof verifyRes === 'boolean') {
+            verified = verifyRes;
+          } else {
+            verified = verifyRes.verified;
+            failReason = verifyRes.reason;
+          }
+        } else if (res.readBackOverview) {
+          const matchRes = verifyOverviewReceiptMatch(res.receipt, res.readBackOverview);
+          verified = matchRes.verified;
+          failReason = matchRes.reason;
+        } else {
+          verified = false;
+          failReason = 'Server read-back verification is required before confirming import. Outcome is unconfirmed.';
+        }
+
+        if (!verified) {
+          setImportStatusState({
+            phase: 'error',
+            message: failReason ?? 'Server read-back could not confirm exactly one matching receipt. Outcome is unconfirmed.',
+          });
+          setLifecycle(prev => recordNonPersistedImportAttempt(prev));
+          return;
+        }
+
         setLifecycle(prev => applyConfirmedCometImport(prev, res.receipt, now()));
         setImportStatusState({ phase: 'added', message: 'Added to the cube.' });
         onMembershipRefreshed?.(res.receipt);
@@ -703,14 +812,14 @@ export const IdeaVerseComets: React.FC<IdeaVerseCometsProps> = ({
               ? 'FalkorDB is unavailable right now. Nothing was saved.'
               : res.status === 'CONFLICT'
                 ? 'Workspace revision changed. Please retry.'
-                : 'Could not confirm save receipt. Nothing was saved.');
+                : 'Could not confirm save receipt. Outcome is unconfirmed.');
         setImportStatusState({ phase: 'error', message: reasonCopy });
         setLifecycle(prev => recordNonPersistedImportAttempt(prev));
       }
     } catch {
       setImportStatusState({
         phase: 'error',
-        message: 'Could not confirm save. Retry reuses the request safely.',
+        message: 'Could not confirm save. Outcome is unconfirmed. Retry reuses the request safely.',
       });
       setLifecycle(prev => recordNonPersistedImportAttempt(prev));
     }
