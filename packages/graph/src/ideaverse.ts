@@ -240,7 +240,7 @@ function importIntegrity(ideaId: string, manifestSha: string, workspaceRevision:
  * stale-content), is withheld with an integrity item rather than served or counted.
  */
 export async function ideaverseOverview(client: GraphClient, repoRoot: string, tenantId: string, options: { manifestPath?: string } = {}): Promise<IdeaverseOverview> {
-  let rows: { revision: number; id: string | null; props: Record<string, unknown> | null; edges: [unknown, unknown][]; receipts: Record<string, unknown>[] }[];
+  let rows: { iid: number | null; wid: number; revision: number; id: string | null; props: Record<string, unknown> | null; edges: [unknown, unknown][]; receipts: Record<string, unknown>[] }[];
   try {
     rows = await client.read(`
 MATCH (w:Workspace {id: $workspaceId, tenantId: $tenantId})
@@ -248,7 +248,7 @@ OPTIONAL MATCH (i:IdeaFile {tenantId: $tenantId})
 OPTIONAL MATCH (i)-[m:IMPORTED_INTO]->(w)
 WITH w, i, collect([m.id, m.receiptId]) AS edges
 OPTIONAL MATCH (r:ImportReceipt {tenantId: $tenantId, ideaId: i.id})
-RETURN w.revision AS revision, i.id AS id, properties(i) AS props, edges, collect(properties(r)) AS receipts`, { workspaceId: WORKSPACE_ID, tenantId });
+RETURN id(w) AS wid, id(i) AS iid, w.revision AS revision, i.id AS id, properties(i) AS props, edges, collect(properties(r)) AS receipts`, { workspaceId: WORKSPACE_ID, tenantId });
   } catch (err) {
     if (err instanceof GraphUnavailableError) return { status: 'UNAVAILABLE', reason: err.reason };
     throw err;
@@ -260,7 +260,16 @@ RETURN w.revision AS revision, i.id AS id, properties(i) AS props, edges, collec
   const revision = rows[0]!.revision;
   const integrity: { id: string; reason: string }[] = [];
   const ideas: IdeaverseIdea[] = [];
+  // `iid`/`wid` (internal node ids) keep identical nodes as separate rows. More than one workspace node, or two idea nodes with one id,
+  // make the import state ambiguous: nothing is served for them and each is flagged once.
+  if (new Set(rows.map(r => r.wid)).size > 1) {
+    return { status: 'AVAILABLE', tenantId, domain: 'studio', workspace: { id: WORKSPACE_ID, revision }, ideas: [], counts: { ideas: 0, imported: 0 }, integrity: [{ id: WORKSPACE_ID, reason: 'more than one workspace node has this id' }] };
+  }
+  const idCount = new Map<string, number>();
+  for (const r of rows) if (r.id !== null) idCount.set(r.id, (idCount.get(r.id) ?? 0) + 1);
+  for (const [id, n] of [...idCount].sort()) if (n > 1) integrity.push({ id, reason: 'more than one idea node has this id' });
   for (const r of rows) {
+    if (r.id !== null && (idCount.get(r.id) ?? 0) > 1) continue;
     if (r.id === null || r.props === null) continue;
     const m = byId.get(r.id);
     if (!m) { integrity.push({ id: r.id, reason: 'idea is not in the manifest' }); continue; }
