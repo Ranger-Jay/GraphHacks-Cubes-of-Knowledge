@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import type { GraphClient } from './client.js';
 import { WORKSPACE_ID } from './ideaverse.js';
 
 /**
@@ -139,4 +140,76 @@ export async function loadAgentFixtures(repoRoot: string): Promise<AgentFixtures
   const agentKeys = new Set(profiles.map(p => p.actorKey));
   if (assignments.some(a => a.roleId === 'role-owner' && agentKeys.has(a.principalKey))) throw new Error('agent fixture: Owner must not be assigned to a synthetic agent');
   return { files, profiles, capabilities, roles, assignments, assignmentProvenance: { source: text(prov['source'], 'provenance source'), decidedAt, enforcement: 'NOT_ENFORCED' } };
+}
+
+
+export interface AgentProfilesSeedResult {
+  seedVersion: string; tenantId: string; profiles: number; roles: number; capabilities: number; assignments: number; edges: number;
+  /** Edges to the EXISTING Principal nodes (IS_PRINCIPAL, FOR_PRINCIPAL). 0 when the licensing seed has not created them: nothing is invented. */
+  principalLinks: number;
+}
+
+/**
+ * Deterministic idempotent seed on (id, tenantId). Profile, voice, resource, role and capability nodes are refreshed
+ * from the fixtures; RoleAssignment nodes are created once and NEVER overwritten by a re-seed, so a later authorized
+ * change to an assignment is not reverted. The workspace is created only if absent (revision untouched). No Principal
+ * is created, renamed or given membership.
+ */
+export async function seedAgentProfiles(client: GraphClient, repoRoot: string, options: { tenantId?: string } = {}): Promise<AgentProfilesSeedResult> {
+  const tenantId = options.tenantId ?? 't-wad';
+  const f = await loadAgentFixtures(repoRoot);
+  let edges = 0; let principalLinks = 0;
+  const merge = (label: string, id: string, props: Record<string, string | number | boolean | string[]>) =>
+    client.write(`MERGE (n:${label} {id: $id, tenantId: $tenantId}) SET n += $props`, { id, tenantId, props: { tenantId, ...props } });
+  const link = async (fromLabel: string, from: string, type: string, toLabel: string, to: string, id: string, props: Record<string, string> = {}) => {
+    const rows = await client.write<{ n: number }>(`MATCH (a:${fromLabel} {id: $from, tenantId: $tenantId}), (b:${toLabel} {id: $to, tenantId: $tenantId}) MERGE (a)-[e:${type} {id: $id}]->(b) SET e += $props RETURN count(e) AS n`, { from, to, id, tenantId, props });
+    if (rows[0]?.n !== 1) throw new Error(`Agent profile edge ${id} endpoints missing`);
+    edges++;
+  };
+  const linkPrincipal = async (fromLabel: string, from: string, type: string, key: string, id: string) => {
+    const rows = await client.write<{ n: number }>(`MATCH (a:${fromLabel} {id: $from, tenantId: $tenantId}), (p:Principal {id: $key}) MERGE (a)-[e:${type} {id: $id}]->(p) RETURN count(e) AS n`, { from, key, id, tenantId });
+    const n = rows[0]?.n ?? 0; edges += n; principalLinks += n;
+  };
+  const srcFor = { profiles: PROFILE_SOURCE_IDS.profiles, roles: PROFILE_SOURCE_IDS.roles, assignments: PROFILE_SOURCE_IDS.assignments };
+  const kinds = { profiles: 'agent_profiles', roles: 'access_roles', assignments: 'role_assignments' } as const;
+  for (const k of Object.keys(srcFor) as FixtureKey[]) {
+    await merge('ProfileSource', srcFor[k], { kind: kinds[k], path: f.files[k].path, sha256: f.files[k].sha256, synthetic: true, origin: PROFILE_ORIGIN.kind, licenseStatus: PROFILE_ORIGIN.licenseStatus });
+  }
+  // Same statement as seedIdeaverse: created once, the revision is never reset by seeding order.
+  await client.write('MERGE (w:Workspace {id: $id, tenantId: $tenantId}) ON CREATE SET w.revision = 0, w.name = $name, w.synthetic = true', { id: WORKSPACE_ID, tenantId, name: 'Warnings After Dark cube workspace' });
+
+  for (const c of f.capabilities) await merge('Capability', c.id, { description: c.description, implemented: false, synthetic: true, sourceId: srcFor.roles });
+  for (const r of f.roles) await merge('AccessRole', r.id, { name: r.name, intendedScope: r.intendedScope, cannot: r.cannot, implemented: false, synthetic: true, sourceId: srcFor.roles });
+  for (const r of f.roles) {
+    await link('AccessRole', r.id, 'DEFINED_IN', 'ProfileSource', srcFor.roles, `e-${r.id}-defined-in`);
+    for (const c of r.capabilities) await link('AccessRole', r.id, 'HAS_CAPABILITY', 'Capability', c, `e-${r.id}-has-${c}`);
+  }
+  for (const p of f.profiles) {
+    const id = profileNodeId(p.agentId);
+    await merge('AgentProfile', id, {
+      agentId: p.agentId, actorKey: p.actorKey, name: p.name, gender: p.gender, species: p.species, apparentAge: p.apparentAge, color: p.color, emoji: p.emoji, emojiName: p.emojiName,
+      role: p.role, personality: p.personality, assignment: p.assignment, knownFor: p.knownFor, declaredAccessLevel: p.declaredAccessLevel, synthetic: true, sourceId: srcFor.profiles
+    });
+    await merge('VoiceProfile', voiceNodeId(p.voice.voiceId), { provider: p.voice.provider, externalVoiceId: p.voice.voiceId, voiceName: p.voice.voiceName, synthetic: true, sourceId: srcFor.profiles });
+    for (const res of [p.skills, p.memory]) await merge('ResourceRef', resourceNodeId(p.agentId, res.kind), { kind: res.kind, agentId: p.agentId, declaredPath: res.declaredPath, proposedPath: res.proposedPath, synthetic: true, sourceId: srcFor.profiles });
+    await link('AgentProfile', id, 'DEFINED_IN', 'ProfileSource', srcFor.profiles, `e-${id}-defined-in`);
+    await link('AgentProfile', id, 'USES_VOICE', 'VoiceProfile', voiceNodeId(p.voice.voiceId), `e-${id}-uses-voice`);
+    await link('AgentProfile', id, 'HAS_SKILLS', 'ResourceRef', resourceNodeId(p.agentId, 'skills'), `e-${id}-has-skills`);
+    await link('AgentProfile', id, 'HAS_MEMORY', 'ResourceRef', resourceNodeId(p.agentId, 'memory'), `e-${id}-has-memory`);
+    await link('AgentProfile', id, 'ASSIGNED_TO', 'Workspace', WORKSPACE_ID, `e-${id}-assigned-to`);
+    await linkPrincipal('AgentProfile', id, 'IS_PRINCIPAL', p.actorKey, `e-${id}-is-principal`);
+  }
+  for (const a of f.assignments) {
+    const id = assignmentNodeId(a.principalKey);
+    // ON CREATE only: a re-seed never reverts a later authorized change or revocation.
+    await client.write('MERGE (n:RoleAssignment {id: $id, tenantId: $tenantId}) ON CREATE SET n += $props', { id, tenantId, props: {
+      tenantId, principalId: a.principalKey, roleId: a.roleId, workspaceId: WORKSPACE_ID, status: 'ACTIVE', enforcement: 'NOT_ENFORCED', revision: 1,
+      assignedAt: f.assignmentProvenance.decidedAt, assignedBy: 'owner decision (fixture)', source: 'fixture', sourceId: srcFor.assignments, synthetic: true
+    } });
+    await link('RoleAssignment', id, 'GRANTS_ROLE', 'AccessRole', a.roleId, `e-${id}-grants-role`);
+    await link('RoleAssignment', id, 'IN_WORKSPACE', 'Workspace', WORKSPACE_ID, `e-${id}-in-workspace`);
+    await link('RoleAssignment', id, 'DEFINED_IN', 'ProfileSource', srcFor.assignments, `e-${id}-defined-in`);
+    await linkPrincipal('RoleAssignment', id, 'FOR_PRINCIPAL', a.principalKey, `e-${id}-for-principal`);
+  }
+  return { seedVersion: AGENT_PROFILES_SEED_VERSION, tenantId, profiles: f.profiles.length, roles: f.roles.length, capabilities: f.capabilities.length, assignments: f.assignments.length, edges, principalLinks };
 }
