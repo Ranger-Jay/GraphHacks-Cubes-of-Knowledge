@@ -270,7 +270,7 @@ const MAX_RESOURCE_BYTES = 1_048_576;
 
 /**
  * Status of a proposed resource path at read time. The file is only hashed, never executed, loaded or interpreted.
- * A path outside the allowlist, a symlink, or anything that resolves outside `nodes/agents/` under the repository is UNVERIFIED.
+ * A path outside the allowlist, a symlink, or anything whose real path resolves outside `nodes/agents/` is UNVERIFIED.
  */
 export async function resolveResource(repoRoot: string, declaredPath: string, proposedPath: string, kind: 'skills' | 'memory'): Promise<ResourceView> {
   const base = { kind, declaredPath, proposedPath };
@@ -282,8 +282,9 @@ export async function resolveResource(repoRoot: string, declaredPath: string, pr
     const st = await lstat(abs);
     if (st.isSymbolicLink() || !st.isFile()) return unverified('Not a regular file; not opened.');
     if (st.size > MAX_RESOURCE_BYTES) return unverified('File is larger than the 1 MiB inspection limit; not opened.');
-    const real = await realpath(abs); const realRoot = await realpath(root);
-    if (!real.startsWith(realRoot + sep)) return unverified('File resolves outside the repository; not opened.');
+    const real = await realpath(abs); const realBase = await realpath(resolve(root, 'nodes/agents'));
+    // Checked against nodes/agents itself, not the repository: a directory symlink to another repo folder must not read as PRESENT.
+    if (!real.startsWith(realBase + sep)) return unverified('File resolves outside the allowed resource folder; not opened.');
     const bytes = await readFile(real);
     return { ...base, status: 'PRESENT', sha256: createHash('sha256').update(bytes).digest('hex'), byteCount: bytes.length, note: 'File exists. Its content is not loaded or executed.' };
   } catch (err) {
