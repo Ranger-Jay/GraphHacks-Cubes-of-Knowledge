@@ -41,3 +41,21 @@ test('studio edges: a forged edge id, an extra edge or an extra type is withheld
   assert.ok(o.nodes.some(n => n.id === 'sp-editor') && o.nodes.some(n => n.id === 'sp-writer'), 'the people themselves are still served');
   assert.equal((await studio(await (async () => { const h = await fresh('clean'); await seedStudio(h, root); return h; })())).integrity.length, 0, 'a clean graph is unaffected');
 });
+
+test('duplicate keys do not depend on label order: an extra first label or a second studio label cannot hide a duplicate', async () => {
+  const g = await fresh('labels');
+  await g.write("CREATE (:Extra {id: 'label-registered-first'})"); // the engine orders labels() by label id, so an earlier-registered label comes first
+  await seedStudio(g, root);
+  const real = (await g.read<{ p: Record<string, never> }>("MATCH (n:StudioPerson {id: 'sp-director', tenantId: 't-wad'}) RETURN properties(n) AS p"))[0]!.p;
+  await g.write('CREATE (m:Extra:StudioPerson) SET m = $p', { p: real }); // domain label is second
+  const realEd = (await g.read<{ p: Record<string, never> }>("MATCH (n:StudioPerson {id: 'sp-editor', tenantId: 't-wad'}) RETURN properties(n) AS p"))[0]!.p;
+  await g.write('CREATE (m:StudioSource:StudioPerson) SET m = $p', { p: realEd }); // two studio labels
+  const labelsOf = async (id: string) => (await g.read<{ l: string[] }>('MATCH (n {id: $id, tenantId: $t}) RETURN labels(n) AS l', { id, t: 't-wad' })).map(r => r.l.join(':')).sort();
+  assert.deepEqual(await labelsOf('sp-director'), ['Extra:StudioPerson', 'StudioPerson']);
+  const o = await studio(g);
+  assert.ok(o.integrity.some(i => i.id === 'sp-director' && /more than one StudioPerson node/.test(i.reason)), 'the Extra-first copy is detected as a duplicate');
+  assert.ok(!o.nodes.some(n => n.id === 'sp-director'), 'neither copy of the director is served');
+  assert.ok(o.integrity.some(i => i.id === 'sp-editor' && /more than one studio label/.test(i.reason)), 'a node with two studio labels is flagged');
+  assert.ok(o.nodes.some(n => n.id === 'sp-editor' && n.name === 'Lucinda Frayne'), 'the real, single-label editor is still served with its fixture values');
+  assert.equal(o.counts.people, 19);
+});
