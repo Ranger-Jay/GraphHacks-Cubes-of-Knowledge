@@ -1,0 +1,21 @@
+import { createRoot } from 'react-dom/client';
+import { StrictMode } from 'react';
+import type { ComponentType } from 'react';
+import { App } from './App';
+import type { SceneProps } from './components/SceneMount';
+import { createStudioClient } from './studio/ideaverseClient';
+import { IdeaStudioController } from './studio/studioController';
+import './styles.css';
+// SCRATCH proof entry (not committed): binds the real client to the controller and records onAdded + card phases.
+const sceneModules = import.meta.glob<{ CompanyCubeScene: ComponentType<SceneProps> }>('./scene/index.tsx', { eager: true });
+const Scene = Object.values(sceneModules)[0]?.CompanyCubeScene ?? null;
+const w = window as unknown as { __added: unknown[]; __phases: string[]; __ctl: IdeaStudioController };
+w.__added = []; w.__phases = [];
+const client = createStudioClient();
+const params = new URLSearchParams(location.search);
+const controller = new IdeaStudioController({ readOverview: client.readOverview, readDetail: client.readDetail, importIdea: client.importIdea, checkImport: client.checkImport, onAdded: (r, id) => w.__added.push({ id, r }) });
+w.__ctl = controller;
+new MutationObserver(() => { const c = document.querySelector('[data-testid="idea-card"]'); const p = c?.getAttribute('data-import-phase'); if (p && w.__phases[w.__phases.length - 1] !== p) w.__phases.push(p); }).observe(document.body, { subtree: true, attributes: true, childList: true, attributeFilter: ['data-import-phase'] });
+const access = (params.get('access') ?? 'OWNER') as 'OWNER' | 'READER' | 'UNKNOWN';
+const tree = <App Scene={Scene} studio={{ controller, access }} />;
+createRoot(document.getElementById('root')!).render(params.get('strict') ? <StrictMode>{tree}</StrictMode> : tree);

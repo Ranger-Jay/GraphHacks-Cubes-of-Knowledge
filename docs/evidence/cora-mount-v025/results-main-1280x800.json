@@ -1,0 +1,565 @@
+{
+  "pass": "main",
+  "viewport": "1280x800",
+  "base": 30,
+  "results": [
+    {
+      "vp": "1280x800",
+      "scenario": "S1-happy",
+      "name": "dialog role/labelled/described, aria-modal=false, exactly one card",
+      "ok": true,
+      "extra": {
+        "role": "dialog",
+        "modal": "false",
+        "title": "idea-040-typewriter-percussion-stem.txt",
+        "tabindex": "-1",
+        "focusIsTitle": true,
+        "desc": "Loading the verified idea text...",
+        "live": "polite",
+        "roleStatus": "status",
+        "cards": 1
+      }
+    },
+    {
+      "vp": "1280x800",
+      "scenario": "S1-happy",
+      "name": "focus moved to the title (tabindex=-1)",
+      "ok": true
+    },
+    {
+      "vp": "1280x800",
+      "scenario": "S1-happy",
+      "name": "status region is role=status aria-live=polite",
+      "ok": true
+    },
+    {
+      "vp": "1280x800",
+      "scenario": "S1-happy",
+      "name": "verified text shown (1-30 words) with the synthetic tag",
+      "ok": true
+    },
+    {
+      "vp": "1280x800",
+      "scenario": "S1-happy",
+      "name": "opening imported nothing",
+      "ok": true
+    },
+    {
+      "vp": "1280x800",
+      "scenario": "S1-happy",
+      "name": "reaches Added",
+      "ok": true
+    },
+    {
+      "vp": "1280x800",
+      "scenario": "S1-happy",
+      "name": "phases pending > verifying > added in order",
+      "ok": true,
+      "extra": [
+        "pending",
+        "verifying",
+        "added"
+      ]
+    },
+    {
+      "vp": "1280x800",
+      "scenario": "S1-happy",
+      "name": "onAdded exactly once",
+      "ok": true,
+      "extra": 1
+    },
+    {
+      "vp": "1280x800",
+      "scenario": "S1-happy",
+      "name": "exactly one import POST with the pinned tuple",
+      "ok": true,
+      "extra": [
+        {
+          "ideaId": "idea-040",
+          "key": "idea-75b5f3bd-22a1-411a-b0e1-cbda7417dae2",
+          "expectedRevision": 11
+        }
+      ]
+    },
+    {
+      "vp": "1280x800",
+      "scenario": "S1-happy",
+      "name": "graph truth: membership present, revision +1",
+      "ok": true,
+      "extra": {
+        "rev0": 11,
+        "now": 12
+      }
+    },
+    {
+      "vp": "1280x800",
+      "scenario": "S1-happy",
+      "name": "a fresh overview read happened after the import (read-back)",
+      "ok": true
+    },
+    {
+      "vp": "1280x800",
+      "scenario": "S1-happy",
+      "name": "pool refreshed: the imported idea left the pool",
+      "ok": true
+    },
+    {
+      "vp": "1280x800",
+      "scenario": "S1-happy",
+      "name": "status text Added, button disabled",
+      "ok": true
+    },
+    {
+      "vp": "1280x800",
+      "scenario": "S1-happy",
+      "name": "no overflow / card inside viewport",
+      "ok": true,
+      "extra": {
+        "l": 897.796875,
+        "t": 471.859375,
+        "r": 1254.203125,
+        "b": 763.171875,
+        "vw": 1280,
+        "vh": 800
+      }
+    },
+    {
+      "vp": "1280x800",
+      "scenario": "S1-happy",
+      "name": "Escape closes the card",
+      "ok": true
+    },
+    {
+      "vp": "1280x800",
+      "scenario": "S1-happy",
+      "name": "opener is gone after Added: focus falls back to the pool heading",
+      "ok": true,
+      "extra": "idea-pool-h"
+    },
+    {
+      "vp": "1280x800",
+      "scenario": "S1-happy",
+      "name": "every studio request carried no-store semantics (Cache-Control/Pragma no-cache)",
+      "ok": true,
+      "extra": [
+        {
+          "n": 143,
+          "method": "GET",
+          "path": "/api/studio/ideas/idea-040",
+          "cache": "no-cache",
+          "pragma": "no-cache",
+          "hasAuth": false,
+          "browser": true
+        },
+        {
+          "n": 145,
+          "method": "GET",
+          "path": "/api/studio/ideas",
+          "cache": "no-cache",
+          "pragma": "no-cache",
+          "hasAuth": false,
+          "browser": true,
+          "status": 200
+        },
+        {
+          "n": 146,
+          "method": "POST",
+          "path": "/api/studio/ideas/idea-040/import",
+          "cache": "no-cache",
+          "pragma": "no-cache",
+          "hasAuth": false,
+          "browser": true,
+          "body": {
+            "ideaId": "idea-040",
+            "key": "idea-75b5f3bd-22a1-411a-b0e1-cbda7417dae2",
+            "expectedRevision": 11
+          },
+          "status": 200
+        }
+      ]
+    },
+    {
+      "vp": "1280x800",
+      "scenario": "S1-happy",
+      "name": "the browser sent no Authorization header on any studio request",
+      "ok": true
+    },
+    {
+      "vp": "1280x800",
+      "scenario": "S2-keyboard",
+      "name": "Enter on the opener opens the card, focus on title",
+      "ok": true
+    },
+    {
+      "vp": "1280x800",
+      "scenario": "S2-keyboard",
+      "name": "Tab order: Add then Close (no disabled control, nothing behind the card)",
+      "ok": true,
+      "extra": [
+        "idea-card-add",
+        "idea-card-close"
+      ]
+    },
+    {
+      "vp": "1280x800",
+      "scenario": "S2-keyboard",
+      "name": "Escape closes; focus returns to the opener button",
+      "ok": true
+    },
+    {
+      "vp": "1280x800",
+      "scenario": "S2-keyboard",
+      "name": "closing imported nothing",
+      "ok": true
+    },
+    {
+      "vp": "1280x800",
+      "scenario": "S3-double-click",
+      "name": "reaches Added",
+      "ok": true,
+      "extra": {
+        "phases": [
+          "idle",
+          "pending",
+          "verifying",
+          "added"
+        ],
+        "text": "\n2026-10-14 UTC\n\nA synthetic graphic designer hand-stamps forty fictional transit visas using aged cotton paper and custom brass seals for the border crossing sequence.\n\nAdded to the cube.\nAdded\nClose"
+      }
+    },
+    {
+      "vp": "1280x800",
+      "scenario": "S3-double-click",
+      "name": "triple click = one import POST, one pull",
+      "ok": true
+    },
+    {
+      "vp": "1280x800",
+      "scenario": "S4a-lost-reply-recheck",
+      "name": "uncertain state shown",
+      "ok": true
+    },
+    {
+      "vp": "1280x800",
+      "scenario": "S4a-lost-reply-recheck",
+      "name": "ruled sentence, never \"Nothing was saved\"",
+      "ok": true,
+      "extra": "Could not confirm whether this was saved. Re-check the cube before retrying."
+    },
+    {
+      "vp": "1280x800",
+      "scenario": "S4a-lost-reply-recheck",
+      "name": "Re-check and same-tuple Retry are offered",
+      "ok": true
+    },
+    {
+      "vp": "1280x800",
+      "scenario": "S4a-lost-reply-recheck",
+      "name": "the write really committed (graph truth)",
+      "ok": true
+    },
+    {
+      "vp": "1280x800",
+      "scenario": "S4a-lost-reply-recheck",
+      "name": "Re-check ends Added",
+      "ok": true
+    },
+    {
+      "vp": "1280x800",
+      "scenario": "S4a-lost-reply-recheck",
+      "name": "Re-check made ZERO import POSTs (read-only status check only)",
+      "ok": true,
+      "extra": [
+        "POST /api/studio/ideas/idea-043/import-status",
+        "GET /api/studio/ideas",
+        "GET /api/studio/ideas"
+      ]
+    },
+    {
+      "vp": "1280x800",
+      "scenario": "S4a-lost-reply-recheck",
+      "name": "one pull",
+      "ok": true
+    },
+    {
+      "vp": "1280x800",
+      "scenario": "S4b-lost-reply-retry",
+      "name": "another actor moved the workspace revision",
+      "ok": true
+    },
+    {
+      "vp": "1280x800",
+      "scenario": "S4b-lost-reply-retry",
+      "name": "Retry ends Added",
+      "ok": true
+    },
+    {
+      "vp": "1280x800",
+      "scenario": "S4b-lost-reply-retry",
+      "name": "two POSTs with the IDENTICAL {key, expectedRevision} tuple; revision not re-read",
+      "ok": true,
+      "extra": [
+        {
+          "ideaId": "idea-044",
+          "key": "idea-caab6015-40f7-439a-9386-d8478765f4a7",
+          "expectedRevision": 14
+        },
+        {
+          "ideaId": "idea-044",
+          "key": "idea-caab6015-40f7-439a-9386-d8478765f4a7",
+          "expectedRevision": 14
+        }
+      ]
+    },
+    {
+      "vp": "1280x800",
+      "scenario": "S4b-lost-reply-retry",
+      "name": "one pull",
+      "ok": true
+    },
+    {
+      "vp": "1280x800",
+      "scenario": "S5-close-mid-flight",
+      "name": "the import POST is in flight before closing",
+      "ok": true
+    },
+    {
+      "vp": "1280x800",
+      "scenario": "S5-close-mid-flight",
+      "name": "card closed while pending; focus on the opener",
+      "ok": true
+    },
+    {
+      "vp": "1280x800",
+      "scenario": "S5-close-mid-flight",
+      "name": "late completion discarded: no Added, no pull, no card",
+      "ok": true,
+      "extra": {
+        "phases": [
+          "idle",
+          "pending"
+        ],
+        "added": 0,
+        "active": "BODY",
+        "scrollW": 1280,
+        "innerW": 1280
+      }
+    },
+    {
+      "vp": "1280x800",
+      "scenario": "S5-close-mid-flight",
+      "name": "but the committed idea left the pool via a fresh read",
+      "ok": true,
+      "extra": {
+        "imported": true,
+        "poolCount": 0,
+        "log": [
+          "GET /api/studio/ideas 200",
+          "POST /api/studio/ideas/idea-045/import 200",
+          "GET /api/studio/ideas 200",
+          "GET /api/studio/ideas 200",
+          "GET /api/studio/ideas 200"
+        ]
+      }
+    },
+    {
+      "vp": "1280x800",
+      "scenario": "S6-reopen-unresolved",
+      "name": "the import POST is in flight before closing",
+      "ok": true
+    },
+    {
+      "vp": "1280x800",
+      "scenario": "S6-reopen-unresolved",
+      "name": "reopened card shows the unresolved attempt with the ruled sentence",
+      "ok": true,
+      "extra": "Could not confirm whether this was saved. Re-check the cube before retrying.\nAn earlier attempt for this idea was interrupted and has not been resolved."
+    },
+    {
+      "vp": "1280x800",
+      "scenario": "S6-reopen-unresolved",
+      "name": "reopening did not submit again",
+      "ok": true,
+      "extra": [
+        "GET /api/studio/ideas 200",
+        "POST /api/studio/ideas/idea-046/import undefined",
+        "GET /api/studio/ideas/idea-046 undefined"
+      ]
+    },
+    {
+      "vp": "1280x800",
+      "scenario": "S6-reopen-unresolved",
+      "name": "Re-check before the commit: no matching receipt, says it proves nothing",
+      "ok": true,
+      "extra": "Could not confirm whether this was saved. Re-check the cube before retrying.\nThe status check saw no matching receipt. That does not rule out a request that is still completing."
+    },
+    {
+      "vp": "1280x800",
+      "scenario": "S6-reopen-unresolved",
+      "name": "late first completion discarded (no pull yet)",
+      "ok": true
+    },
+    {
+      "vp": "1280x800",
+      "scenario": "S6-reopen-unresolved",
+      "name": "second Re-check finds the receipt and confirms Added",
+      "ok": true
+    },
+    {
+      "vp": "1280x800",
+      "scenario": "S6-reopen-unresolved",
+      "name": "still exactly ONE import POST; Re-checks used import-status only",
+      "ok": true,
+      "extra": {
+        "imports": 1,
+        "status": 2
+      }
+    },
+    {
+      "vp": "1280x800",
+      "scenario": "S6-reopen-unresolved",
+      "name": "one pull",
+      "ok": true
+    },
+    {
+      "vp": "1280x800",
+      "scenario": "S7-phase-leaves-ready",
+      "name": "the import POST is in flight before leaving READY",
+      "ok": true
+    },
+    {
+      "vp": "1280x800",
+      "scenario": "S7-phase-leaves-ready",
+      "name": "Add disabled with the READY copy or card shows unresolved while phase is not READY",
+      "ok": true
+    },
+    {
+      "vp": "1280x800",
+      "scenario": "S7-phase-leaves-ready",
+      "name": "late completion after leaving READY: no Added, no pull",
+      "ok": true,
+      "extra": [
+        "idle",
+        "pending",
+        "unconfirmed"
+      ]
+    },
+    {
+      "vp": "1280x800",
+      "scenario": "S7-phase-leaves-ready",
+      "name": "committed idea left the pool after READY returned",
+      "ok": true
+    },
+    {
+      "vp": "1280x800",
+      "scenario": "S9-denied",
+      "name": "POST refused: refusal wording, not \"Nothing was saved\"",
+      "ok": true,
+      "extra": "idea-049-rooftop-pigeon-coop-set.txt\n\nSynthetic demo idea. A fictional proposal, not a verified fact or a clearance.\n\nSubmitted\n2026-10-12 UTC\nLast updated\n2026-10-14 UTC\n\nA fictional greensperson dresses a tar-paper roof with weathered timber coops, laundry lines, and galvanized water tanks for the opening surveillance scene.\n\nAdding ideas needs owner access. The server refused this request.\nClose\n\nThe server refused owner access for this session, so adding is off."
+    },
+    {
+      "vp": "1280x800",
+      "scenario": "S9-denied",
+      "name": "no same-tuple Retry offered after a refusal",
+      "ok": true,
+      "extra": 0
+    },
+    {
+      "vp": "1280x800",
+      "scenario": "S9-denied",
+      "name": "exactly one import POST",
+      "ok": true
+    },
+    {
+      "vp": "1280x800",
+      "scenario": "S9-denied",
+      "name": "refused overview read before submit: says no request was sent, never \"Nothing was saved\"",
+      "ok": true,
+      "extra": "idea-053-silk-parachute-diffuser.txt\n\nSynthetic demo idea. A fictional proposal, not a verified fact or a clearance.\n\nSubmitted\n2026-10-12 UTC\nLast updated\n2026-10-14 UTC\n\nAn imagined grip crew rigs a surplus cargo parachute overhead to soften harsh midday sun during the desert relay station dialogue scene.\n\nCould not read the cube to start this add, so no request was sent.\nRetry Add to cube\nClose"
+    },
+    {
+      "vp": "1280x800",
+      "scenario": "S9-denied",
+      "name": "and zero import POSTs",
+      "ok": true
+    },
+    {
+      "vp": "1280x800",
+      "scenario": "S10-stale",
+      "name": "stale copy, no same-tuple Retry, new-attempt action offered",
+      "ok": true,
+      "extra": {
+        "phase": "error",
+        "t": "t a new attempt\nClose",
+        "log": [
+          "GET /api/studio/ideas 200",
+          "POST /api/studio/ideas/idea-050/import 409",
+          "GET /api/studio/ideas 200"
+        ]
+      }
+    },
+    {
+      "vp": "1280x800",
+      "scenario": "S10-stale",
+      "name": "new attempt returns to idle (not auto-submitted)",
+      "ok": true
+    },
+    {
+      "vp": "1280x800",
+      "scenario": "S10-stale",
+      "name": "then Added",
+      "ok": true
+    },
+    {
+      "vp": "1280x800",
+      "scenario": "S10-stale",
+      "name": "second POST has a NEW key and a newer expectedRevision",
+      "ok": true,
+      "extra": [
+        {
+          "ideaId": "idea-050",
+          "key": "idea-9b6a7cb3-1028-4c21-863e-3ca14a312e23",
+          "expectedRevision": 19
+        },
+        {
+          "ideaId": "idea-050",
+          "key": "idea-b031480c-fa58-44f4-b354-d9b414e8251e",
+          "expectedRevision": 20
+        }
+      ]
+    },
+    {
+      "vp": "1280x800",
+      "scenario": "S11-reader",
+      "name": "Add disabled with the owner-access reason",
+      "ok": true,
+      "extra": "This session can read ideas but needs owner access to add them."
+    },
+    {
+      "vp": "1280x800",
+      "scenario": "S11-reader",
+      "name": "no import POST from a reader session",
+      "ok": true
+    },
+    {
+      "vp": "1280x800",
+      "scenario": "S12-strict-mode",
+      "name": "Added under StrictMode",
+      "ok": true
+    },
+    {
+      "vp": "1280x800",
+      "scenario": "S12-strict-mode",
+      "name": "one import POST and one pull",
+      "ok": true
+    }
+  ],
+  "pageErrors": [
+    "1280 console: Failed to load resource: the server responded with a status of 404 (Not Found)",
+    "1280 console: Failed to load resource: the server responded with a status of 502 (Bad Gateway)",
+    "1280 console: Failed to load resource: the server responded with a status of 502 (Bad Gateway)",
+    "1280 console: Failed to load resource: the server responded with a status of 403 (Forbidden)",
+    "1280 console: Failed to load resource: the server responded with a status of 403 (Forbidden)",
+    "1280 console: Failed to load resource: the server responded with a status of 409 (Conflict)"
+  ]
+}
