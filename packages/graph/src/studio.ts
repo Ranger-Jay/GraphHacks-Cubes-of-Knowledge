@@ -230,21 +230,30 @@ export async function studioOverview(client: GraphClient, repoRoot: string, tena
   for (const r of rows) {
     const from = String(r.props['id']);
     if (!served.has(from)) continue;
-    for (const [eid, type, to, ep] of r.out) {
-      if (typeof type !== 'string' || typeof eid !== 'string' || typeof to !== 'string') continue;
+    // Each served node must have EXACTLY one edge of each expected type, with the id the seed writes. A duplicate edge (same
+    // id or not), a forged id or an extra type is withheld (every edge of that type) and flagged once per distinct id.
+    const expectedId: Record<string, string> = label(r) === 'StudioPerson'
+      ? { WORKS_IN: `e-${from}-works-in`, DEFINED_IN: `e-${from}-defined-in` } : { DEFINED_IN: `e-${from}-defined-in` };
+    const byType = new Map<string, unknown[][]>();
+    for (const entry of r.out) { const [eid, type, to] = entry; if (typeof type !== 'string' || typeof eid !== 'string' || typeof to !== 'string') continue; byType.set(type, [...(byType.get(type) ?? []), entry]); }
+    for (const [type, list] of byType) {
+      const flagged = new Set<string>();
+      const flagAll = (reason: string) => { for (const [eid] of list) if (!flagged.has(String(eid))) { flagged.add(String(eid)); withhold(String(eid), reason); } };
+      if (expectedId[type] === undefined) { flagAll('unexpected relationship type in the studio domain'); continue; }
+      if (list.length !== 1 || list[0]![0] !== expectedId[type]) { flagAll(`${type} must be exactly one edge with the fixture id ${expectedId[type]}`); continue; }
+      const [eid, , to, ep] = list[0]!; const id = String(eid);
       const props = (ep ?? {}) as Record<string, unknown>;
-      const target = served.get(to);
-      if (!target) { withhold(eid, 'edge endpoint was withheld or is outside the studio domain'); continue; }
+      if (!served.get(String(to))) { withhold(id, 'edge endpoint was withheld or is outside the studio domain'); continue; }
       if (type === 'WORKS_IN') {
         const row = crewBySlug.get(slugOf(r));
-        if (label(r) !== 'StudioPerson' || !row || to !== departmentId(row.departmentSlug)) { withhold(eid, 'WORKS_IN differs from the fixture'); continue; }
-        edges.push({ id: eid, type, from, to });
-      } else if (type === 'DEFINED_IN') {
+        if (label(r) !== 'StudioPerson' || !row || to !== departmentId(row.departmentSlug)) { withhold(id, 'WORKS_IN differs from the fixture'); continue; }
+        edges.push({ id, type, from, to: String(to) });
+      } else {
         const row = label(r) === 'StudioPerson' ? crewBySlug.get(slugOf(r)) : depBySlug.get(slugOf(r));
         const sourceId = label(r) === 'StudioPerson' ? 'ssrc-crew-roster' : 'ssrc-departments';
-        if (!row || to !== sourceId || props['line'] !== row.line || props['excerpt'] !== row.excerpt) { withhold(eid, 'DEFINED_IN line or excerpt differs from the fixture'); continue; }
-        edges.push({ id: eid, type, from, to, line: row.line, excerpt: row.excerpt });
-      } else withhold(eid, 'unexpected relationship type in the studio domain');
+        if (!row || to !== sourceId || props['line'] !== row.line || props['excerpt'] !== row.excerpt) { withhold(id, 'DEFINED_IN line or excerpt differs from the fixture'); continue; }
+        edges.push({ id, type: 'DEFINED_IN', from, to: String(to), line: row.line, excerpt: row.excerpt });
+      }
     }
   }
   nodes.sort((a, b) => a.label.localeCompare(b.label) || a.id.localeCompare(b.id));
