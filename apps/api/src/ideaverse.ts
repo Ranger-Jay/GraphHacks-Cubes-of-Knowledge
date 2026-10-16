@@ -167,7 +167,11 @@ function receiptAgrees(receipt: ImportReceipt, ideaId: string, expectedRevision:
 async function readDetail(client: GraphClient, repoRoot: string, tenantId: string, ideaId: string): Promise<DetailBody> {
   let manifest;
   try { manifest = await loadIdeaManifest(repoRoot); }
-  catch { return { status: 'UNAVAILABLE', reason: 'MANIFEST_INVALID' }; }
+  catch (err) {
+    const message = err instanceof Error ? err.message : '';
+    const source = message.startsWith(`manifest ${ideaId}:`) && (message.includes('hash differs') || message.includes('byte count'));
+    return { status: 'UNAVAILABLE', reason: source ? 'SOURCE_MISMATCH' : 'MANIFEST_INVALID' };
+  }
   const entry = manifest.ideas.find(idea => idea.id === ideaId);
   if (entry === undefined) return { status: 'NOT_FOUND' };
   const text = await verifiedText(repoRoot, entry.path, entry.byteCount, entry.sha256);
