@@ -455,15 +455,18 @@ test('15. P3 Synchronous lock releases cleanly if handler throws/rejects', async
 });
 
 test('16. Approved outage notices are exact and other blocked phases do not use them', () => {
-  assert.equal(GRAPH_OUTAGE_NOTICES.roy, 'FalkorDB is disconnected. Operations are offline.');
+  assert.equal(GRAPH_OUTAGE_NOTICES.roy, 'FalkorDB is unavailable. Operations are offline.');
   assert.equal(
     GRAPH_OUTAGE_NOTICES.ava,
-    'I can\u2019t access the company\u2019s knowledge. Information is unavailable until FalkorDB reconnects.'
+    'I can\u2019t access the company\u2019s knowledge. Information is unavailable until FalkorDB is available again.'
   );
   assert.equal(
     GRAPH_OUTAGE_NOTICES.guz,
     'I can\u2019t verify any sources. I won\u2019t provide an answer without evidence.'
   );
+  for (const notice of Object.values(GRAPH_OUTAGE_NOTICES)) {
+    assert.ok(!/disconnect|reconnect|sever/i.test(notice), `outage notice must not claim a lost connection: ${notice}`);
+  }
   assert.equal(normalSpeechAllowed('READY'), true);
   assert.equal(normalSpeechAllowed(undefined), false);
   assert.equal(normalSpeechAllowed('GRAPH_UNAVAILABLE'), false);
