@@ -1,0 +1,20 @@
+{
+  "version": "v001",
+  "outageVersions": { "roy": "v002", "ava": "v002", "guz": "v002" },
+  "speakers": ["roy", "ava", "guz"],
+  "phrases": [
+    { "id": "01_greeting", "text": "Greetings, Commander" },
+    { "id": "02_help", "text": "how may I help" },
+    { "id": "03_yes", "text": "yes" },
+    { "id": "04_no", "text": "no" },
+    { "id": "05_task_start_a", "text": "I'll get right on it." },
+    { "id": "06_task_start_b", "text": "Task beginning" },
+    { "id": "07_task_start_c", "text": "Underway." },
+    { "id": "08_task_optional", "text": "On it." }
+  ],
+  "outage": {
+    "roy": "FalkorDB is unavailable. Operations are offline.",
+    "ava": "I can’t access the company’s knowledge. Information is unavailable until FalkorDB is available again.",
+    "guz": "I can’t verify any sources. I will not provide an answer without evidence."
+  }
+}

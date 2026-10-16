@@ -3,6 +3,8 @@ dist/
 coverage/
 artifacts/
 .local/graph-witness/
+.local/agent-dialogue/
+.local/voices-*.json
 .env
 .env.*
 !.env.example
