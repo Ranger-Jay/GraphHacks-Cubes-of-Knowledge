@@ -83,3 +83,24 @@ test('an ambiguous workspace serves no revision (never an attacker-chosen one), 
     const clean = await fresh('wsclean'); await seedIdeaverse(clean, tmp); const c = await ideaverseOverview(clean, tmp, 't-wad'); assert.ok(c.status === 'AVAILABLE' && c.workspace.revision === 0, 'the unambiguous path still serves the revision');
   } finally { await rm(tmp, { recursive: true, force: true }); }
 });
+
+import { IMPORT_WRITE_QUERY } from '../../packages/graph/src/ideaverse.ts';
+test('the import write refuses a duplicate idea or workspace identity before mutating: no revision jump, no twin receipts', async () => {
+  const tmp = await ideaRoot();
+  try {
+    for (const which of ['idea', 'workspace'] as const) {
+      const g = await fresh(`dupwrite_${which}`); await seedIdeaverse(g, tmp);
+      if (which === 'idea') { const p = (await g.read<{ p: Record<string, never> }>("MATCH (n:IdeaFile {id: 'idea-a', tenantId: 't-wad'}) RETURN properties(n) AS p"))[0]!.p; await g.write('CREATE (m:IdeaFile) SET m = $p', { p }); }
+      else { const p = (await g.read<{ p: Record<string, never> }>("MATCH (n:Workspace {id: 'ws-wad-cube', tenantId: 't-wad'}) RETURN properties(n) AS p"))[0]!.p; await g.write('CREATE (m:Workspace) SET m = $p', { p }); }
+      const r = await importIdea(g, tmp, req('idea-a', `key-dupwrite-${which}`, 0));
+      assert.deepEqual(r, { status: 'REJECTED', reason: 'AMBIGUOUS_IDENTITY' }, which);
+      assert.equal(await count(g, 'MATCH (r:ImportReceipt) RETURN count(r) AS n'), 0, `${which}: no receipt`);
+      assert.equal(await count(g, 'MATCH ()-[e:IMPORTED_INTO]->() RETURN count(e) AS n'), 0, `${which}: no membership`);
+      assert.equal(await count(g, 'MATCH (w:Workspace) WHERE w.revision <> 0 RETURN count(w) AS n'), 0, `${which}: revision unchanged`);
+      // The statement itself, not only the pre-check, refuses: run it directly.
+      const rows = await g.write<unknown>(IMPORT_WRITE_QUERY, { tenantId: 't-wad', workspaceId: 'ws-wad-cube', ideaId: 'idea-a', sha256: sha(Buffer.from('A short fictional idea number 0 about a compass.\n')), expectedRevision: 0, keyHash: 'k'.repeat(64), receiptId: 'r1', fingerprint: 'f', importedAt: '2026-10-16T00:00:00.000Z', membershipId: 'm1', filename: 'idea-a.txt', byteCount: 49, submittedAt: '2026-10-14T09:00:00Z', touchedAt: '2026-10-15T09:00:00Z' } as Parameters<GraphClient['write']>[1]);
+      assert.equal(rows.length, 0, `${which}: the guarded statement returns no row`);
+    }
+    const ok = await fresh('dupwrite_ok'); await seedIdeaverse(ok, tmp); assert.equal((await importIdea(ok, tmp, req('idea-a', 'key-dupwrite-ok1', 0))).status, 'IMPORTED', 'a clean graph still imports');
+  } finally { await rm(tmp, { recursive: true, force: true }); }
+});
