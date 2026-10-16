@@ -1,0 +1,3 @@
+[[0,"flying:0",null],[56,"flying:0","idle"],[101,"REMOVED","added"]]
+--- default gate:
+[[0,"flying:0",null],[59,"flying:0","idle"],[122,"flying:0","added"],[139,"importing:0","added"],[188,"importing:0.0711","added"],[438,"importing:0.3489","added"],[689,"importing:0.6267","added"],[939,"importing:0.9044","added"],[1189,"REMOVED","added"]]

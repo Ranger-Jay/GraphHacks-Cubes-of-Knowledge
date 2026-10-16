@@ -1,0 +1,387 @@
+[
+ {
+  "vp": "1280x800",
+  "scenario": "W1-own-add",
+  "name": "comets mount once, only after the pool is ready (1 mount, 0 remounts, 3 comets)",
+  "ok": true,
+  "extra": {
+   "w0": {
+    "mounts": 1,
+    "remounts": 0,
+    "remountLog": [],
+    "deferred": 0,
+    "added": 0,
+    "imports": 0
+   },
+   "c0": [
+    {
+     "id": "idea-001",
+     "status": "flying",
+     "prog": 0.0045
+    },
+    {
+     "id": "idea-003",
+     "status": "flying",
+     "prog": 0.0045
+    },
+    {
+     "id": "idea-005",
+     "status": "flying",
+     "prog": 0.0045
+    }
+   ]
+  }
+ },
+ {
+  "vp": "1280x800",
+  "scenario": "W1-own-add",
+  "name": "inspecting via the comet opens exactly one card (no second Add control in the scene)",
+  "ok": true
+ },
+ {
+  "vp": "1280x800",
+  "scenario": "W1-own-add",
+  "name": "Added, exactly one pull, exactly one POST",
+  "ok": true,
+  "extra": {
+   "mounts": 1,
+   "remounts": 0,
+   "remountLog": [],
+   "deferred": 0,
+   "added": 1,
+   "imports": 1
+  }
+ },
+ {
+  "vp": "1280x800",
+  "scenario": "W1-own-add",
+  "name": "the comet goes importing -> removed and never back to flying (no reset of an in-flight pull)",
+  "ok": true,
+  "extra": [
+   "importing",
+   "importing",
+   "importing",
+   "importing",
+   "importing",
+   "importing",
+   "importing",
+   "REMOVED",
+   "REMOVED",
+   "REMOVED",
+   "REMOVED",
+   "REMOVED",
+   "REMOVED",
+   "REMOVED",
+   "REMOVED",
+   "REMOVED",
+   "REMOVED",
+   "REMOVED",
+   "REMOVED",
+   "REMOVED",
+   "REMOVED",
+   "REMOVED",
+   "REMOVED",
+   "REMOVED"
+  ]
+ },
+ {
+  "vp": "1280x800",
+  "scenario": "W1-own-add",
+  "name": "no remount after an own add (pool matches what the comets expect)",
+  "ok": true,
+  "extra": {
+   "mounts": 1,
+   "remounts": 0,
+   "remountLog": [],
+   "deferred": 0,
+   "added": 1,
+   "imports": 1
+  }
+ },
+ {
+  "vp": "1280x800",
+  "scenario": "W1-own-add",
+  "name": "imported idea stays gone from the scene and the pool",
+  "ok": true,
+  "extra": [
+   {
+    "id": "idea-003",
+    "status": "flying",
+    "prog": 0.0644
+   },
+   {
+    "id": "idea-005",
+    "status": "flying",
+    "prog": 0.0644
+   },
+   {
+    "id": "idea-007",
+    "status": "flying",
+    "prog": 0.0417
+   }
+  ]
+ },
+ {
+  "vp": "1280x800",
+  "scenario": "W2-external-drift",
+  "name": "one remount on drift",
+  "ok": true,
+  "extra": {
+   "mounts": 1,
+   "remounts": 1,
+   "remountLog": [
+    {
+     "at": 1792149926973,
+     "from": [
+      "idea-001",
+      "idea-002",
+      "idea-003",
+      "idea-004",
+      "idea-005",
+      "idea-006",
+      "idea-007",
+      "idea-008"
+     ],
+     "to": [
+      "idea-001",
+      "idea-002",
+      "idea-003",
+      "idea-005",
+      "idea-006",
+      "idea-007",
+      "idea-008"
+     ]
+    }
+   ],
+   "deferred": 0,
+   "added": 0,
+   "imports": 0
+  }
+ },
+ {
+  "vp": "1280x800",
+  "scenario": "W2-external-drift",
+  "name": "imported-elsewhere idea is not a comet after the remount",
+  "ok": true,
+  "extra": [
+   {
+    "id": "idea-001",
+    "status": "flying",
+    "prog": 0.025
+   },
+   {
+    "id": "idea-003",
+    "status": "flying",
+    "prog": 0.025
+   },
+   {
+    "id": "idea-006",
+    "status": "flying",
+    "prog": 0.025
+   }
+  ]
+ },
+ {
+  "vp": "1280x800",
+  "scenario": "W2-external-drift",
+  "name": "no continuous resetting (still 1 remount after 1.2 s)",
+  "ok": true
+ },
+ {
+  "vp": "1280x800",
+  "scenario": "W3-drift-during-in-flight-import",
+  "name": "no remount while the import is in flight; the held comet is still the same flying comet",
+  "ok": true,
+  "extra": {
+   "wMid": {
+    "mounts": 1,
+    "remounts": 0,
+    "remountLog": [],
+    "deferred": 4,
+    "added": 0,
+    "imports": 1
+   },
+   "cMid": [
+    {
+     "id": "idea-001",
+     "status": "flying",
+     "prog": 0.0045
+    },
+    {
+     "id": "idea-003",
+     "status": "flying",
+     "prog": 0.0336
+    },
+    {
+     "id": "idea-005",
+     "status": "flying",
+     "prog": 0.0336
+    }
+   ]
+  }
+ },
+ {
+  "vp": "1280x800",
+  "scenario": "W3-drift-during-in-flight-import",
+  "name": "the held request settles STALE (revision moved): error card, no Added",
+  "ok": true
+ },
+ {
+  "vp": "1280x800",
+  "scenario": "W3-drift-during-in-flight-import",
+  "name": "then exactly one deferred remount; the drifted idea is absent; no pull",
+  "ok": true,
+  "extra": {
+   "wEnd": {
+    "mounts": 1,
+    "remounts": 1,
+    "remountLog": [
+     {
+      "at": 1792149932023,
+      "from": [
+       "idea-001",
+       "idea-002",
+       "idea-003",
+       "idea-004",
+       "idea-005",
+       "idea-006",
+       "idea-007",
+       "idea-008"
+      ],
+      "to": [
+       "idea-001",
+       "idea-002",
+       "idea-003",
+       "idea-004",
+       "idea-005",
+       "idea-006",
+       "idea-007"
+      ]
+     }
+    ],
+    "deferred": 4,
+    "added": 0,
+    "imports": 1
+   },
+   "cEnd": [
+    {
+     "id": "idea-001",
+     "status": "flying",
+     "prog": 0
+    },
+    {
+     "id": "idea-003",
+     "status": "flying",
+     "prog": 0.0168
+    },
+    {
+     "id": "idea-005",
+     "status": "flying",
+     "prog": 0.0168
+    }
+   ]
+  }
+ },
+ {
+  "vp": "1280x800",
+  "scenario": "W4-drift-during-pull",
+  "name": "importing -> removed, never reset to flying, 0 remounts while the pull was visible",
+  "ok": true,
+  "extra": {
+   "seen": [
+    "importing",
+    "importing",
+    "importing",
+    "importing",
+    "importing",
+    "importing",
+    "importing",
+    "importing",
+    "importing",
+    "importing",
+    "REMOVED",
+    "REMOVED",
+    "REMOVED",
+    "REMOVED",
+    "REMOVED",
+    "REMOVED",
+    "REMOVED",
+    "REMOVED",
+    "REMOVED",
+    "REMOVED",
+    "REMOVED",
+    "REMOVED",
+    "REMOVED",
+    "REMOVED",
+    "REMOVED",
+    "REMOVED",
+    "REMOVED",
+    "REMOVED",
+    "REMOVED",
+    "REMOVED"
+   ],
+   "remountsDuringPull": 0
+  }
+ },
+ {
+  "vp": "1280x800",
+  "scenario": "W4-drift-during-pull",
+  "name": "then exactly one remount; drifted and imported ideas absent; one pull, one POST",
+  "ok": true,
+  "extra": {
+   "wEnd": {
+    "mounts": 1,
+    "remounts": 1,
+    "remountLog": [
+     {
+      "at": 1792149935524,
+      "from": [
+       "idea-002",
+       "idea-003",
+       "idea-004",
+       "idea-005",
+       "idea-006",
+       "idea-007",
+       "idea-008"
+      ],
+      "to": [
+       "idea-002",
+       "idea-003",
+       "idea-004",
+       "idea-005",
+       "idea-006",
+       "idea-007"
+      ]
+     }
+    ],
+    "deferred": 4,
+    "added": 1,
+    "imports": 1
+   },
+   "cEnd": [
+    {
+     "id": "idea-002",
+     "status": "flying",
+     "prog": 0.05
+    },
+    {
+     "id": "idea-004",
+     "status": "flying",
+     "prog": 0.05
+    },
+    {
+     "id": "idea-006",
+     "status": "flying",
+     "prog": 0.05
+    }
+   ]
+  }
+ },
+ {
+  "vp": "1280x800",
+  "scenario": "PAGE",
+  "name": "no page errors or console errors",
+  "ok": true,
+  "extra": []
+ }
+]

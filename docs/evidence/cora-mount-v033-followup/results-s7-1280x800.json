@@ -1,0 +1,185 @@
+[
+ {
+  "vp": "1280x800",
+  "scenario": "S7a-leaves-READY-in-flight",
+  "name": "the import request is in flight (1 POST) before READY is left",
+  "ok": true
+ },
+ {
+  "vp": "1280x800",
+  "scenario": "S7a-leaves-READY-in-flight",
+  "name": "pool is withheld outside READY (waiting copy shown, no pool items, data-studio-ready=false)",
+  "ok": true
+ },
+ {
+  "vp": "1280x800",
+  "scenario": "S7a-leaves-READY-in-flight",
+  "name": "card says the READY requirement and offers no enabled Add/Retry/Re-check",
+  "ok": true,
+  "extra": {
+   "addCount": 1,
+   "text": "idea-001.txt Synthetic demo idea. A fictional proposal, not a verified fact or a clearance. Submitted 2026-10-14 UTC Last updated 2026-10-15 UTC A fictional proposal for idea-001. Could not confirm whether this was saved. Re-check the cube before retrying. An earlier attempt for this idea was interr"
+  }
+ },
+ {
+  "vp": "1280x800",
+  "scenario": "S7a-leaves-READY-in-flight",
+  "name": "card shows unresolved (could not confirm), never \"Nothing was saved\"",
+  "ok": true
+ },
+ {
+  "vp": "1280x800",
+  "scenario": "S7a-leaves-READY-in-flight",
+  "name": "late completion after leaving READY: no Added, no pull, still one POST",
+  "ok": true,
+  "extra": {
+   "phases": [
+    "idle",
+    "pending",
+    "unconfirmed"
+   ],
+   "added": 0,
+   "imports": 1
+  }
+ },
+ {
+  "vp": "1280x800",
+  "scenario": "S7a-leaves-READY-in-flight",
+  "name": "still no enabled Add while not READY after the late completion",
+  "ok": true
+ },
+ {
+  "vp": "1280x800",
+  "scenario": "S7a-leaves-READY-in-flight",
+  "name": "READY returns: pool re-read and the committed idea is no longer listed",
+  "ok": true,
+  "extra": [
+   "idea-002.txt",
+   "idea-003.txt",
+   "idea-004.txt",
+   "idea-005.txt",
+   "idea-006.txt"
+  ]
+ },
+ {
+  "vp": "1280x800",
+  "scenario": "S7a-leaves-READY-in-flight",
+  "name": "card is still unresolved (unconfirmed) and offers a read-only Re-check",
+  "ok": true
+ },
+ {
+  "vp": "1280x800",
+  "scenario": "S7a-leaves-READY-in-flight",
+  "name": "Re-check finds this attempt's receipt and confirms Added",
+  "ok": true
+ },
+ {
+  "vp": "1280x800",
+  "scenario": "S7a-leaves-READY-in-flight",
+  "name": "exactly one pull and still exactly one import POST (Re-check never wrote)",
+  "ok": true,
+  "extra": {
+   "added": 1,
+   "imports": 1
+  }
+ },
+ {
+  "vp": "1280x800",
+  "scenario": "S7b-idle-card-not-READY",
+  "name": "Add is disabled",
+  "ok": true
+ },
+ {
+  "vp": "1280x800",
+  "scenario": "S7b-idle-card-not-READY",
+  "name": "status region shows exactly the READY copy",
+  "ok": true,
+  "extra": "Adding ideas is available only when the cube is ready."
+ },
+ {
+  "vp": "1280x800",
+  "scenario": "S7b-idle-card-not-READY",
+  "name": "a forced click makes zero reads and zero writes",
+  "ok": true,
+  "extra": {
+   "imports": 0
+  }
+ },
+ {
+  "vp": "1280x800",
+  "scenario": "S7b-idle-card-not-READY",
+  "name": "back in READY the card can add again (one POST, one pull)",
+  "ok": true
+ },
+ {
+  "vp": "1280x800",
+  "scenario": "S10-direct-unconfirmed-bare-existing",
+  "name": "card is unconfirmed (no Added)",
+  "ok": true
+ },
+ {
+  "vp": "1280x800",
+  "scenario": "S10-direct-unconfirmed-bare-existing",
+  "name": "could-not-confirm copy, never \"Nothing was saved\"",
+  "ok": true,
+  "extra": "idea-003.txt Synthetic demo idea. A fictional proposal, not a verified fact or a clearance. Submitted 2026-10-14 UTC Last updated 2026-10-15 UTC A fictional proposal for idea-003. Could not confirm whether this was saved. Re-check the cube before retrying. The server reports this idea is already in "
+ },
+ {
+  "vp": "1280x800",
+  "scenario": "S10-direct-unconfirmed-bare-existing",
+  "name": "pool was re-read: committed idea no longer listed",
+  "ok": true,
+  "extra": [
+   "idea-001.txt",
+   "idea-002.txt",
+   "idea-004.txt",
+   "idea-005.txt",
+   "idea-006.txt"
+  ]
+ },
+ {
+  "vp": "1280x800",
+  "scenario": "S10-direct-unconfirmed-bare-existing",
+  "name": "no pull, one POST",
+  "ok": true
+ },
+ {
+  "vp": "1280x800",
+  "scenario": "S10-direct-unconfirmed-bad-receipt",
+  "name": "card is unconfirmed (no Added)",
+  "ok": true
+ },
+ {
+  "vp": "1280x800",
+  "scenario": "S10-direct-unconfirmed-bad-receipt",
+  "name": "could-not-confirm copy, never \"Nothing was saved\"",
+  "ok": true,
+  "extra": "idea-003.txt Synthetic demo idea. A fictional proposal, not a verified fact or a clearance. Submitted 2026-10-14 UTC Last updated 2026-10-15 UTC A fictional proposal for idea-003. Could not confirm whether this was saved. Re-check the cube before retrying. The server reply was not in the expected fo"
+ },
+ {
+  "vp": "1280x800",
+  "scenario": "S10-direct-unconfirmed-bad-receipt",
+  "name": "pool was re-read: committed idea no longer listed",
+  "ok": true,
+  "extra": [
+   "idea-001.txt",
+   "idea-002.txt",
+   "idea-004.txt",
+   "idea-005.txt",
+   "idea-006.txt"
+  ]
+ },
+ {
+  "vp": "1280x800",
+  "scenario": "S10-direct-unconfirmed-bad-receipt",
+  "name": "no pull, one POST",
+  "ok": true
+ },
+ {
+  "vp": "1280x800",
+  "scenario": "PAGE",
+  "name": "no page errors or console errors",
+  "ok": true,
+  "extra": []
+ }
+]
