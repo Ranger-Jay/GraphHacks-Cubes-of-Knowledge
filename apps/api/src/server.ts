@@ -1,7 +1,9 @@
 import { timingSafeEqual } from 'node:crypto';
 import { FalkorDB } from 'falkordb';
+import { fileURLToPath } from 'node:url';
 import { analyzeRelease, configFromEnv, GraphClient, graphHealth } from '@cubes/graph';
 import { createApiServer, type Principal, type ReleaseReader, type SessionStore } from './app.js';
+import { createGraphIdeaverse } from './ideaverse.js';
 
 // A dropped socket emits `error`, and closing that client emits it again with no listener.
 // Swallow it here so the route can answer 503. The failed query still rejects.
@@ -62,7 +64,11 @@ const status = {
   },
 };
 
-const server = createApiServer({ sessions, status, ...(analysis === undefined ? {} : { analysis }) });
+const repoRoot = fileURLToPath(new URL('../../../', import.meta.url));
+const ideaverse = typeof tenantId === 'string' && /^[A-Za-z0-9._~-]{1,128}$/.test(tenantId)
+  ? createGraphIdeaverse(graphClient, repoRoot, tenantId)
+  : undefined;
+const server = createApiServer({ sessions, status, ...(analysis === undefined ? {} : { analysis }), ...(ideaverse === undefined ? {} : { ideaverse }) });
 server.listen(port, host, () => console.log(`Bootstrap API: http://${host}:${port}; product readiness=false`));
 for (const signal of ['SIGINT', 'SIGTERM'] as const) {
   process.on(signal, () => server.close(error => {
