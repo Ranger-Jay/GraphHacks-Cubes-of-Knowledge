@@ -12,7 +12,7 @@ export const settleAll = async (): Promise<void> => { for (let i = 0; i < 12; i+
 export function deferred<T>() { let resolve!: (v: T) => void; let reject!: (e: unknown) => void; const promise = new Promise<T>((a, b) => { resolve = a; reject = b; }); return { promise, resolve, reject }; }
 
 export class FakeServer {
-  revision = 3;
+  revision: number | null = 3;   // null = an ambiguous workspace serves no revision (accepted graph rule, #54)
   readonly ideas = new Map<string, { n: number; imported: ImportReceipt | null }>();
   readonly keys = new Map<string, { fp: string; receipt: ImportReceipt }>();
   calls = { overview: 0, detail: 0, imports: [] as ImportAttempt[], checks: [] as ImportAttempt[] };
@@ -46,13 +46,13 @@ export class FakeServer {
   private fp = (a: ImportAttempt): string => `${a.ideaId}|${a.expectedRevision}`;
   private commit = (a: ImportAttempt): ImportReceipt => {
     const i = this.ideas.get(a.ideaId)!;
-    this.revision++;
-    const r: ImportReceipt = { ideaId: a.ideaId, sha256: HASH(i.n), workspaceId: 'ws-1', importedAt: `2026-10-16T04:0${this.revision % 10}:00.000Z`, workspaceRevision: this.revision, membershipId: `member-${a.ideaId}` };
+    this.revision = (this.revision ?? 0) + 1;
+    const r: ImportReceipt = { ideaId: a.ideaId, sha256: HASH(i.n), workspaceId: 'ws-1', importedAt: `2026-10-16T04:0${(this.revision as number) % 10}:00.000Z`, workspaceRevision: this.revision as number, membershipId: `member-${a.ideaId}` };
     i.imported = r; this.keys.set(a.idempotencyKey, { fp: this.fp(a), receipt: r });
     return r;
   };
   /** Someone else imports an idea (workspace revision moves). */
-  externalImport = (id: string): ImportReceipt => this.commit(createImportAttempt(id, `external-${id}-key`, this.revision));
+  externalImport = (id: string): ImportReceipt => this.commit(createImportAttempt(id, `external-${id}-key`, this.revision as number));
   importIdea: ImportIdea = async (a): Promise<ImportOutcome> => {
     this.calls.imports.push(a);
     if (this.holdImport) await this.holdImport.promise;
