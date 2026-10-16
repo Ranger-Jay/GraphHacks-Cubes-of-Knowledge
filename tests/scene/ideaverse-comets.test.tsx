@@ -13,6 +13,7 @@ import {
   IDEAVERSE_REFERENCE_NOW_ISO,
   IdeaVerseComets,
   MAX_ACTIVE_COMETS,
+  MAX_TICK_CLAMP_MS,
   RECENT_WINDOW_MS,
   advanceReducedMotionPage,
   applyConfirmedCometImport,
@@ -25,6 +26,8 @@ import {
   setCometHiddenTab,
   setCometPause,
   tickCometLifecycle,
+  verifyOverviewReceiptMatch,
+  type CometLifecycleState,
   type IdeaVerseCometItem,
   type PersistedImportReceipt,
 } from '../../apps/web/src/scene/IdeaVerseComets';
@@ -285,9 +288,41 @@ test('import transition: only confirmed persisted receipt triggers pull-to-cube 
   );
   assert.equal(state.importedIds.has(targetId), false);
 
-  // Backward-compatible alias fileSha256 also passes validation
+  // Empty sha256 or whitespace is strictly rejected (#40/#48)
+  assert.equal(
+    isValidWorkspaceImportReceipt(
+      {
+        ideaId: targetId,
+        sha256: '',
+        workspaceId: 'ws-wad-cube',
+        importedAt: '2026-10-15T20:00:02.000Z',
+        workspaceRevision: 1,
+        membershipId: `member-ws-wad-cube-${targetId}`,
+      },
+      items
+    ),
+    false,
+    'empty sha256 is rejected'
+  );
+
+  assert.equal(
+    isValidWorkspaceImportReceipt(
+      {
+        ideaId: targetId,
+        sha256: '   ',
+        workspaceId: 'ws-wad-cube',
+        importedAt: '2026-10-15T20:00:02.000Z',
+        workspaceRevision: 1,
+        membershipId: `member-ws-wad-cube-${targetId}`,
+      },
+      items
+    ),
+    false,
+    'whitespace sha256 is rejected'
+  );
+
+  // fileSha256 alias is strictly removed and rejected (#40/#48)
   const aliasReceipt = {
-    receiptId: `rcpt-alias-${targetId}`,
     ideaId: targetId,
     fileSha256: targetSha256,
     workspaceId: 'ws-wad-cube',
@@ -295,24 +330,31 @@ test('import transition: only confirmed persisted receipt triggers pull-to-cube 
     workspaceRevision: 1,
     membershipId: `member-ws-wad-cube-${targetId}`,
   };
-  assert.equal(isValidWorkspaceImportReceipt(aliasReceipt, items), true, 'alias receipt with fileSha256 passes');
+  assert.equal(isValidWorkspaceImportReceipt(aliasReceipt, items), false, 'fileSha256 alias must be rejected');
 
-  // Confirmed persisted canonical workspace-import receipt (#40/#48: sha256) starts gentle pull toward cube + fade
-  const receipt: PersistedImportReceipt = {
-    receiptId: `rcpt-ws-wad-cube-${targetId}`,
+  const dualHashReceipt = {
     ideaId: targetId,
-    filename: state.activeComets[0]!.idea.filename,
+    sha256: targetSha256,
+    fileSha256: targetSha256,
+    workspaceId: 'ws-wad-cube',
+    importedAt: '2026-10-15T20:00:02.000Z',
+    workspaceRevision: 1,
+    membershipId: `member-ws-wad-cube-${targetId}`,
+  };
+  assert.equal(isValidWorkspaceImportReceipt(dualHashReceipt, items), false, 'receipt carrying fileSha256 must be rejected');
+
+  // Confirmed persisted canonical workspace-import receipt produced by Claude's 366eb56 loader
+  // Contract: exactly { ideaId, sha256, workspaceId, importedAt, workspaceRevision, membershipId }
+  const realClaudeReceipt: PersistedImportReceipt = {
+    ideaId: targetId,
     sha256: targetSha256,
     workspaceId: 'ws-wad-cube',
     importedAt: '2026-10-15T20:00:02.000Z',
-    importedByRole: 'owner',
-    idempotencyKey: `idem-${targetId}-1`,
     workspaceRevision: 1,
     membershipId: `member-ws-wad-cube-${targetId}`,
-    replayed: false,
   };
-  assert.equal(isValidWorkspaceImportReceipt(receipt, items), true, 'canonical receipt with sha256 passes');
-  state = applyConfirmedCometImport(state, receipt, startMs + 2_000);
+  assert.equal(isValidWorkspaceImportReceipt(realClaudeReceipt, items), true, 'real Claude 366eb56 receipt passes');
+  state = applyConfirmedCometImport(state, realClaudeReceipt, startMs + 2_000);
   assert.equal(state.importedIds.has(targetId), true);
   assert.equal(state.inspectedIdeaId, null);
   assert.equal(state.activeComets.find(c => c.idea.id === targetId)?.status, 'importing');
@@ -359,4 +401,139 @@ test('reduced-motion & all-imported markup: stationary list, manual next cycling
   );
   assert.ok(allImportedHtml.includes('data-testid="ideaverse-all-imported"'));
   assert.ok(allImportedHtml.includes('All ideas added'));
+});
+
+test('clock jump clamp: a 90-second clock jump is clamped so it does not retire all three comets', () => {
+  const items = loadRepoManifestItems().slice(0, 10);
+  const startMs = Date.parse(IDEAVERSE_REFERENCE_NOW_ISO);
+
+  let state = createCometLifecycle(items, { nowMs: startMs });
+  assert.equal(state.activeComets.length, 3);
+  const initialIds = state.activeComets.map(c => c.idea.id);
+
+  // Jump clock by 90 seconds (90,000ms) in a single tick
+  // Without clamp, all 3 comets would exceed 60,000ms flight duration and be retired at once.
+  // With MAX_TICK_CLAMP_MS (5,000ms), elapsed time is clamped to at most 5s:
+  state = tickCometLifecycle(state, startMs + 90_000);
+
+  assert.equal(state.activeComets.length, 3);
+  const survivingIds = state.activeComets.map(c => c.idea.id);
+  assert.deepEqual(survivingIds, initialIds, 'none of the 3 comets are retired on a 90s clock jump');
+  assert.ok(
+    state.activeComets.every(c => c.activeFlightMs === MAX_TICK_CLAMP_MS),
+    `all comets advanced by clamped ${MAX_TICK_CLAMP_MS}ms, not 90,000ms`
+  );
+
+  // When comets are staggered (e.g. 20s, 10s, 0s), the 90s jump is clamped to 45s:
+  // The oldest reaches 20s + 45s = 65s (expires and replaced), while the younger comets
+  // reach 55s and 45s (< 60s flight duration) and survive!
+  const staggeredState: CometLifecycleState = {
+    ...state,
+    lastTickMs: startMs + 90_000,
+    activeComets: [
+      { ...state.activeComets[0]!, activeFlightMs: 20_000 },
+      { ...state.activeComets[1]!, activeFlightMs: 10_000 },
+      { ...state.activeComets[2]!, activeFlightMs: 0 },
+    ],
+  };
+
+  const postJump = tickCometLifecycle(staggeredState, startMs + 90_000 + 90_000);
+  assert.equal(postJump.activeComets.length, 3);
+  // Younger comets (index 1 and 2) survived:
+  const surviving1 = postJump.activeComets.find(c => c.idea.id === staggeredState.activeComets[1]!.idea.id);
+  const surviving2 = postJump.activeComets.find(c => c.idea.id === staggeredState.activeComets[2]!.idea.id);
+  assert.ok(surviving1, 'comet 1 survived the jump');
+  assert.ok(surviving2, 'comet 2 survived the jump');
+  assert.equal(surviving1.activeFlightMs, 10_000 + MAX_TICK_CLAMP_MS);
+  assert.equal(surviving2.activeFlightMs, 0 + MAX_TICK_CLAMP_MS);
+});
+
+test('server read-back verification: shape+hash is not proof of Added; fresh ideaverseOverview read-back gates confirmation', async () => {
+  const items = loadRepoManifestItems().slice(0, 5);
+  const idea = items[0]!;
+  const realClaudeReceipt: PersistedImportReceipt = {
+    ideaId: idea.id,
+    sha256: idea.sha256,
+    workspaceId: 'ws-wad-cube',
+    importedAt: '2026-10-15T20:00:02.000Z',
+    workspaceRevision: 1,
+    membershipId: `member-ws-wad-cube-${idea.id}`,
+  };
+
+  // 1. verifyOverviewReceiptMatch helper checks:
+  // Clean overview with exactly one matching receipt:
+  const validOverview = {
+    status: 'AVAILABLE',
+    ideas: [
+      { id: idea.id, imported: true, sha256: idea.sha256, membershipId: `member-ws-wad-cube-${idea.id}` },
+      { id: items[1]!.id, imported: false, sha256: items[1]!.sha256 },
+    ],
+    integrity: [],
+  };
+  const verifiedMatch = verifyOverviewReceiptMatch(realClaudeReceipt, validOverview);
+  assert.equal(verifiedMatch.verified, true);
+  assert.equal(verifiedMatch.matchingReceiptCount, 1);
+
+  // Overview with integrity issue (forged or mismatched) refuses:
+  const integrityFailOverview = {
+    status: 'AVAILABLE',
+    ideas: [],
+    integrity: [{ id: idea.id, reason: 'membership edge without an import receipt' }],
+  };
+  const integrityMatch = verifyOverviewReceiptMatch(realClaudeReceipt, integrityFailOverview);
+  assert.equal(integrityMatch.verified, false);
+  assert.ok(integrityMatch.reason?.includes('Outcome is unconfirmed'));
+
+  // Overview where idea is not marked imported (zero matching receipts):
+  const zeroMatchOverview = {
+    status: 'AVAILABLE',
+    ideas: [{ id: idea.id, imported: false, sha256: idea.sha256 }],
+    integrity: [],
+  };
+  const zeroMatch = verifyOverviewReceiptMatch(realClaudeReceipt, zeroMatchOverview);
+  assert.equal(zeroMatch.verified, false);
+  assert.ok(zeroMatch.reason?.includes('Outcome is unconfirmed'));
+
+  // Overview with duplicate matching receipts:
+  const dupOverview = {
+    status: 'AVAILABLE',
+    ideas: [
+      { id: idea.id, imported: true, sha256: idea.sha256, membershipId: `member-ws-wad-cube-${idea.id}` },
+      { id: idea.id, imported: true, sha256: idea.sha256, membershipId: `member-ws-wad-cube-${idea.id}` },
+    ],
+    integrity: [],
+  };
+  const dupMatch = verifyOverviewReceiptMatch(realClaudeReceipt, dupOverview);
+  assert.equal(dupMatch.verified, false);
+  assert.equal(dupMatch.matchingReceiptCount, 2);
+  assert.ok(dupMatch.reason?.includes('Outcome is unconfirmed'));
+
+  // Overview unavailable:
+  const unavailOverview = { status: 'UNAVAILABLE' };
+  const unavailMatch = verifyOverviewReceiptMatch(realClaudeReceipt, unavailOverview);
+  assert.equal(unavailMatch.verified, false);
+  assert.ok(unavailMatch.reason?.includes('Outcome is unconfirmed'));
+});
+
+test('UI copy & hook enforcement: unclear results report outcome is unconfirmed, and read-back is strictly required', () => {
+  // Static render verifies that IdeaVerseComets accepts onVerifyReadBack and onRequestImport
+  const items = loadRepoManifestItems().slice(0, 5);
+  const html = renderToStaticMarkup(
+    <IdeaVerseComets
+      ideas={items}
+      onRequestImport={async () => ({
+        status: 'IMPORTED',
+        receipt: {
+          ideaId: items[0]!.id,
+          sha256: items[0]!.sha256,
+          workspaceId: 'ws-wad-cube',
+          importedAt: '2026-10-15T20:00:00Z',
+          workspaceRevision: 1,
+          membershipId: `member-ws-wad-cube-${items[0]!.id}`,
+        },
+      })}
+      onVerifyReadBack={async () => ({ verified: true, matchingReceiptCount: 1 })}
+    />
+  );
+  assert.ok(html.includes('ideaverse-comets-layer'));
 });
