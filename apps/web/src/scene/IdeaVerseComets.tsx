@@ -13,6 +13,14 @@ export const RECENT_WINDOW_MS = 48 * 60 * 60 * 1000; // 48 hours in ms
 export const COMET_FLIGHT_DURATION_MS = 60 * 1000; // 60 seconds active unpaused flight
 export const COMET_IMPORT_PULL_DURATION_MS = 900; // Gentle pull toward cube + fade after confirmed receipt
 export const MAX_ACTIVE_COMETS = 3;
+export const MAX_TICK_CLAMP_MS = 1000; // Monotonic clock clamp: 1000ms (#40/#48/v030.01)
+
+/**
+ * Standard unconfirmed outcome copy specified by the v030 import contract:
+ * "Could not confirm whether this was saved. Re-check the cube before retrying."
+ */
+export const UNCONFIRMED_IMPORT_MESSAGE =
+  'Could not confirm whether this was saved. Re-check the cube before retrying.';
 
 const UTC_ISO_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,3})?Z$/;
 
@@ -32,18 +40,18 @@ export interface IdeaVerseCometItem {
 }
 
 /**
- * Persisted workspace-import receipt (#40/#48).
+ * Persisted workspace-import receipt (#40/#48/v030).
  * Import membership is outside the licensing witness: must carry idea/file hash,
  * workspace and membership identity, imported timestamp, and workspace revision,
  * and must NEVER fabricate a licensing witnessHash.
- * Canonical hash property is sha256 (#40/#48); fileSha256 supported as backward-compatible alias.
+ * Canonical hash property is sha256 (#40/#48); fileSha256 is strictly rejected.
  */
 export interface PersistedImportReceipt {
   receiptId?: string | undefined;
   ideaId: string;
   filename?: string | undefined;
-  sha256?: string | undefined;
-  fileSha256?: string | undefined;
+  sha256: string;
+  fileSha256?: never;
   workspaceId: string;
   membershipId: string;
   importedAt: string;
@@ -339,13 +347,17 @@ export function tickCometLifecycle(state: CometLifecycleState, nowMs: number): C
     };
   }
 
+  // Elapsed-time clamp: 1000ms clamp prevents clock discontinuities or tab freeze
+  // from retiring all three comets at once (#40/#48/v030.01)
+  const clampedDelta = Math.min(rawDelta, MAX_TICK_CLAMP_MS);
+
   const surviving: ActiveCometSlot[] = [];
   let lastRetiredIdeaId = state.lastRetiredIdeaId;
   let membershipRefreshCount = state.membershipRefreshCount;
 
   for (const slot of state.activeComets) {
     if (slot.status === 'importing') {
-      const nextPullMs = slot.importPullMs + rawDelta;
+      const nextPullMs = slot.importPullMs + clampedDelta;
       if (nextPullMs >= COMET_IMPORT_PULL_DURATION_MS) {
         // Confirmed import pull-to-cube + fade finished: refresh membership & replace comet
         lastRetiredIdeaId = slot.idea.id;
@@ -368,7 +380,7 @@ export function tickCometLifecycle(state: CometLifecycleState, nowMs: number): C
       continue;
     }
 
-    const nextFlightMs = slot.activeFlightMs + rawDelta;
+    const nextFlightMs = slot.activeFlightMs + clampedDelta;
     if (nextFlightMs >= COMET_FLIGHT_DURATION_MS) {
       // Ignored comet flew for 60s of active unpaused flight: retire and replace
       lastRetiredIdeaId = slot.idea.id;
@@ -403,6 +415,25 @@ export function tickCometLifecycle(state: CometLifecycleState, nowMs: number): C
     allImported: filled.allImported,
     membershipRefreshCount,
   };
+}
+
+/**
+ * Step-by-step clock advancement for testing and deterministic batch simulation.
+ * Advances the active lifecycle in discrete increments of stepMs (default 250ms),
+ * honoring the 1000ms MAX_TICK_CLAMP_MS on each tick.
+ */
+export function advanceCometActiveClock(
+  state: CometLifecycleState,
+  targetMs: number,
+  stepMs = COMET_TICK_INTERVAL_MS
+): CometLifecycleState {
+  let current = state;
+  let now = state.lastTickMs;
+  while (now < targetMs) {
+    now = Math.min(now + stepMs, targetMs);
+    current = tickCometLifecycle(current, now);
+  }
+  return current;
 }
 
 /**
@@ -468,13 +499,14 @@ export function isValidWorkspaceImportReceipt(
   if ('witnessHash' in r && r.witnessHash !== undefined) return false;
   if ('nodeId' in r && r.nodeId !== undefined) return false;
   if ('edgeId' in r && r.edgeId !== undefined) return false;
+  if ('fileSha256' in r && r.fileSha256 !== undefined) return false;
   if (typeof r.ideaId !== 'string' || !r.ideaId.trim()) return false;
   
-  // Canonical hash field is sha256 (#40/#48); fileSha256 accepted as backward-compat alias
-  const hash =
-    (typeof r.sha256 === 'string' && r.sha256.trim()) ||
-    (typeof r.fileSha256 === 'string' && r.fileSha256.trim());
-  if (!hash || !SHA256_HEX_RE.test(hash)) return false;
+  // Canonical hash field is sha256 (#40/#48/v030); fileSha256 is strictly rejected
+  if (typeof r.sha256 !== 'string' || !r.sha256.trim() || !SHA256_HEX_RE.test(r.sha256.trim())) {
+    return false;
+  }
+  const hash = r.sha256.trim();
 
   if (typeof r.workspaceId !== 'string' || !r.workspaceId.trim()) return false;
   if (typeof r.membershipId !== 'string' || !r.membershipId.trim()) return false;
@@ -491,6 +523,65 @@ export function isValidWorkspaceImportReceipt(
     if (!matchedIdea || matchedIdea.sha256 !== hash) return false;
   }
   return true;
+}
+
+/**
+ * Verifies a persisted receipt against a fresh server ideaverseOverview read-back (#40/#48/v030).
+ * Ensures:
+ * 1. Overview status is AVAILABLE.
+ * 2. Overview reports zero integrity issues for this idea.
+ * 3. Exactly one matching idea exists with imported: true, matching sha256, and matching membershipId.
+ */
+export function verifyOverviewReceiptMatch(
+  receipt: PersistedImportReceipt,
+  overview: {
+    status: string;
+    ideas?: Array<{ id: string; imported?: boolean; sha256: string; membershipId?: string }>;
+    integrity?: Array<{ id: string; reason: string }>;
+  }
+): { verified: boolean; matchingReceiptCount: number; reason?: string } {
+  if (overview.status !== 'AVAILABLE' || !overview.ideas) {
+    return {
+      verified: false,
+      matchingReceiptCount: 0,
+      reason: UNCONFIRMED_IMPORT_MESSAGE,
+    };
+  }
+
+  const integrityIssue = overview.integrity?.find(i => i.id === receipt.ideaId);
+  if (integrityIssue) {
+    return {
+      verified: false,
+      matchingReceiptCount: 0,
+      reason: `Server read-back integrity check failed: ${integrityIssue.reason}. ${UNCONFIRMED_IMPORT_MESSAGE}`,
+    };
+  }
+
+  const matching = overview.ideas.filter(
+    i =>
+      i.id === receipt.ideaId &&
+      i.imported === true &&
+      i.sha256 === receipt.sha256 &&
+      (!receipt.membershipId || i.membershipId === receipt.membershipId)
+  );
+
+  if (matching.length === 1) {
+    return { verified: true, matchingReceiptCount: 1 };
+  }
+
+  if (matching.length === 0) {
+    return {
+      verified: false,
+      matchingReceiptCount: 0,
+      reason: `Server read-back did not find confirmed imported idea. ${UNCONFIRMED_IMPORT_MESSAGE}`,
+    };
+  }
+
+  return {
+    verified: false,
+    matchingReceiptCount: matching.length,
+    reason: `Server read-back found ${matching.length} matching imported entries (duplicate). ${UNCONFIRMED_IMPORT_MESSAGE}`,
+  };
 }
 
 /**
@@ -601,17 +692,24 @@ export function advanceReducedMotionPage(state: CometLifecycleState, nowMs: numb
 
 export interface IdeaVerseCometsProps {
   ideas: readonly IdeaVerseCometItem[];
-  importedIds?: Iterable<string>;
-  reducedMotion?: boolean;
-  initialPaused?: boolean;
-  now?: () => number;
-  onInspectIdea?: (idea: IdeaVerseCometItem) => void;
-  onRequestImport?: (idea: IdeaVerseCometItem) => Promise<{
-    status: 'IMPORTED' | 'DENIED' | 'UNAVAILABLE' | 'CONFLICT' | 'FAILED';
-    receipt?: PersistedImportReceipt;
-    message?: string;
-  }>;
-  onMembershipRefreshed?: (receipt: PersistedImportReceipt) => void;
+  importedIds?: Iterable<string> | undefined;
+  reducedMotion?: boolean | undefined;
+  initialPaused?: boolean | undefined;
+  now?: (() => number) | undefined;
+  /** Called when user selects a comet to inspect in the shell's single studio/IdeaCard */
+  onInspectIdea?: ((idea: IdeaVerseCometItem) => void) | undefined;
+  /** Current inspected idea id (held in flight so lifetime does not expire while reading) */
+  inspectedIdeaId?: string | null | undefined;
+  /** Called when inspect is dismissed/closed */
+  onCloseInspect?: (() => void) | undefined;
+  /**
+   * Confirmed shell import receipt event:
+   * Triggers the gentle pull-toward-cube + fade transition for that idea's comet.
+   */
+  confirmedReceipt?: PersistedImportReceipt | null | undefined;
+  /** Backward-compatible alias for confirmed receipt */
+  receipt?: PersistedImportReceipt | null | undefined;
+  onMembershipRefreshed?: ((receipt: PersistedImportReceipt) => void) | undefined;
 }
 
 export const IdeaVerseComets: React.FC<IdeaVerseCometsProps> = ({
@@ -621,21 +719,29 @@ export const IdeaVerseComets: React.FC<IdeaVerseCometsProps> = ({
   initialPaused = false,
   now = () => Date.now(),
   onInspectIdea,
-  onRequestImport,
+  inspectedIdeaId: controlledInspectedId,
+  onCloseInspect,
+  confirmedReceipt,
+  receipt,
   onMembershipRefreshed,
 }) => {
-  const [lifecycle, setLifecycle] = useState<CometLifecycleState>(() =>
-    createCometLifecycle(ideas, {
+  const [lifecycle, setLifecycle] = useState<CometLifecycleState>(() => {
+    const initial = createCometLifecycle(ideas, {
       nowMs: now(),
       importedIds,
       paused: initialPaused,
       reducedMotion,
-    })
-  );
-  const [importStatusState, setImportStatusState] = useState<{
-    phase: 'idle' | 'pending' | 'added' | 'error';
-    message: string;
-  }>({ phase: 'idle', message: '' });
+    });
+    const conf = confirmedReceipt ?? receipt;
+    if (conf && isValidWorkspaceImportReceipt(conf, ideas)) {
+      return applyConfirmedCometImport(initial, conf, now());
+    }
+    return initial;
+  });
+  const [internalInspectedId, setInternalInspectedId] = useState<string | null>(null);
+  const effectiveInspectedId = controlledInspectedId !== undefined ? controlledInspectedId : internalInspectedId;
+
+  const activeConfirmed = confirmedReceipt ?? receipt;
 
   useEffect(() => {
     const onVisChange = () => {
@@ -659,61 +765,22 @@ export const IdeaVerseComets: React.FC<IdeaVerseCometsProps> = ({
     return () => clearInterval(timer);
   }, [reducedMotion, lifecycle.paused, lifecycle.tabHidden, now]);
 
-  const inspectedIdea =
-    lifecycle.inspectedIdeaId !== null
-      ? lifecycle.allIdeas.find(i => i.id === lifecycle.inspectedIdeaId) ?? null
-      : null;
+  useEffect(() => {
+    setLifecycle(prev => (effectiveInspectedId ? inspectComet(prev, effectiveInspectedId) : closeInspectedComet(prev)));
+  }, [effectiveInspectedId]);
 
-  const handleOpenCard = (idea: IdeaVerseCometItem) => {
-    setImportStatusState({ phase: 'idle', message: '' });
-    setLifecycle(prev => inspectComet(prev, idea.id));
+  useEffect(() => {
+    if (activeConfirmed && isValidWorkspaceImportReceipt(activeConfirmed, lifecycle.allIdeas)) {
+      setLifecycle(prev => applyConfirmedCometImport(prev, activeConfirmed, now()));
+      onMembershipRefreshed?.(activeConfirmed);
+    }
+  }, [activeConfirmed, now, onMembershipRefreshed]);
+
+  const handleSelectComet = (idea: IdeaVerseCometItem) => {
+    if (controlledInspectedId === undefined) {
+      setInternalInspectedId(idea.id);
+    }
     onInspectIdea?.(idea);
-  };
-
-  const handleCloseCard = () => {
-    setImportStatusState({ phase: 'idle', message: '' });
-    setLifecycle(prev => closeInspectedComet(prev));
-  };
-
-  const handleAddToCube = async () => {
-    if (!inspectedIdea || importStatusState.phase === 'pending' || importStatusState.phase === 'added') {
-      return;
-    }
-    if (!onRequestImport) {
-      setImportStatusState({
-        phase: 'error',
-        message: 'Adding to the cube requires an authorized import connection. Nothing was saved.',
-      });
-      return;
-    }
-
-    setImportStatusState({ phase: 'pending', message: 'Adding to the cube...' });
-    try {
-      const res = await onRequestImport(inspectedIdea);
-      if (res.status === 'IMPORTED' && res.receipt && isValidWorkspaceImportReceipt(res.receipt, lifecycle.allIdeas)) {
-        setLifecycle(prev => applyConfirmedCometImport(prev, res.receipt, now()));
-        setImportStatusState({ phase: 'added', message: 'Added to the cube.' });
-        onMembershipRefreshed?.(res.receipt);
-      } else {
-        const reasonCopy =
-          res.message ??
-          (res.status === 'DENIED'
-            ? 'Adding ideas requires owner access. Nothing was saved.'
-            : res.status === 'UNAVAILABLE'
-              ? 'FalkorDB is unavailable right now. Nothing was saved.'
-              : res.status === 'CONFLICT'
-                ? 'Workspace revision changed. Please retry.'
-                : 'Could not confirm save receipt. Nothing was saved.');
-        setImportStatusState({ phase: 'error', message: reasonCopy });
-        setLifecycle(prev => recordNonPersistedImportAttempt(prev));
-      }
-    } catch {
-      setImportStatusState({
-        phase: 'error',
-        message: 'Could not confirm save. Retry reuses the request safely.',
-      });
-      setLifecycle(prev => recordNonPersistedImportAttempt(prev));
-    }
   };
 
   const showAllAdded = lifecycle.allImported && lifecycle.activeComets.length === 0;
@@ -783,7 +850,7 @@ export const IdeaVerseComets: React.FC<IdeaVerseCometsProps> = ({
                   type="button"
                   className="ideaverse-comet-trigger"
                   data-testid={`ideaverse-comet-btn-${slot.idea.id}`}
-                  onClick={() => handleOpenCard(slot.idea)}
+                  onClick={() => handleSelectComet(slot.idea)}
                 >
                   <span className="ideaverse-comet-filename">{slot.idea.filename}</span>
                 </button>
@@ -791,64 +858,6 @@ export const IdeaVerseComets: React.FC<IdeaVerseCometsProps> = ({
             );
           })}
         </ul>
-      )}
-
-      {inspectedIdea && (
-        <section
-          className="ideaverse-inspect-card"
-          role="dialog"
-          aria-modal="false"
-          aria-labelledby={`ideaverse-card-title-${inspectedIdea.id}`}
-          data-testid="ideaverse-inspect-card"
-        >
-          <h3 id={`ideaverse-card-title-${inspectedIdea.id}`} className="ideaverse-card-title">
-            {inspectedIdea.filename}
-          </h3>
-          <p className="ideaverse-card-badge">
-            <strong>Synthetic demo idea</strong> — fictional proposal, not verified studio or licensing evidence.
-          </p>
-          <dl className="ideaverse-card-meta">
-            <div>
-              <dt>Submitted</dt>
-              <dd data-testid="ideaverse-card-submitted">{formatUtcDateLabel(inspectedIdea.submittedAt)}</dd>
-            </div>
-            <div>
-              <dt>Last updated</dt>
-              <dd data-testid="ideaverse-card-touched">{formatUtcDateLabel(inspectedIdea.touchedAt)}</dd>
-            </div>
-          </dl>
-          <p className="ideaverse-card-body" data-testid="ideaverse-card-text">
-            {inspectedIdea.text}
-          </p>
-          {importStatusState.message && (
-            <div className="ideaverse-card-status" role="status" data-testid="ideaverse-card-status">
-              {importStatusState.message}
-            </div>
-          )}
-          <div className="ideaverse-card-actions">
-            <button
-              type="button"
-              className="ideaverse-card-add-btn"
-              data-testid="ideaverse-card-add-btn"
-              disabled={importStatusState.phase === 'pending' || importStatusState.phase === 'added'}
-              onClick={handleAddToCube}
-            >
-              {importStatusState.phase === 'added'
-                ? 'Added'
-                : importStatusState.phase === 'pending'
-                  ? 'Adding...'
-                  : 'Add to cube'}
-            </button>
-            <button
-              type="button"
-              className="ideaverse-card-close-btn"
-              data-testid="ideaverse-card-close-btn"
-              onClick={handleCloseCard}
-            >
-              Close
-            </button>
-          </div>
-        </section>
       )}
     </section>
   );
