@@ -1,6 +1,7 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import { randomUUID } from 'node:crypto';
 import type { AnalysisResponse, ApiError, ApprovalResponse, GraphStatusResponse } from '@cubes/contracts';
+import { assessTalk, defaultTalkerConfig, type TalkerConfig } from './talker.js';
 
 export interface Principal {
   id: 'kanny' | 'serena' | 'roy' | 'ava' | 'guz';
@@ -74,18 +75,19 @@ interface ApprovalBody {
   evidenceSourceIds: string[];
 }
 
-export function createApiServer(options?: { sessions?: SessionStore; graph?: ApprovalGraph; analysis?: ReleaseReader; status?: GraphStatusProbe }): Server {
+export function createApiServer(options?: { sessions?: SessionStore; graph?: ApprovalGraph; analysis?: ReleaseReader; status?: GraphStatusProbe; talker?: TalkerConfig }): Server {
   const sessions = options?.sessions ?? denyAllSessions;
   const graph = options?.graph ?? unavailableGraph;
   const analysis = options?.analysis ?? unconfiguredAnalysis;
   const status = options?.status;
+  const talker = options?.talker ?? defaultTalkerConfig();
   return createServer((request, response) => {
-    void route(request, response, sessions, graph, analysis, status);
+    void route(request, response, sessions, graph, analysis, status, talker);
   });
 }
 
 async function route(
-  request: IncomingMessage, response: ServerResponse, sessions: SessionStore, graph: ApprovalGraph, analysis: ReleaseReader, status?: GraphStatusProbe,
+  request: IncomingMessage, response: ServerResponse, sessions: SessionStore, graph: ApprovalGraph, analysis: ReleaseReader, status: GraphStatusProbe | undefined, talker: TalkerConfig,
 ): Promise<void> {
   const requestId = randomUUID();
   response.setHeader('Content-Type', 'application/json; charset=utf-8');
@@ -102,6 +104,10 @@ async function route(
     const releaseId = releaseIdFrom(request);
     if (request.method === 'GET' && releaseId !== null) {
       await getAnalysis(request, response, requestId, sessions, analysis, releaseId);
+      return;
+    }
+    if (request.method === 'POST' && request.url === '/api/talk') {
+      await postTalk(request, response, requestId, sessions, status, talker);
       return;
     }
     if (request.method === 'POST' && request.url === '/api/approvals') {
@@ -182,6 +188,37 @@ async function getAnalysis(
     return;
   }
   send(response, result.status === 'AVAILABLE' ? 200 : 503, result);
+}
+
+async function postTalk(
+  request: IncomingMessage, response: ServerResponse, requestId: string,
+  sessions: SessionStore, status: GraphStatusProbe | undefined, talker: TalkerConfig,
+): Promise<void> {
+  const principal = principalFrom(request, sessions);
+  const closed = assessTalk(principal, null, false, talker);
+  if (closed.status === 401 || closed.status === 403) {
+    sendError(response, closed.status, closed.code, closed.message, requestId);
+    return;
+  }
+  const body = await readJson(request);
+  // A false ready value only distinguishes a bad body. It is not the graph answer.
+  const invalid = assessTalk(principal, body, false, talker);
+  if (invalid.status === 400) {
+    sendError(response, invalid.status, invalid.code, invalid.message, requestId);
+    return;
+  }
+  const decision = assessTalk(principal, body, await graphReady(status), talker);
+  sendError(response, decision.status, decision.code, decision.message, requestId);
+}
+
+async function graphReady(status: GraphStatusProbe | undefined): Promise<boolean> {
+  if (status === undefined) return false;
+  try {
+    const result = await status.check();
+    return result.state === 'available';
+  } catch {
+    return false;
+  }
 }
 
 async function postApproval(
