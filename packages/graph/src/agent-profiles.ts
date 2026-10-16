@@ -1,7 +1,8 @@
 import { createHash } from 'node:crypto';
-import { readFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { lstat, readFile, realpath } from 'node:fs/promises';
+import { join, resolve, sep } from 'node:path';
 import type { GraphClient } from './client.js';
+import { GraphUnavailableError } from './client.js';
 import { WORKSPACE_ID } from './ideaverse.js';
 
 /**
@@ -212,4 +213,198 @@ export async function seedAgentProfiles(client: GraphClient, repoRoot: string, o
     await linkPrincipal('RoleAssignment', id, 'FOR_PRINCIPAL', a.principalKey, `e-${id}-for-principal`);
   }
   return { seedVersion: AGENT_PROFILES_SEED_VERSION, tenantId, profiles: f.profiles.length, roles: f.roles.length, capabilities: f.capabilities.length, assignments: f.assignments.length, edges, principalLinks };
+}
+
+// ---------------------------------------------------------------------------------------------------------------
+// Read side (v028.04): one query per tenant, every served fact re-verified against the fixtures on disk.
+// ---------------------------------------------------------------------------------------------------------------
+
+export const READ_AGENT_PROFILES = `
+MATCH (n {tenantId: $tenantId}) WHERE n:AgentProfile OR n:VoiceProfile OR n:ResourceRef OR n:AccessRole OR n:Capability OR n:RoleAssignment OR n:ProfileSource
+OPTIONAL MATCH (n)-[e]->(b)
+RETURN labels(n) AS labels, properties(n) AS props, collect([e.id, type(e), b.id, labels(b), b.tenantId]) AS out`;
+
+export type ResourceStatus = 'PRESENT' | 'MISSING' | 'UNVERIFIED';
+export interface ResourceView { kind: 'skills' | 'memory'; declaredPath: string; proposedPath: string; status: ResourceStatus; sha256?: string; byteCount?: number; note: string }
+export interface IntendedCapabilityView { id: string; description: string; implemented: false }
+export interface RoleView { id: string; name: string; intendedScope: string; intendedCapabilities: IntendedCapabilityView[]; cannot: string[]; implemented: false }
+export type EffectiveRole =
+  | { state: 'ASSIGNED'; enforcement: 'NOT_ENFORCED'; role: RoleView; assignmentId: string; revision: number; assignedAt: string; assignedBy: string; source: string; note: string }
+  | { state: 'UNASSIGNED'; enforcement: 'NOT_ENFORCED'; reason: 'none' | 'revoked'; note: string }
+  | { state: 'UNKNOWN'; enforcement: 'NOT_ENFORCED'; reason: string; note: string };
+export interface AgentProfileView {
+  id: string; agentId: string; actorKey: string; name: string; gender: string; species: string; apparentAge: number; color: string; emoji: string; emojiName: string;
+  role: string; personality: string; assignmentText: string; knownFor: string;
+  /** The owner's supplied access text. Source provenance only: it grants nothing and no consumer may render it as access. */
+  sourceProvenance: { declaredAccessLevel: string; grantsAccess: false };
+  voice: VoiceFixture; resources: { skills: ResourceView; memory: ResourceView };
+  principal: { key: string; linked: boolean };
+  workspaceId: string;
+  access: EffectiveRole;
+}
+export interface AgentProfileOverview {
+  status: 'AVAILABLE'; tenantId: string; domain: 'studio'; origin: typeof PROFILE_ORIGIN; enforcement: 'NOT_ENFORCED';
+  profiles: AgentProfileView[]; roles: RoleView[]; assignments: { principalKey: string; access: EffectiveRole }[];
+  integrity: { id: string; reason: string }[];
+}
+export type AgentProfileResult =
+  | AgentProfileOverview
+  | { status: 'EMPTY'; tenantId: string; domain: 'studio' }
+  | { status: 'UNAVAILABLE'; reason: 'CONNECTION_FAILED' | 'QUERY_FAILED' | 'FIXTURE_INVALID' };
+
+const NOTE_DISPLAY_ONLY = 'Intended assignment for display. Not enforced: session rights are unchanged.';
+const RESOURCE_PATH = /^nodes\/agents\/agent\d{3}\/(skills|memory)\.md$/;
+const MAX_RESOURCE_BYTES = 1_048_576;
+
+/**
+ * Status of a proposed resource path at read time. The file is only hashed, never executed, loaded or interpreted.
+ * A path outside the allowlist, a symlink, or anything that resolves outside `nodes/agents/` under the repository is UNVERIFIED.
+ */
+export async function resolveResource(repoRoot: string, declaredPath: string, proposedPath: string, kind: 'skills' | 'memory'): Promise<ResourceView> {
+  const base = { kind, declaredPath, proposedPath };
+  const unverified = (note: string): ResourceView => ({ ...base, status: 'UNVERIFIED', note });
+  if (!RESOURCE_PATH.test(proposedPath)) return unverified('Path is outside the allowed resource folder; not opened.');
+  const root = resolve(repoRoot); const abs = resolve(root, proposedPath);
+  if (!abs.startsWith(resolve(root, 'nodes/agents') + sep)) return unverified('Path resolves outside the allowed resource folder; not opened.');
+  try {
+    const st = await lstat(abs);
+    if (st.isSymbolicLink() || !st.isFile()) return unverified('Not a regular file; not opened.');
+    if (st.size > MAX_RESOURCE_BYTES) return unverified('File is larger than the 1 MiB inspection limit; not opened.');
+    const real = await realpath(abs); const realRoot = await realpath(root);
+    if (!real.startsWith(realRoot + sep)) return unverified('File resolves outside the repository; not opened.');
+    const bytes = await readFile(real);
+    return { ...base, status: 'PRESENT', sha256: createHash('sha256').update(bytes).digest('hex'), byteCount: bytes.length, note: 'File exists. Its content is not loaded or executed.' };
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === 'ENOENT' || (err as NodeJS.ErrnoException).code === 'ENOTDIR') return { ...base, status: 'MISSING', note: 'File not found. No skill or memory is loaded.' };
+    return unverified('Could not be inspected.');
+  }
+}
+
+interface Row { labels: string[]; props: Record<string, unknown>; out: unknown[][] }
+interface Edge { id: string; type: string; to: string; toLabels: string[]; toTenant: unknown }
+const edgesOf = (r: Row): Edge[] => r.out.filter(([id, type, to]) => typeof id === 'string' && typeof type === 'string' && typeof to === 'string')
+  .map(([id, type, to, labels, tenant]) => ({ id: id as string, type: type as string, to: to as string, toLabels: (labels as string[] | null) ?? [], toTenant: tenant }));
+const sameSet = (a: string[], b: string[]) => a.length === b.length && [...a].sort().join('\u0000') === [...b].sort().join('\u0000');
+
+/**
+ * Named read of one tenant's agent profiles and display-only role assignments in ONE graph query, re-verified against
+ * the fixtures (hash of each source, every field, every edge). Anything that does not verify is withheld and listed
+ * under `integrity`; a role is never inferred from `declaredAccessLevel`, and no assignment is ever reported as enforced.
+ */
+export async function agentProfileOverview(client: GraphClient, repoRoot: string, tenantId: string): Promise<AgentProfileResult> {
+  let rows: Row[];
+  try { rows = await client.read<Row>(READ_AGENT_PROFILES, { tenantId }); }
+  catch (err) { if (err instanceof GraphUnavailableError) return { status: 'UNAVAILABLE', reason: err.reason }; throw err; }
+  if (rows.length === 0) return { status: 'EMPTY', tenantId, domain: 'studio' };
+  let f: AgentFixtures;
+  try { f = await loadAgentFixtures(repoRoot); } catch { return { status: 'UNAVAILABLE', reason: 'FIXTURE_INVALID' }; }
+  const integrity: { id: string; reason: string }[] = [];
+  const flag = (id: string, reason: string) => { integrity.push({ id, reason }); };
+  const by = (label: string) => rows.filter(r => r.labels[0] === label);
+  const node = (label: string, id: string) => by(label).find(r => r.props['id'] === id);
+  const inTenant = (e: Edge) => e.toTenant === tenantId;
+
+  // Sources: stored path and hash must equal the fixture file on disk.
+  const sourceOk = new Set<string>();
+  for (const k of Object.keys(PROFILE_SOURCE_IDS) as FixtureKey[]) {
+    const id = PROFILE_SOURCE_IDS[k]; const s = node('ProfileSource', id);
+    if (!s) { flag(id, 'fixture source is not in the graph'); continue; }
+    if (s.props['sha256'] !== f.files[k].sha256 || s.props['path'] !== f.files[k].path) { flag(id, 'stored source hash or path differs from the fixture file'); continue; }
+    sourceOk.add(id);
+  }
+
+  // Roles: node fields and capability edges must equal the fixture; capabilities must match too.
+  const capDesc = new Map(f.capabilities.map(c => [c.id, c.description]));
+  const capOk = new Set<string>();
+  for (const c of f.capabilities) {
+    const n = node('Capability', c.id);
+    if (n && sourceOk.has(PROFILE_SOURCE_IDS.roles) && n.props['description'] === c.description && n.props['implemented'] === false && n.props['sourceId'] === PROFILE_SOURCE_IDS.roles) capOk.add(c.id);
+    else flag(c.id, 'capability is missing or differs from the fixture');
+  }
+  const roles = new Map<string, RoleView>();
+  for (const r of f.roles) {
+    const n = node('AccessRole', r.id);
+    if (!n) { flag(r.id, 'role is not in the graph'); continue; }
+    const p = n.props; const e = edgesOf(n);
+    const caps = e.filter(x => x.type === 'HAS_CAPABILITY' && x.toLabels[0] === 'Capability' && inTenant(x)).map(x => x.to);
+    const defined = e.filter(x => x.type === 'DEFINED_IN');
+    if (!sourceOk.has(PROFILE_SOURCE_IDS.roles) || p['name'] !== r.name || p['intendedScope'] !== r.intendedScope || p['implemented'] !== false || !Array.isArray(p['cannot']) || !sameSet(p['cannot'] as string[], r.cannot)
+      || !sameSet(caps, r.capabilities) || !r.capabilities.every(c => capOk.has(c)) || defined.length !== 1 || defined[0]!.to !== PROFILE_SOURCE_IDS.roles) {
+      flag(r.id, 'role or its capabilities differ from the fixture'); continue;
+    }
+    roles.set(r.id, { id: r.id, name: r.name, intendedScope: r.intendedScope, implemented: false, cannot: r.cannot,
+      intendedCapabilities: r.capabilities.map(c => ({ id: c, description: capDesc.get(c)!, implemented: false as const })) });
+  }
+
+  // Assignments: validated against the verified role table. The assignment row is the live source of the displayed
+  // tag (it may legitimately differ from the seed fixture after an authorized change), but it is never trusted blindly.
+  const UTC_RE = UTC; const KEY_RE = KEY;
+  const assignmentRows = by('RoleAssignment');
+  interface Assn { id: string; principalKey: string; reason: string | null; status: string; roleId: string; revision: number; assignedAt: string; assignedBy: string; source: string }
+  const assns: Assn[] = assignmentRows.map(r => {
+    const p = r.props; const e = edgesOf(r); const id = String(p['id']); const principalKey = typeof p['principalId'] === 'string' ? p['principalId'] : '';
+    const roleId = typeof p['roleId'] === 'string' ? p['roleId'] : ''; const status = typeof p['status'] === 'string' ? p['status'] : '';
+    let reason: string | null = null;
+    if (!KEY_RE.test(principalKey)) reason = 'assignment has no valid principal';
+    else if (id !== assignmentNodeId(principalKey)) reason = 'unexpected assignment id (possible duplicate or conflicting assignment)';
+    else if (!roles.has(roleId)) reason = 'assignment names a role that is unknown or did not verify';
+    else if (p['workspaceId'] !== WORKSPACE_ID || !e.some(x => x.type === 'IN_WORKSPACE' && x.to === WORKSPACE_ID && inTenant(x))) reason = 'assignment is not for this workspace';
+    else if (!e.some(x => x.type === 'GRANTS_ROLE' && x.to === roleId && inTenant(x))) reason = 'assignment edge and role do not agree';
+    else if (p['enforcement'] !== 'NOT_ENFORCED') reason = 'assignment claims enforcement, which no server policy implements';
+    else if (status !== 'ACTIVE' && status !== 'REVOKED') reason = 'assignment status is invalid';
+    else if (typeof p['revision'] !== 'number' || !Number.isInteger(p['revision']) || p['revision'] < 1) reason = 'assignment revision is invalid';
+    else if (typeof p['assignedAt'] !== 'string' || !UTC_RE.test(p['assignedAt'])) reason = 'assignment timestamp is invalid';
+    if (reason) flag(id, reason);
+    return { id, principalKey, reason, status, roleId, revision: typeof p['revision'] === 'number' ? p['revision'] : 0, assignedAt: String(p['assignedAt'] ?? ''), assignedBy: String(p['assignedBy'] ?? ''), source: String(p['source'] ?? '') };
+  });
+  const effective = (principalKey: string): EffectiveRole => {
+    const mine = assns.filter(a => a.principalKey === principalKey);
+    if (mine.length === 0) return { state: 'UNASSIGNED', enforcement: 'NOT_ENFORCED', reason: 'none', note: 'No role assignment. This grants no access and changes no session right.' };
+    const bad = mine.filter(a => a.reason !== null);
+    if (bad.length > 0) return { state: 'UNKNOWN', enforcement: 'NOT_ENFORCED', reason: bad[0]!.reason!, note: 'The assignment could not be verified, so no role or capability is shown.' };
+    const active = mine.filter(a => a.status === 'ACTIVE');
+    if (active.length > 1) { flag(principalKey, 'more than one active assignment for one principal'); return { state: 'UNKNOWN', enforcement: 'NOT_ENFORCED', reason: 'more than one active assignment', note: 'Conflicting assignments, so no role or capability is shown.' }; }
+    if (active.length === 0) return { state: 'UNASSIGNED', enforcement: 'NOT_ENFORCED', reason: 'revoked', note: 'The assignment was revoked. This grants no access.' };
+    const a = active[0]!;
+    return { state: 'ASSIGNED', enforcement: 'NOT_ENFORCED', role: roles.get(a.roleId)!, assignmentId: a.id, revision: a.revision, assignedAt: a.assignedAt, assignedBy: a.assignedBy, source: a.source, note: NOTE_DISPLAY_ONLY };
+  };
+
+  // Profiles: served only when the profile, its voice, both resource refs and every edge verify.
+  const profiles: AgentProfileView[] = [];
+  for (const p of f.profiles) {
+    const id = profileNodeId(p.agentId); const n = node('AgentProfile', id);
+    if (!n) { flag(id, 'profile is not in the graph'); continue; }
+    const q = n.props; const e = edgesOf(n);
+    const fields: [string, unknown][] = [['agentId', p.agentId], ['actorKey', p.actorKey], ['name', p.name], ['gender', p.gender], ['species', p.species], ['apparentAge', p.apparentAge], ['color', p.color], ['emoji', p.emoji], ['emojiName', p.emojiName], ['role', p.role], ['personality', p.personality], ['assignment', p.assignment], ['knownFor', p.knownFor], ['declaredAccessLevel', p.declaredAccessLevel], ['sourceId', PROFILE_SOURCE_IDS.profiles]];
+    if (!sourceOk.has(PROFILE_SOURCE_IDS.profiles) || fields.some(([k, v]) => q[k] !== v)) { flag(id, 'profile fields differ from the fixture'); continue; }
+    const one = (type: string, to: string, label?: string) => e.filter(x => x.type === type).length === 1 && e.some(x => x.type === type && x.to === to && inTenant(x) && (label === undefined || x.toLabels[0] === label));
+    const vid = voiceNodeId(p.voice.voiceId); const v = node('VoiceProfile', vid);
+    const sk = node('ResourceRef', resourceNodeId(p.agentId, 'skills')); const mem = node('ResourceRef', resourceNodeId(p.agentId, 'memory'));
+    const resOk = (r: Row | undefined, x: ResourceFixture) => !!r && r.props['kind'] === x.kind && r.props['agentId'] === p.agentId && r.props['declaredPath'] === x.declaredPath && r.props['proposedPath'] === x.proposedPath && r.props['sourceId'] === PROFILE_SOURCE_IDS.profiles;
+    if (!v || v.props['provider'] !== p.voice.provider || v.props['externalVoiceId'] !== p.voice.voiceId || v.props['voiceName'] !== p.voice.voiceName || v.props['sourceId'] !== PROFILE_SOURCE_IDS.profiles) { flag(id, 'voice binding differs from the fixture'); continue; }
+    if (!resOk(sk, p.skills) || !resOk(mem, p.memory)) { flag(id, 'resource references differ from the fixture'); continue; }
+    if (!one('USES_VOICE', vid, 'VoiceProfile') || !one('HAS_SKILLS', resourceNodeId(p.agentId, 'skills'), 'ResourceRef') || !one('HAS_MEMORY', resourceNodeId(p.agentId, 'memory'), 'ResourceRef')
+      || !one('ASSIGNED_TO', WORKSPACE_ID, 'Workspace') || !one('DEFINED_IN', PROFILE_SOURCE_IDS.profiles, 'ProfileSource')) { flag(id, 'profile relationships differ from the fixture'); continue; }
+    const linked = e.some(x => x.type === 'IS_PRINCIPAL' && x.to === p.actorKey && x.toLabels[0] === 'Principal');
+    profiles.push({
+      id, agentId: p.agentId, actorKey: p.actorKey, name: p.name, gender: p.gender, species: p.species, apparentAge: p.apparentAge, color: p.color, emoji: p.emoji, emojiName: p.emojiName,
+      role: p.role, personality: p.personality, assignmentText: p.assignment, knownFor: p.knownFor,
+      sourceProvenance: { declaredAccessLevel: p.declaredAccessLevel, grantsAccess: false },
+      voice: p.voice,
+      resources: { skills: await resolveResource(repoRoot, p.skills.declaredPath, p.skills.proposedPath, 'skills'), memory: await resolveResource(repoRoot, p.memory.declaredPath, p.memory.proposedPath, 'memory') },
+      principal: { key: p.actorKey, linked }, workspaceId: WORKSPACE_ID, access: effective(p.actorKey)
+    });
+  }
+  const keys = [...new Set([...assns.map(a => a.principalKey).filter(k => KEY_RE.test(k)), ...f.profiles.map(p => p.actorKey)])].sort();
+  const assignments = keys.map(principalKey => ({ principalKey, access: effective(principalKey) }));
+  integrity.sort((a, b) => a.id.localeCompare(b.id) || a.reason.localeCompare(b.reason));
+  return { status: 'AVAILABLE', tenantId, domain: 'studio', origin: PROFILE_ORIGIN, enforcement: 'NOT_ENFORCED', profiles, roles: [...roles.values()], assignments, integrity };
+}
+
+/** Fresh read of one principal's display-only role. Never cached; any privileged operation must re-read (and must not use this as authorization). */
+export async function effectiveRoleFor(client: GraphClient, repoRoot: string, tenantId: string, principalKey: string): Promise<EffectiveRole | { status: 'UNAVAILABLE'; reason: string }> {
+  const o = await agentProfileOverview(client, repoRoot, tenantId);
+  if (o.status === 'UNAVAILABLE') return o;
+  if (o.status === 'EMPTY') return { state: 'UNASSIGNED', enforcement: 'NOT_ENFORCED', reason: 'none', note: 'No role assignment. This grants no access and changes no session right.' };
+  return o.assignments.find(a => a.principalKey === principalKey)?.access ?? { state: 'UNASSIGNED', enforcement: 'NOT_ENFORCED', reason: 'none', note: 'No role assignment. This grants no access and changes no session right.' };
 }

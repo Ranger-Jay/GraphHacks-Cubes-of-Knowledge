@@ -17,3 +17,5 @@ export { loadIdeaManifest, seedIdeaverse, importIdea, importStatus, ideaverseOve
 export type { IdeaManifest, IdeaManifestEntry, IdeaverseSeedResult, IdeaverseOverview, IdeaverseIdea, ImportRequest, ImportResult, ImportReceipt } from './ideaverse.js';
 export { loadAgentFixtures, seedAgentProfiles, normalizeResourcePath, AGENT_PROFILES_SEED_VERSION } from './agent-profiles.js';
 export type { AgentFixtures, AgentProfileFixture, AgentProfilesSeedResult } from './agent-profiles.js';
+export { agentProfileOverview, effectiveRoleFor, resolveResource } from './agent-profiles.js';
+export type { AgentProfileResult, AgentProfileOverview, AgentProfileView, EffectiveRole, RoleView, ResourceView } from './agent-profiles.js';
