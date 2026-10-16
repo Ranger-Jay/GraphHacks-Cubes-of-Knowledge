@@ -1,0 +1,89 @@
+// Real headless Chrome proof (Cora, v033-followup): S7 phase-leaves-READY with REAL DOM assertions, plus direct-unconfirmed pool refresh.
+// Usage: node s7-proof.mjs <W> <H>   Server = FakeServer (UNPROVEN as a model of the real v026 route; no owner credential; no real graph).
+import { chromium } from '/tmp/gap2-pw/node_modules/playwright-core/index.mjs';
+import { writeFileSync } from 'node:fs';
+const [W, H] = [+(process.argv[2] ?? 1280), +(process.argv[3] ?? 800)];
+const OUT = '/workspace/hackathon/cora-ideaverse-mount-v033-followup';
+const READY_COPY = 'Adding ideas is available only when the cube is ready.';
+const UNCERTAIN = 'Could not confirm whether this was saved. Re-check the cube before retrying.';
+const results = []; const errs = [];
+const check = (sc, name, ok, extra) => { results.push({ vp: `${W}x${H}`, scenario: sc, name, ok: !!ok, ...(extra !== undefined ? { extra } : {}) }); if (!ok) console.log('FAIL', sc, name, JSON.stringify(extra)); };
+const b = await chromium.launch({ executablePath: '/usr/bin/google-chrome', args: ['--no-sandbox'] });
+async function open(v = 'default') {
+  const ctx = await b.newContext({ viewport: { width: W, height: H } }); const p = await ctx.newPage();
+  p.on('pageerror', e => errs.push(`${W}: ${String(e)}`)); p.on('console', m => { if (m.type() === 'error') errs.push(`${W} console: ${m.text()}`); });
+  await p.goto(`file://${OUT}/harness/index.html#v=${v}`);
+  await p.waitForSelector('[data-studio-ready="true"] .idea-pool-item', { timeout: 10000 });
+  return p;
+}
+const card = p => p.locator('[data-testid="idea-card"]');
+const waitPhase = (p, ph, t = 8000) => p.waitForSelector(`[data-testid="idea-card"][data-import-phase="${ph}"]`, { timeout: t }).then(() => true, () => false);
+const imports = p => p.evaluate(() => window.__server.calls.imports.length);
+const added = p => p.evaluate(() => window.__added.length);
+const phases = p => p.evaluate(() => window.__phases.slice());
+const poolIds = p => p.locator('button.idea-pool-item').allInnerTexts();
+const statusText = p => card(p).locator('.idea-card-status').innerText();
+const shot = (p, n) => p.screenshot({ path: `${OUT}/screens/${n}-${W}x${H}.png` });
+const holdOn = p => p.evaluate(() => { let r; const promise = new Promise(x => { r = x; }); window.__server.holdImport = { promise, resolve: r }; });
+const holdOff = p => p.evaluate(() => { const h = window.__server.holdImport; window.__server.holdImport = null; h.resolve(); });
+
+// S7a: phase leaves READY while the import is in flight, then READY returns.
+try { const sc = 'S7a-leaves-READY-in-flight'; const p = await open();
+  await p.locator('button.idea-pool-item', { hasText: 'idea-001' }).click(); await card(p).waitFor(); await p.waitForSelector('.idea-card-add:not([disabled])');
+  await holdOn(p); await card(p).locator('.idea-card-add').click(); await waitPhase(p, 'pending');
+  const t0 = Date.now(); while (Date.now() - t0 < 4000 && (await imports(p)) < 1) await p.waitForTimeout(30);
+  check(sc, 'the import request is in flight (1 POST) before READY is left', (await imports(p)) === 1);
+  await p.locator('button.to-checking').click(); await p.waitForTimeout(300);
+  check(sc, 'pool is withheld outside READY (waiting copy shown, no pool items, data-studio-ready=false)', (await p.locator('[data-testid="studio-waiting"]').count()) === 1 && (await p.locator('button.idea-pool-item').count()) === 0 && (await p.locator('[data-testid="studio-panel"]').getAttribute('data-studio-ready')) === 'false');
+  await shot(p, 'S7a-1-not-ready');
+  const addBtn = card(p).locator('.idea-card-add');
+  const blockedText = await card(p).innerText();
+  check(sc, 'card says the READY requirement and offers no enabled Add/Retry/Re-check', blockedText.includes(READY_COPY) && (await p.locator('.idea-card-add:not([disabled]), .idea-card-recheck:not([disabled]), .idea-card-new-attempt:not([disabled])').count()) === 0, { addCount: await addBtn.count(), text: blockedText.replace(/\s+/g, ' ').slice(0, 300) });
+  check(sc, 'card shows unresolved (could not confirm), never "Nothing was saved"', (await waitPhase(p, 'unconfirmed', 3000)) && (await card(p).innerText()).includes(UNCERTAIN) && !/nothing was saved/i.test(await card(p).innerText()));
+  await holdOff(p); await p.waitForTimeout(800);
+  const afterLate = { phases: await phases(p), added: await added(p), imports: await imports(p) };
+  check(sc, 'late completion after leaving READY: no Added, no pull, still one POST', afterLate.added === 0 && !afterLate.phases.includes('added') && afterLate.imports === 1, afterLate);
+  check(sc, 'still no enabled Add while not READY after the late completion', (await p.locator('.idea-card-add:not([disabled]), .idea-card-recheck:not([disabled])').count()) === 0);
+  await p.locator('button.to-ready').click(); await p.waitForSelector('[data-studio-ready="true"]'); await p.waitForTimeout(500);
+  const pool = await poolIds(p);
+  check(sc, 'READY returns: pool re-read and the committed idea is no longer listed', pool.length === 5 && !pool.some(t => t.includes('idea-001')), pool);
+  check(sc, 'card is still unresolved (unconfirmed) and offers a read-only Re-check', (await card(p).getAttribute('data-import-phase')) === 'unconfirmed' && (await p.locator('.idea-card-recheck:not([disabled])').count()) === 1);
+  await shot(p, 'S7a-2-ready-again');
+  await p.locator('.idea-card-recheck').click();
+  check(sc, 'Re-check finds this attempt\'s receipt and confirms Added', await waitPhase(p, 'added'));
+  await p.waitForTimeout(400);
+  check(sc, 'exactly one pull and still exactly one import POST (Re-check never wrote)', (await added(p)) === 1 && (await imports(p)) === 1, { added: await added(p), imports: await imports(p) });
+  await shot(p, 'S7a-3-added');
+  await p.context().close(); } catch (e) { check('CRASH', String(e).split('\n')[0].slice(0, 300), false); }
+
+// S7b: card open and idle, phase leaves READY BEFORE Add: Add disabled with the READY copy, zero requests.
+try { const sc = 'S7b-idle-card-not-READY'; const p = await open();
+  await p.locator('button.idea-pool-item', { hasText: 'idea-002' }).click(); await card(p).waitFor(); await p.waitForSelector('.idea-card-add:not([disabled])');
+  const ov0 = await p.evaluate(() => window.__server.calls.overview);
+  await p.locator('button.to-checking').click(); await p.waitForTimeout(300);
+  const add = card(p).locator('.idea-card-add');
+  check(sc, 'Add is disabled', (await add.count()) === 1 && (await add.isDisabled()));
+  check(sc, 'status region shows exactly the READY copy', (await statusText(p)).trim() === READY_COPY, await statusText(p));
+  await add.click({ force: true, timeout: 1000 }).catch(() => {}); await p.waitForTimeout(300);
+  check(sc, 'a forced click makes zero reads and zero writes', (await imports(p)) === 0 && (await p.evaluate(() => window.__server.calls.overview)) === ov0, { imports: await imports(p) });
+  await shot(p, 'S7b-idle-blocked');
+  await p.locator('button.to-ready').click(); await p.waitForSelector('[data-studio-ready="true"]'); await p.waitForTimeout(400);
+  check(sc, 'back in READY the card can add again (one POST, one pull)', await (async () => { await p.waitForSelector('.idea-card-add:not([disabled])'); await card(p).locator('.idea-card-add').click(); return waitPhase(p, 'added'); })() && (await imports(p)) === 1 && (await added(p)) === 1);
+  await p.context().close(); } catch (e) { check('CRASH', String(e).split('\n')[0].slice(0, 300), false); }
+
+// S10: direct unconfirmed (v033.03): reply is not a usable receipt but the server committed; pool must be re-read in the real DOM.
+for (const [v, reason] of [['bare-existing', 'existing'], ['bad-receipt', 'receipt-invalid']]) {
+  try { const sc = `S10-direct-unconfirmed-${v}`; const p = await open(v);
+    await p.locator('button.idea-pool-item', { hasText: 'idea-003' }).click(); await card(p).waitFor(); await p.waitForSelector('.idea-card-add:not([disabled])');
+    await card(p).locator('.idea-card-add').click();
+    check(sc, 'card is unconfirmed (no Added)', await waitPhase(p, 'unconfirmed'));
+    await p.waitForTimeout(500);
+    const txt = await card(p).innerText(); const pool = await poolIds(p);
+    check(sc, 'could-not-confirm copy, never "Nothing was saved"', txt.includes(UNCERTAIN) && !/nothing was saved/i.test(txt), txt.replace(/\s+/g, ' ').slice(0, 300));
+    check(sc, 'pool was re-read: committed idea no longer listed', pool.length === 5 && !pool.some(t => t.includes('idea-003')), pool);
+    check(sc, 'no pull, one POST', (await added(p)) === 0 && (await imports(p)) === 1);
+    await shot(p, `S10-${v}`); await p.context().close(); } catch (e) { check('CRASH', String(e).split('\n')[0].slice(0, 300), false); }
+}
+check('PAGE', 'no page errors or console errors', errs.length === 0, errs);
+writeFileSync(`${OUT}/results-s7-${W}x${H}.json`, JSON.stringify(results, null, 1));
+console.log(`${W}x${H}: ${results.filter(r => r.ok).length}/${results.length} ok`); await b.close();

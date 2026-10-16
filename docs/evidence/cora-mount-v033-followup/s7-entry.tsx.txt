@@ -1,0 +1,36 @@
+// Cora scratch/proof harness for cora/ideaverse-mount-v033-followup: REAL StudioPanel + IdeaCard + IdeaStudioController in headless Chrome.
+// The server is the in-memory FakeServer from tests/web/studio-harness.ts: UNPROVEN as a model of the real v026 route (no owner credential, no real graph here).
+// Optional `#v=` modes: default | bare-existing | bad-receipt. Phase buttons stand in for the shell's live ScenePhase.
+import React, { useState, useSyncExternalStore } from 'react';
+import { createRoot } from 'react-dom/client';
+import type { ScenePhase } from '@cubes/contracts';
+import { FakeServer } from '../tests/web/studio-harness';
+import { IdeaStudioController } from '../apps/web/src/studio/studioController';
+import { StudioPanel } from '../apps/web/src/studio/StudioPanel';
+const mode = new URLSearchParams(location.hash.slice(1)).get('v') ?? 'default';
+const server = new FakeServer(Array.from({ length: 6 }, (_, i) => `idea-00${i + 1}`));
+(window as any).__server = server;
+(window as any).__added = []; (window as any).__phases = [];
+if (mode === 'bare-existing') server.importIdea = (async (a: any) => { server.calls.imports.push(a); server.externalImport(a.ideaId); return { kind: 'existing' }; }) as any;
+if (mode === 'bad-receipt') server.importIdea = (async (a: any) => { server.calls.imports.push(a); server.externalImport(a.ideaId); return { kind: 'persisted', receipt: { ideaId: a.ideaId, fileSha256: 'x' } }; }) as any;
+let k = 0;
+const ctl = new IdeaStudioController({
+  readOverview: () => server.overview(), readDetail: id => server.detail(id), importIdea: a => server.importIdea(a), checkImport: a => server.checkImport(a),
+  newKey: () => `attempt-key-${String(++k).padStart(4, '0')}`,
+  onAdded: (receipt, ideaId) => { (window as any).__added.push({ ideaId, receipt }); },
+});
+(window as any).__ctl = ctl;
+ctl.subscribe(() => { const s = ctl.getSnapshot().open?.state.phase; const p = (window as any).__phases; if (s && p[p.length - 1] !== s) p.push(s); });
+function App() {
+  const [phase, setPhase] = useState<ScenePhase>('READY');
+  (window as any).__setPhase = setPhase;
+  useSyncExternalStore(ctl.subscribe, ctl.getSnapshot, ctl.getSnapshot);
+  return <div>
+    <div id="phase-controls">
+      <button className="to-checking" onClick={() => setPhase('CHECKING')}>Phase: CHECKING</button>
+      <button className="to-ready" onClick={() => setPhase('READY')}>Phase: READY</button>
+    </div>
+    <StudioPanel controller={ctl} phase={phase} access="OWNER" />
+  </div>;
+}
+createRoot(document.getElementById('root')!).render(<App />);
