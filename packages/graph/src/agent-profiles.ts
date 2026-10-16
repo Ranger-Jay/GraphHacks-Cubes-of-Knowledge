@@ -369,7 +369,7 @@ export async function agentProfileOverview(client: GraphClient, repoRoot: string
     else if (id !== assignmentNodeId(principalKey)) reason = 'unexpected assignment id (possible duplicate or conflicting assignment)';
     else if (!roles.has(roleId)) reason = 'assignment names a role that is unknown or did not verify';
     else if (roleId === 'role-owner' && agentKeys.has(principalKey)) reason = 'Owner must not be assigned to a synthetic agent';
-    else if (!fixtureFor.has(principalKey) && !e.some(x => x.type === 'FOR_PRINCIPAL' && x.to === principalKey && x.toLabels[0] === 'Principal')) reason = 'assignment is for a principal that is neither in the fixture nor an existing Principal';
+    else if (status === 'ACTIVE' && !fixtureFor.has(principalKey) && !e.some(x => x.type === 'FOR_PRINCIPAL' && x.to === principalKey && x.toLabels[0] === 'Principal')) reason = 'assignment is for a principal that is neither in the fixture nor an existing Principal';
     else if (p['workspaceId'] !== WORKSPACE_ID || e.filter(x => x.type === 'IN_WORKSPACE').length !== 1 || !e.some(x => x.type === 'IN_WORKSPACE' && x.to === WORKSPACE_ID && inTenant(x))) reason = 'assignment is not for this workspace (it needs exactly one workspace edge)';
     else if (e.filter(x => x.type === 'GRANTS_ROLE').length !== 1 || !e.some(x => x.type === 'GRANTS_ROLE' && x.to === roleId && inTenant(x))) reason = 'assignment edge and role do not agree (there must be exactly one role edge)';
     else if (p['enforcement'] !== 'NOT_ENFORCED') reason = 'assignment claims enforcement, which no server policy implements';
