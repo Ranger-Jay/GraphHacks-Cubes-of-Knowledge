@@ -234,7 +234,7 @@ export async function seedAgentProfiles(client: GraphClient, repoRoot: string, o
 export const READ_AGENT_PROFILES = `
 MATCH (n {tenantId: $tenantId}) WHERE n:AgentProfile OR n:VoiceProfile OR n:ResourceRef OR n:AccessRole OR n:Capability OR n:RoleAssignment OR n:ProfileSource
 OPTIONAL MATCH (n)-[e]->(b)
-RETURN labels(n) AS labels, properties(n) AS props, collect([e.id, type(e), b.id, labels(b), b.tenantId]) AS out`;
+RETURN id(n) AS iid, labels(n) AS labels, properties(n) AS props, collect([e.id, type(e), b.id, labels(b), b.tenantId]) AS out`;
 
 export type ResourceStatus = 'PRESENT' | 'MISSING' | 'UNVERIFIED';
 export interface ResourceView { kind: 'skills' | 'memory'; declaredPath: string; proposedPath: string; status: ResourceStatus; sha256?: string; byteCount?: number; note: string }
@@ -293,7 +293,8 @@ export async function resolveResource(repoRoot: string, declaredPath: string, pr
   }
 }
 
-interface Row { labels: string[]; props: Record<string, unknown>; out: unknown[][] }
+/** `iid` (the internal node id) keeps two nodes with identical labels and properties as two rows: aggregation would otherwise merge an exact-copy duplicate into one. */
+interface Row { iid: number; labels: string[]; props: Record<string, unknown>; out: unknown[][] }
 interface Edge { id: string; type: string; to: string; toLabels: string[]; toTenant: unknown }
 const edgesOf = (r: Row): Edge[] => r.out.filter(([id, type, to]) => typeof id === 'string' && typeof type === 'string' && typeof to === 'string')
   .map(([id, type, to, labels, tenant]) => ({ id: id as string, type: type as string, to: to as string, toLabels: (labels as string[] | null) ?? [], toTenant: tenant }));
