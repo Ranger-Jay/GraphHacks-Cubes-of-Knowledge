@@ -79,6 +79,12 @@ export interface IdeaverseSeedResult { seedVersion: string; tenantId: string; id
 export async function seedIdeaverse(client: GraphClient, repoRoot: string, options: { tenantId?: string; manifestPath?: string } = {}): Promise<IdeaverseSeedResult> {
   const tenantId = options.tenantId ?? DEFAULT_TENANT;
   const m = await loadIdeaManifest(repoRoot, options.manifestPath);
+  // An imported idea's content is what its receipt names. Changing the file under an imported id would
+  // make unreviewed content look imported, so a re-seed refuses; publish changed content under a new id.
+  // Sent as a write-mode call (read-only Cypher): a read-only call errors on a graph that does not exist yet.
+  const imported = await client.write<{ ideaId: string; sha256: string }>('MATCH (r:ImportReceipt {tenantId: $tenantId}) RETURN r.ideaId AS ideaId, r.sha256 AS sha256', { tenantId });
+  const changed = m.ideas.filter(i => imported.some(r => r.ideaId === i.id && r.sha256 !== i.sha256)).map(i => i.id);
+  if (changed.length > 0) throw new Error(`Refusing to re-seed: imported idea content changed (${changed.join(', ')}). Use a new idea id for changed content.`);
   await client.write('MERGE (n:StudioSource {id: $id, tenantId: $tenantId}) SET n += $props', { id: MANIFEST_SOURCE_ID, tenantId, props: {
     tenantId, kind: 'ideaverse_manifest', path: m.manifestPath, sha256: m.manifestSha256, synthetic: true, origin: 'project-authored synthetic fixture', licenseStatus: 'none claimed'
   } });
