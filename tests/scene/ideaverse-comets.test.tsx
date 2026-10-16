@@ -526,3 +526,132 @@ test('single-card scene boundary: IdeaVerseComets omits duplicate card UI, holds
   assert.ok(importingHtml.includes(`data-testid="ideaverse-comet-${targetId}"`));
   assert.ok(importingHtml.includes('status-importing'));
 });
+
+test('mounted component with default clock: confirmed receipt advances through pull and leaves importing state without stuck loop (#40/#48)', async () => {
+  const previousEnv = (global as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT;
+  (global as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+
+  class MockDOMNode {
+    nodeName = 'DIV';
+    tagName = 'DIV';
+    nodeType = 1;
+    children: MockDOMNode[] = [];
+    childNodes = this.children;
+    style: Record<string, unknown> = {};
+    attributes: Record<string, string> = {};
+    ownerDocument: unknown = global.document;
+    appendChild(child: MockDOMNode) { this.children.push(child); return child; }
+    removeChild(child: MockDOMNode) {
+      const idx = this.children.indexOf(child);
+      if (idx !== -1) this.children.splice(idx, 1);
+      return child;
+    }
+    insertBefore(child: MockDOMNode, ref: MockDOMNode) {
+      const idx = this.children.indexOf(ref);
+      if (idx === -1) this.children.push(child);
+      else this.children.splice(idx, 0, child);
+      return child;
+    }
+    setAttribute(k: string, v: unknown) { this.attributes[k] = String(v); }
+    removeAttribute(k: string) { delete this.attributes[k]; }
+    getAttribute(k: string) { return this.attributes[k]; }
+    addEventListener() {}
+    removeEventListener() {}
+  }
+
+  const prevDoc = global.document;
+  const prevWin = global.window;
+  const prevIFrame = (global as unknown as { HTMLIFrameElement?: unknown }).HTMLIFrameElement;
+  const prevElem = global.Element;
+  const prevNode = global.Node;
+
+  (global as unknown as { HTMLIFrameElement: unknown }).HTMLIFrameElement = class HTMLIFrameElement extends MockDOMNode {};
+  (global as unknown as { HTMLElement: unknown }).HTMLElement = class HTMLElement extends MockDOMNode {};
+  global.Element = MockDOMNode as unknown as typeof Element;
+  global.Node = MockDOMNode as unknown as typeof Node;
+
+  global.document = {
+    createElement: () => new MockDOMNode(),
+    createElementNS: () => new MockDOMNode(),
+    createTextNode: (text: string) => ({ nodeType: 3, nodeValue: text, textContent: text, ownerDocument: global.document }) as unknown as Text,
+    addEventListener: () => {},
+    removeEventListener: () => {},
+    nodeType: 9,
+    defaultView: global,
+    activeElement: null,
+  } as unknown as Document;
+  global.window = global as unknown as Window & typeof globalThis;
+
+  try {
+    const { createRoot } = await import('react-dom/client');
+    const { act } = await import('react');
+
+    const items = loadRepoManifestItems().slice(0, 5);
+    const targetId = items[0]!.id;
+    const realReceipt: PersistedImportReceipt = {
+      ideaId: targetId,
+      sha256: items[0]!.sha256,
+      workspaceId: 'ws-wad-cube',
+      membershipId: `member-ws-wad-cube-${targetId}`,
+      importedAt: '2026-10-15T20:00:02.000Z',
+      workspaceRevision: 1,
+    };
+
+    function findAllWithAttr(node: MockDOMNode, attr: string): MockDOMNode[] {
+      const result: MockDOMNode[] = [];
+      if (node.attributes && node.attributes[attr]) result.push(node);
+      for (const ch of node.children) {
+        result.push(...findAllWithAttr(ch, attr));
+      }
+      return result;
+    }
+
+    const container = new MockDOMNode();
+    const root = createRoot(container as unknown as HTMLElement);
+
+    let refreshedReceipt: PersistedImportReceipt | null = null;
+    await act(async () => {
+      // NOTE: now prop is deliberately omitted so the production default now = () => Date.now() is exercised!
+      root.render(
+        <IdeaVerseComets
+          ideas={items}
+          confirmedReceipt={realReceipt}
+          onMembershipRefreshed={r => { refreshedReceipt = r; }}
+        />
+      );
+    });
+
+    // 1. Immediately upon mount: confirmedReceipt starts transition in status 'importing'
+    const cometImmediate = findAllWithAttr(container, 'data-testid').find(
+      n => n.attributes['data-testid'] === `ideaverse-comet-${targetId}`
+    );
+    assert.ok(cometImmediate, 'target comet exists immediately after mount');
+    assert.equal(cometImmediate.attributes['data-comet-status'], 'importing');
+    assert.ok(refreshedReceipt);
+
+    // 2. Wait 1.4s (exceeding COMET_IMPORT_PULL_DURATION_MS = 900ms) with default live clock running
+    await act(async () => {
+      await new Promise(resolve => setTimeout(resolve, 1400));
+    });
+
+    // 3. Comet has left 'importing' status and has retired or been replaced (NOT stuck at pull=0!)
+    const cometAfter = findAllWithAttr(container, 'data-testid').find(
+      n => n.attributes['data-testid'] === `ideaverse-comet-${targetId}`
+    );
+    assert.ok(
+      !cometAfter || cometAfter.attributes['data-comet-status'] !== 'importing',
+      'target comet successfully leaves importing state and does not stay stuck'
+    );
+
+    await act(async () => {
+      root.unmount();
+    });
+  } finally {
+    global.document = prevDoc;
+    global.window = prevWin;
+    (global as unknown as { HTMLIFrameElement: unknown }).HTMLIFrameElement = prevIFrame;
+    global.Element = prevElem;
+    global.Node = prevNode;
+    (global as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = previousEnv;
+  }
+});
