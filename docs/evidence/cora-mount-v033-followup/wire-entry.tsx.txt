@@ -1,0 +1,57 @@
+// ISOLATED WIRING PREP (Cora, v033-followup). NOT a mounted-product GO: nothing in the app mounts IdeaVerseComets.
+// Real StudioPanel + IdeaCard + IdeaStudioController (this branch) + accepted Gem B component (025b7bd, component scope only), FakeServer (UNPROVEN vs the real v026 route).
+// Rules under test: mount comets only once the pool is READY and ready; pass the controller's FRESH overview; apply each confirmed receipt once (onAdded -> confirmedReceipt);
+// remount via key ONLY on pool drift (pool ids differ from what the comets already expect) and never while a request is in flight or a pull is running.
+import React, { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import { createRoot } from 'react-dom/client';
+import { FakeServer } from '../tests/web/studio-harness';
+import { IdeaStudioController } from '../apps/web/src/studio/studioController';
+import { StudioPanel } from '../apps/web/src/studio/StudioPanel';
+import { IdeaVerseComets } from './IdeaVerseComets.B-025b7bd';
+const PULL_GUARD_MS = 900 + 700;   // B's pull duration + margin
+const server = new FakeServer(Array.from({ length: 8 }, (_, i) => `idea-00${i + 1}`));
+(window as any).__server = server; (window as any).__added = [];
+const wire: any = { mounts: [] as any[], remounts: [] as any[], deferredWhileBusy: 0 }; (window as any).__wire = wire;
+let k = 0; let onAddedHook: (r: any) => void = () => {};
+const ctl = new IdeaStudioController({
+  readOverview: () => server.overview(), readDetail: id => server.detail(id), importIdea: a => server.importIdea(a), checkImport: a => server.checkImport(a),
+  newKey: () => `attempt-key-${String(++k).padStart(4, '0')}`,
+  onAdded: (receipt, ideaId) => { (window as any).__added.push({ ideaId, receipt, at: Date.now() }); onAddedHook(receipt); },
+});
+(window as any).__ctl = ctl;
+function App() {
+  const snap = useSyncExternalStore(ctl.subscribe, ctl.getSnapshot, ctl.getSnapshot);
+  const [gen, setGen] = useState(0);
+  const [conf, setConf] = useState<any>(null);
+  const lastAddedAt = useRef(0);
+  const mountedIds = useRef<string[] | null>(null);       // pool ids the mounted comets were built from
+  const confirmedIds = useRef(new Set<string>());         // ids this component already consumed via a confirmed receipt
+  onAddedHook = r => { lastAddedAt.current = Date.now(); confirmedIds.current.add(r.ideaId); setConf(r); };
+  // Settled = a fresh overview is in hand. A refresh in flight ('loading') keeps the old ideas: it must NOT unmount the comets (that would reset an in-flight pull).
+  const poolReady = snap.env.phase === 'READY' && snap.pool.status === 'ready' && snap.pool.overview?.status === 'AVAILABLE';
+  const canShow = snap.env.phase === 'READY' && snap.pool.overview?.status === 'AVAILABLE' && (snap.pool.status === 'ready' || snap.pool.status === 'loading') && snap.pool.ideas.length > 0;
+  const ids = snap.pool.ideas.map(i => i.id);
+  const busy = snap.open ? ctl.isBusyFor(snap.open.idea.id) : false;
+  const [tick, setTick] = useState(0);
+  const [mountedFlag, setMountedFlag] = useState(false);
+  useEffect(() => { ctl.setEnv({ phase: 'READY', access: 'OWNER' }); }, []);
+  useEffect(() => {
+    if (!poolReady) return;
+    if (mountedIds.current === null) { mountedIds.current = ids; wire.mounts.push({ at: Date.now(), ids }); setMountedFlag(true); return; }
+    const expected = mountedIds.current.filter(i => !confirmedIds.current.has(i));
+    const drift = expected.length !== ids.length || expected.some((i, n) => i !== ids[n]);
+    if (!drift) return;
+    const pullRunning = Date.now() - lastAddedAt.current < PULL_GUARD_MS;
+    if (busy || pullRunning) { wire.deferredWhileBusy++; const t = setTimeout(() => setTick(x => x + 1), 400); return () => clearTimeout(t); }
+    // Controlled remount: new key, drop the consumed receipt so it is never re-applied, rebuild the expectation from the current pool.
+    wire.remounts.push({ at: Date.now(), from: expected, to: ids });
+    mountedIds.current = ids; confirmedIds.current = new Set(); setConf(null); setGen(g => g + 1);
+  }, [poolReady, ids.join(), busy, tick]);
+  const items = snap.pool.ideas.map(i => ({ ...i, text: '' }));
+  return <div>
+    <StudioPanel controller={ctl} phase="READY" access="OWNER" />
+    {(location.hash.includes('strictgate') ? poolReady : canShow) && mountedFlag ? <IdeaVerseComets key={gen} ideas={items as any} confirmedReceipt={conf} overview={(location.hash.includes('noov') ? undefined : snap.pool.overview) as any}
+      inspectedIdeaId={snap.open?.idea.id ?? null} onInspectIdea={i => { void ctl.open(i.id); }} onCloseInspect={ctl.close} /> : null}
+  </div>;
+}
+createRoot(document.getElementById('root')!).render(<App />);

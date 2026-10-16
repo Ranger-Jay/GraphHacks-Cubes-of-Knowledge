@@ -1,0 +1,64 @@
+// ISOLATED WIRING PREP proof (not a mounted-product GO). Usage: node wire-proof.mjs <W> <H>
+import { chromium } from '/tmp/gap2-pw/node_modules/playwright-core/index.mjs';
+import { writeFileSync } from 'node:fs';
+const [W, H] = [+(process.argv[2] ?? 1280), +(process.argv[3] ?? 800)];
+const OUT = '/workspace/hackathon/cora-ideaverse-mount-v033-followup';
+const results = []; const errs = [];
+const check = (sc, name, ok, extra) => { results.push({ vp: `${W}x${H}`, scenario: sc, name, ok: !!ok, ...(extra !== undefined ? { extra } : {}) }); if (!ok) console.log('FAIL', sc, name, JSON.stringify(extra)); };
+const b = await chromium.launch({ executablePath: '/usr/bin/google-chrome', args: ['--no-sandbox'] });
+async function open() { const ctx = await b.newContext({ viewport: { width: W, height: H } }); const p = await ctx.newPage();
+  p.on('pageerror', e => errs.push(String(e))); p.on('console', m => { if (m.type() === 'error') errs.push(m.text()); });
+  await p.goto(`file://${OUT}/harness/wire/index.html`); await p.waitForSelector('[data-testid^="ideaverse-comet-idea-"]', { timeout: 10000 }); await p.waitForTimeout(300); return p; }
+const comets = p => p.evaluate(() => [...document.querySelectorAll('[data-testid^="ideaverse-comet-idea-"]')].map(e => ({ id: e.getAttribute('data-testid').replace('ideaverse-comet-', ''), status: e.getAttribute('data-comet-status'), prog: +e.getAttribute('data-flight-progress') })));
+const W_ = p => p.evaluate(() => ({ mounts: window.__wire.mounts.length, remounts: window.__wire.remounts.length, remountLog: window.__wire.remounts, deferred: window.__wire.deferredWhileBusy, added: window.__added.length, imports: window.__server.calls.imports.length }));
+const card = p => p.locator('[data-testid="idea-card"]');
+const waitPhase = (p, ph, t = 8000) => p.waitForSelector(`[data-testid="idea-card"][data-import-phase="${ph}"]`, { timeout: t }).then(() => true, () => false);
+const shot = (p, n) => p.screenshot({ path: `${OUT}/screens/${n}-${W}x${H}.png` });
+// W1: own Add. Comets mount once after the pool is ready; Add -> onAdded -> one pull; no remount needed.
+try { const sc = 'W1-own-add'; const p = await open(); const c0 = await comets(p); const w0 = await W_(p);
+  check(sc, 'comets mount once, only after the pool is ready (1 mount, 0 remounts, 3 comets)', w0.mounts === 1 && w0.remounts === 0 && c0.length === 3, { w0, c0 });
+  const target = c0[0].id; await p.click(`[data-testid="ideaverse-comet-btn-${target}"]`); await card(p).waitFor(); await p.waitForSelector('.idea-card-add:not([disabled])');
+  check(sc, 'inspecting via the comet opens exactly one card (no second Add control in the scene)', (await p.locator('[data-testid="idea-card"]').count()) === 1 && (await p.locator('[data-testid="ideaverse-comets-layer"] button', { hasText: /add/i }).count()) === 0);
+  await card(p).locator('.idea-card-add').click();
+  const seen = []; for (let i = 0; i < 24; i++) { await p.waitForTimeout(150); seen.push((await comets(p)).find(c => c.id === target)?.status ?? 'REMOVED'); }
+  const w1 = await W_(p);
+  check(sc, 'Added, exactly one pull, exactly one POST', (await waitPhase(p, 'added', 500)) && w1.added === 1 && w1.imports === 1, w1);
+  check(sc, 'the comet goes importing -> removed and never back to flying (no reset of an in-flight pull)', seen.includes('importing') && seen[seen.length - 1] === 'REMOVED' && !seen.slice(seen.indexOf('importing')).includes('flying'), seen);
+  check(sc, 'no remount after an own add (pool matches what the comets expect)', w1.remounts === 0, w1);
+  const cf = await comets(p); check(sc, 'imported idea stays gone from the scene and the pool', !cf.some(c => c.id === target) && !(await p.locator('button.idea-pool-item', { hasText: target }).count()), cf);
+  await shot(p, 'W1-after-add'); await p.context().close(); } catch (e) { check('CRASH', String(e).split('\n')[0].slice(0, 300), false); }
+// W2: external drift (someone else imported idea-004), pool refresh: exactly one controlled remount, imported idea not shown.
+try { const sc = 'W2-external-drift'; const p = await open();
+  await p.evaluate(() => { window.__server.externalImport('idea-004'); return window.__ctl.refreshPool(); }); await p.waitForTimeout(1500);
+  const w = await W_(p); const c = await comets(p);
+  check(sc, 'one remount on drift', w.remounts === 1 && w.mounts === 1, w);
+  check(sc, 'imported-elsewhere idea is not a comet after the remount', !c.some(x => x.id === 'idea-004') && c.length >= 2, c);
+  await p.waitForTimeout(1200); check(sc, 'no continuous resetting (still 1 remount after 1.2 s)', (await W_(p)).remounts === 1);
+  await p.context().close(); } catch (e) { check('CRASH', String(e).split('\n')[0].slice(0, 300), false); }
+// W3: drift WHILE an import is in flight. The external import also moves the revision, so the held request ends STALE (a real consequence, not a bug):
+// no remount while the request is in flight, flying comets untouched; after it settles, exactly one deferred remount; no success effect.
+try { const sc = 'W3-drift-during-in-flight-import'; const p = await open(); const c0 = await comets(p); const target = c0[0].id;
+  await p.click(`[data-testid="ideaverse-comet-btn-${target}"]`); await card(p).waitFor(); await p.waitForSelector('.idea-card-add:not([disabled])');
+  await p.evaluate(() => { let r; const promise = new Promise(x => { r = x; }); window.__server.holdImport = { promise, resolve: r }; });
+  await card(p).locator('.idea-card-add').click(); await waitPhase(p, 'pending'); await p.waitForTimeout(200);
+  await p.evaluate(() => { window.__server.externalImport('idea-008'); return window.__ctl.refreshPool(); }); await p.waitForTimeout(1500);
+  const wMid = await W_(p); const cMid = await comets(p);
+  check(sc, 'no remount while the import is in flight; the held comet is still the same flying comet', wMid.remounts === 0 && wMid.deferred >= 1 && cMid.some(c => c.id === target && c.status === 'flying' && c.prog > 0), { wMid, cMid });
+  await p.evaluate(() => { const h = window.__server.holdImport; window.__server.holdImport = null; h.resolve(); });
+  check(sc, 'the held request settles STALE (revision moved): error card, no Added', await waitPhase(p, 'error'));
+  await p.waitForTimeout(1200);
+  const wEnd = await W_(p); const cEnd = await comets(p);
+  check(sc, 'then exactly one deferred remount; the drifted idea is absent; no pull', wEnd.remounts === 1 && !cEnd.some(c => c.id === 'idea-008') && wEnd.added === 0 && cEnd.every(c => c.status === 'flying'), { wEnd, cEnd });
+  await shot(p, 'W3-after-deferred-remount'); await p.context().close(); } catch (e) { check('CRASH', String(e).split('\n')[0].slice(0, 300), false); }
+// W4: drift arrives DURING the pull (after Added): the pull is never reset; remount waits until the pull is over, then happens once.
+try { const sc = 'W4-drift-during-pull'; const p = await open(); const c0 = await comets(p); const target = c0[0].id;
+  await p.click(`[data-testid="ideaverse-comet-btn-${target}"]`); await card(p).waitFor(); await p.waitForSelector('.idea-card-add:not([disabled])'); await card(p).locator('.idea-card-add').click();
+  await p.waitForSelector(`[data-testid="ideaverse-comet-${target}"][data-comet-status="importing"]`, { timeout: 4000 });
+  await p.evaluate(() => { window.__server.externalImport('idea-008'); return window.__ctl.refreshPool(); });
+  const seen = []; let remountsDuringPull = 0; for (let i = 0; i < 30; i++) { await p.waitForTimeout(100); const c = (await comets(p)).find(x => x.id === target); seen.push(c?.status ?? 'REMOVED'); if (c) remountsDuringPull = (await W_(p)).remounts; }
+  check(sc, 'importing -> removed, never reset to flying, 0 remounts while the pull was visible', seen[0] === 'importing' && seen.includes('REMOVED') && !seen.slice(0, seen.indexOf('REMOVED')).includes('flying') && remountsDuringPull === 0, { seen, remountsDuringPull });
+  await p.waitForTimeout(1500); const wEnd = await W_(p); const cEnd = await comets(p);
+  check(sc, 'then exactly one remount; drifted and imported ideas absent; one pull, one POST', wEnd.remounts === 1 && !cEnd.some(c => c.id === 'idea-008' || c.id === target) && wEnd.added === 1 && wEnd.imports === 1, { wEnd, cEnd });
+  await p.context().close(); } catch (e) { check('CRASH', String(e).split('\n')[0].slice(0, 300), false); }
+check('PAGE', 'no page errors or console errors', errs.length === 0, errs);
+writeFileSync(`${OUT}/results-wire-prep-${W}x${H}.json`, JSON.stringify(results, null, 1)); console.log(`${W}x${H}: ${results.filter(r => r.ok).length}/${results.length} ok`); await b.close();
