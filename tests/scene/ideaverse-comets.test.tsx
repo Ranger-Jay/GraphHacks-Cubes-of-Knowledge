@@ -267,10 +267,10 @@ test('import transition: only confirmed persisted receipt triggers pull-to-cube 
   assert.equal(state.importedIds.has(targetId), false);
   assert.equal(state.activeComets.find(c => c.idea.id === targetId)?.status, 'flying');
 
-  // Fabricated witnessHash/nodeId/edgeId or mismatched fileSha256 is rejected
+  // Fabricated witnessHash/nodeId/edgeId or mismatched sha256 is rejected
   const fabricatedWitnessReceipt = {
     ideaId: targetId,
-    fileSha256: targetSha256,
+    sha256: targetSha256,
     workspaceId: 'ws-wad-cube',
     importedAt: '2026-10-15T20:00:02.000Z',
     workspaceRevision: 1,
@@ -285,12 +285,24 @@ test('import transition: only confirmed persisted receipt triggers pull-to-cube 
   );
   assert.equal(state.importedIds.has(targetId), false);
 
-  // Confirmed persisted workspace-import receipt starts gentle pull toward cube + fade
+  // Backward-compatible alias fileSha256 also passes validation
+  const aliasReceipt = {
+    receiptId: `rcpt-alias-${targetId}`,
+    ideaId: targetId,
+    fileSha256: targetSha256,
+    workspaceId: 'ws-wad-cube',
+    importedAt: '2026-10-15T20:00:02.000Z',
+    workspaceRevision: 1,
+    membershipId: `member-ws-wad-cube-${targetId}`,
+  };
+  assert.equal(isValidWorkspaceImportReceipt(aliasReceipt, items), true, 'alias receipt with fileSha256 passes');
+
+  // Confirmed persisted canonical workspace-import receipt (#40/#48: sha256) starts gentle pull toward cube + fade
   const receipt: PersistedImportReceipt = {
     receiptId: `rcpt-ws-wad-cube-${targetId}`,
     ideaId: targetId,
     filename: state.activeComets[0]!.idea.filename,
-    fileSha256: targetSha256,
+    sha256: targetSha256,
     workspaceId: 'ws-wad-cube',
     importedAt: '2026-10-15T20:00:02.000Z',
     importedByRole: 'owner',
@@ -299,7 +311,7 @@ test('import transition: only confirmed persisted receipt triggers pull-to-cube 
     membershipId: `member-ws-wad-cube-${targetId}`,
     replayed: false,
   };
-  assert.equal(isValidWorkspaceImportReceipt(receipt, items), true);
+  assert.equal(isValidWorkspaceImportReceipt(receipt, items), true, 'canonical receipt with sha256 passes');
   state = applyConfirmedCometImport(state, receipt, startMs + 2_000);
   assert.equal(state.importedIds.has(targetId), true);
   assert.equal(state.inspectedIdeaId, null);

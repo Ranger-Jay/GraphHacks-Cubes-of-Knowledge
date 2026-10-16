@@ -32,16 +32,18 @@ export interface IdeaVerseCometItem {
 }
 
 /**
- * Persisted workspace-import receipt (#40).
+ * Persisted workspace-import receipt (#40/#48).
  * Import membership is outside the licensing witness: must carry idea/file hash,
  * workspace and membership identity, imported timestamp, and workspace revision,
  * and must NEVER fabricate a licensing witnessHash.
+ * Canonical hash property is sha256 (#40/#48); fileSha256 supported as backward-compatible alias.
  */
 export interface PersistedImportReceipt {
   receiptId?: string | undefined;
   ideaId: string;
   filename?: string | undefined;
-  fileSha256: string;
+  sha256?: string | undefined;
+  fileSha256?: string | undefined;
   workspaceId: string;
   membershipId: string;
   importedAt: string;
@@ -452,10 +454,10 @@ export function recordNonPersistedImportAttempt(state: CometLifecycleState): Com
 }
 
 /**
- * Validate that a receipt matches the persisted workspace-import receipt contract (#40):
- * - Must carry ideaId, 64-hex fileSha256, workspaceId, membershipId, valid UTC importedAt, and integer workspaceRevision >= 1.
+ * Validate that a receipt matches the persisted workspace-import receipt contract (#40/#48):
+ * - Must carry ideaId, 64-hex sha256 (or fileSha256 alias), workspaceId, membershipId, valid UTC importedAt, and integer workspaceRevision >= 1.
  * - Must NEVER carry a licensing witnessHash, nodeId, or edgeId (import membership is outside the licensing witness).
- * - If the idea exists in allIdeas, receipt.fileSha256 must match idea.sha256.
+ * - If the idea exists in allIdeas, receipt sha256 (or fileSha256) must match idea.sha256.
  */
 export function isValidWorkspaceImportReceipt(
   receipt: unknown,
@@ -467,7 +469,13 @@ export function isValidWorkspaceImportReceipt(
   if ('nodeId' in r && r.nodeId !== undefined) return false;
   if ('edgeId' in r && r.edgeId !== undefined) return false;
   if (typeof r.ideaId !== 'string' || !r.ideaId.trim()) return false;
-  if (typeof r.fileSha256 !== 'string' || !SHA256_HEX_RE.test(r.fileSha256)) return false;
+  
+  // Canonical hash field is sha256 (#40/#48); fileSha256 accepted as backward-compat alias
+  const hash =
+    (typeof r.sha256 === 'string' && r.sha256.trim()) ||
+    (typeof r.fileSha256 === 'string' && r.fileSha256.trim());
+  if (!hash || !SHA256_HEX_RE.test(hash)) return false;
+
   if (typeof r.workspaceId !== 'string' || !r.workspaceId.trim()) return false;
   if (typeof r.membershipId !== 'string' || !r.membershipId.trim()) return false;
   if (parseStrictUtcMs(r.importedAt) === null) return false;
@@ -480,7 +488,7 @@ export function isValidWorkspaceImportReceipt(
   }
   if (allIdeas) {
     const matchedIdea = allIdeas.find(i => i.id === r.ideaId);
-    if (!matchedIdea || matchedIdea.sha256 !== r.fileSha256) return false;
+    if (!matchedIdea || matchedIdea.sha256 !== hash) return false;
   }
   return true;
 }
@@ -682,9 +690,9 @@ export const IdeaVerseComets: React.FC<IdeaVerseCometsProps> = ({
     setImportStatusState({ phase: 'pending', message: 'Adding to the cube...' });
     try {
       const res = await onRequestImport(inspectedIdea);
-      if (res.status === 'IMPORTED' && res.receipt) {
-        setImportStatusState({ phase: 'added', message: 'Added to the cube.' });
+      if (res.status === 'IMPORTED' && res.receipt && isValidWorkspaceImportReceipt(res.receipt, lifecycle.allIdeas)) {
         setLifecycle(prev => applyConfirmedCometImport(prev, res.receipt, now()));
+        setImportStatusState({ phase: 'added', message: 'Added to the cube.' });
         onMembershipRefreshed?.(res.receipt);
       } else {
         const reasonCopy =
@@ -695,7 +703,7 @@ export const IdeaVerseComets: React.FC<IdeaVerseCometsProps> = ({
               ? 'FalkorDB is unavailable right now. Nothing was saved.'
               : res.status === 'CONFLICT'
                 ? 'Workspace revision changed. Please retry.'
-                : 'Could not save this idea. Nothing was saved.');
+                : 'Could not confirm save receipt. Nothing was saved.');
         setImportStatusState({ phase: 'error', message: reasonCopy });
         setLifecycle(prev => recordNonPersistedImportAttempt(prev));
       }
