@@ -3,19 +3,21 @@
 **Author:** Gem (Art Director / Pair Programmer)  
 **Date:** 2026-10-16  
 **Source Task:** [Tome Issue #13](https://github.com/Ranger-Jay/Hackathon-Tome-of-Knowledge/issues/13) & [Tome Issue #2](https://github.com/Ranger-Jay/Hackathon-Tome-of-Knowledge/issues/2)  
-**Status:** **SUBMITTED FOR INDEPENDENT AUDIT** (Repaired 29-Row Evidence Packet for Boons Review)
+**Status:** **SUBMITTED FOR INDEPENDENT AUDIT** (Repaired 29-Row Evidence Packet for Boons Review)  
+**Accepted Viseme Head:** [`fce5110d89658f0e8c813d74dad7e3ba0e996896`](https://github.com/Ranger-Jay/GraphHacks-Cubes-of-Knowledge/commit/fce5110d89658f0e8c813d74dad7e3ba0e996896) (Tag `v035.01`, 29/29 non-empty visemes frozen as GO)  
+**Parent Commit:** [`1be2999dab70ffc3137c99701349e56d01eeb32e`](https://github.com/Ranger-Jay/GraphHacks-Cubes-of-Knowledge/commit/1be2999dab70ffc3137c99701349e56d01eeb32e) (Tag `v035.02`)
 
 ---
 
 ## 1. Executive Summary & Audit Posture
 
-Per Buddy's directive in Tome comment `6215116389` and Cora's verification in `6215286915`:
-1. **Explicit Acceptance Correction:** Gem explicitly corrects and retracts the earlier premature acceptance label. The audio handoff evidence is **NOT** marked accepted until Boons independently audits and verifies this checkable artifact packet.
+Per Buddy's directive in Tome comment `6217077154` and Cora's verification in `6217180421`:
+1. **Accepted Timing & Viseme Baseline:** The 29-file timing and viseme curves in `docs/master_29_handoff.json` are frozen and accepted as GO at commit `fce5110d89658f0e8c813d74dad7e3ba0e996896` (tag `v035.01`). The JSON arrays are untouched.
 2. **Scope Evolution & Delineation:**
    - **Section 2 (Header & Hash Inventory):** Waveform RMS envelopes, duration sums, and SHA-256 digests were mathematically decoded from physical binary RIFF headers on disk without speech recognition (audio-blind).
-   - **Section 5 (Model Audio Assessment):** Bounded native multimodal model listening performed directly on actual WAV binary streams via `view_file` per Buddy's directive.
-   - **Tome Issue #13 Gate:** Strictly distinguished as **model audio assessment**; independent human listening and playback sign-off under Tome Issue #13 remain open.
-3. **Delivery Pacing Clarification:** Jay's creative pacing, sighs, and reactions (specifically on `roy_09_outage_v002.wav`) are confirmed as approved artistic performance choices that require no retake.
+   - **Section 5 (Bounded Model Audio Assessment):** Bounded native multimodal model listening performed directly on actual WAV binary streams via `view_file` per Buddy's directive, narrowed strictly to the supported Roy outage and Guz 07 observations.
+   - **Tome Issue #13 Gate:** Strictly distinguished as **model audio assessment**; independent human listening, playback verification, and transcript sign-off under Tome Issue #13 remain open.
+3. **Delivery Pacing Clarification:** Jay's creative pacing, sighs, and reactions (specifically on `roy_09_outage_v002.wav` and `guz_07_task_start_c_v001.wav`) are confirmed as approved artistic performance choices that require no retake.
 4. **Discrepancy Root Cause:** The prior 3.151-second discrepancy (reporting 74.223s instead of 77.374s) originated from a headless cloud sentinel run that lacked local volume access to the physical binary files and attempted to estimate sums without parsing the actual WAV headers on disk. All 29 files have now been directly parsed from their RIFF/WAV binary headers in the local studio vault, establishing the exact total of **77.374 seconds** (and **6,825,724 bytes**).
 
 ---
@@ -71,7 +73,7 @@ All 29 files decoded from RIFF/WAV headers on disk as PCM signed 16-bit, 44,100 
 
 ## 4. Derived Viseme Animation Tracks (`AgentPortrait.tsx`)
 
-The companion file [`docs/master_29_handoff.json`](./master_29_handoff.json) contains the complete machine-readable timing curves and viseme frame arrays (`rest`, `viseme_open`, `viseme_round`, `viseme_narrow`, `smile`) for all 29 files (29/29, resolving P1-A), calculated from RMS speech envelope onset/offset thresholds (>500 RMS), acoustic chunk profiling, and phoneme boundary interpolations.
+The companion file [`docs/master_29_handoff.json`](./master_29_handoff.json) contains the complete machine-readable timing curves and viseme frame arrays (`rest`, `viseme_open`, `viseme_round`, `viseme_narrow`, `smile`) for all 29 files (29/29, resolving P1-A, frozen as GO at `fce5110d89658f0e8c813d74dad7e3ba0e996896`), calculated from RMS speech envelope onset/offset thresholds (>500 RMS), acoustic chunk profiling, and phoneme boundary interpolations.
 
 ### Outage Viseme Curve Summary (P1-A Remediation)
 - **`ava_09_outage_v002.wav` (25 viseme keyframes):** Covers initial audible sigh (150ms-450ms), dramatic pause (450ms-1450ms), sentence 1 "I can't access the company's knowledge" (1450ms-3750ms), mid-sentence pause (3750ms-5100ms), sentence 2 "Information is unavailable until FalkorDB is available again" (5100ms-9750ms), and trailing rest (9750ms-10266ms).
@@ -80,58 +82,31 @@ The companion file [`docs/master_29_handoff.json`](./master_29_handoff.json) con
 
 ---
 
-## 5. Model Audio Assessment & Native Capability Report (Issue #13 Handoff)
+## 5. Model Audio Capability Report (Tome Issue #13 Bounded Test)
 
-Per Buddy's directive on Tome Issue #13, a bounded native audio-input capability evaluation was conducted:
+Per Buddy's directive on Tome Issue #13 (comment `6215802203`) and reconciliation in comment `6217077154`, a bounded native audio-input capability evaluation was conducted:
+
+### A. Roy Outage Observation (`roy_09_outage_v002.wav`)
 - **Interface / Model:** Gemini Multimodal Audio Perception via standard binary `view_file` CLI tool.
 - **Input Method:** Actual binary WAV bytes read directly from local volume on disk into multimodal context (not filename, URL, or metadata estimation).
 - **Target File:** `roy_09_outage_v002.wav` (714,284 bytes; SHA-256 `2c32039eeeebeceb95e6b58121f5ee0220f18e9bd56176a8d40904b45f271f6a`).
 - **Observed Spoken Words:** *"FalkorDB is unavailable. Operations are [sigh/pause] offline."*
-- **Acoustic Profiling:**
+- **Acoustic Profiling & Timing Breakdown:**
   - `0.10s - 1.85s`: Spoken phrase *"FalkorDB is unavailable."*
-  - `2.10s - 4.40s`: 2.30s solemn, deliberate pause between thoughts.
+  - `2.10s - 4.40s`: 2.30s solemn, deliberate dramatic pause between thoughts.
   - `4.60s - 5.35s`: Spoken phrase *"Operations are..."*
   - `5.40s - 6.00s`: 0.60s suspension pause.
   - `6.00s - 6.35s`: 0.35s soft audible sigh / exhalation.
   - `6.35s - 6.95s`: 0.60s pause.
   - `7.00s - 7.50s`: Spoken word *"...offline."*
   - `7.50s - 8.05s`: Trailing room decay and final silence.
-- **Intelligibility & Compliance:** 100% intelligible. No omitted words. No extraneous words. Jay-approved pauses, sighs, and outage concern acting are preserved as authentic artistic performance choices.
-- **Scope & Posture:** Strictly labeled **model audio assessment**, NOT a human listening pass. Tome Issue #13 human playback/transcript verification remains open for human sign-off.
+- **Intelligibility & Artistic Performance:** Fully intelligible. No omitted words. No extraneous words. Jay-approved dramatic pauses, sigh, and outage concern acting are preserved as authentic artistic performance choices.
 
-### Complete 29-File Model Audio Assessment Table
+### B. Guz Task Start C Spoken Variant Observation (`guz_07_task_start_c_v001.wav`)
+- **Target File:** `guz_07_task_start_c_v001.wav` (138,284 bytes; 1.567s; SHA-256 `0ede56c21f77583f3ad61ade7e9e6484bae60a7f081b1b006c47ef3413be32f5`).
+- **Observed Spoken Words:** *"On the way."*
+- **Performance Note:** Clear, deep resonant delivery. Distinguishes approved spoken delivery variation (*"On the way."*) from script (*"Underway."*), matching Jay's approved recording take.
 
-All 29 files were processed directly via native multimodal audio input (`view_file` binary WAV stream). Every line reflects the actual words and performance nuances perceived by the model, verified against the approved script and Jay's artistic direction:
-
-| # | Filename | Duration | Spoken Words Heard (Model Audio Input) | Performance / Delivery Notes | Intelligibility |
-| :- | :--- | ---: | :--- | :--- | :---: |
-| 1 | `ava_01_greeting_v001.wav` | 1.985s | "Greetings, Commander." | Crisp, clear, friendly American female | 100% |
-| 2 | `ava_02_help_v001.wav` | 1.776s | "How may I help?" | Attentive, upward questioning inflection | 100% |
-| 3 | `ava_03_yes_v001.wav` | 1.097s | "Yes." | Affirmative, polite, concise | 100% |
-| 4 | `ava_04_no_v001.wav` | 1.045s | "No." | Calm, neutral denial | 100% |
-| 5 | `ava_05_task_start_a_v001.wav` | 1.933s | "I'll get right on it." | Professional, focused cadence | 100% |
-| 6 | `ava_06_task_start_b_v001.wav` | 1.855s | "Task beginning." | Steady, formal operational tone | 100% |
-| 7 | `ava_07_task_start_c_v001.wav` | 1.750s | "Underway." | Clear, decisive execution acknowledgment | 100% |
-| 8 | `ava_08_task_optional_v001.wav` | 1.149s | "On it." | Brisk, energetic acknowledgment | 100% |
-| 9 | `ava_09_outage_v002.wav` | 10.266s | "[sigh] I can't access the company's knowledge. [pause] Information is unavailable until FalkorDB is available again." | Audible soft sigh (150-450ms), solemn dramatic pause, frazzled delivery | 100% |
-| 10 | `ava_10_reconnect_check_v001.wav` | 5.825s | "Connection restored. Checking the latest company records." | Relieved, confident, bright recovery tone | 100% |
-| 11 | `guz_01_greeting_v001.wav` | 2.612s | "Greetings, Commander." | Deep, resonant African male timbre, authoritative | 100% |
-| 12 | `guz_02_help_v001.wav` | 3.187s | "How may I help?" | Deliberate, grounded pacing | 100% |
-| 13 | `guz_03_yes_v001.wav` | 1.620s | "Yes." | Resonant, firm assent | 100% |
-| 14 | `guz_04_no_v001.wav` | 1.437s | "No." | Decisive, immovable refusal | 100% |
-| 15 | `guz_05_task_start_a_v001.wav` | 2.743s | "I'll get right on it." | Measured, steady, powerful cadence | 100% |
-| 16 | `guz_06_task_start_b_v001.wav` | 1.959s | "Task beginning." | Formal military audit posture | 100% |
-| 17 | `guz_07_task_start_c_v001.wav` | 1.567s | "On the way." | Approved spoken delivery variant for underway | 100% |
-| 18 | `guz_08_task_optional_v001.wav` | 1.332s | "On it." | Terse, focused confirmation | 100% |
-| 19 | `guz_09_outage_v002.wav` | 7.105s | "I can't verify any sources. [pause] I will not provide an answer without evidence." | Uncompromising audit tone, dramatic pause (2.25-3.15s) | 100% |
-| 20 | `roy_01_greeting_v001.wav` | 1.698s | "Greetings, Commander." | Formal British/theatrical cadence, Indian English lilt | 100% |
-| 21 | `roy_02_help_v001.wav` | 2.038s | "How may I help?" | Courteous, articulate, crisp consonants | 100% |
-| 22 | `roy_03_yes_v001.wav` | 1.202s | "Yes." | Crisp, prompt affirmative | 100% |
-| 23 | `roy_04_no_v001.wav` | 1.463s | "No." | Calm, polite, distinct denial | 100% |
-| 24 | `roy_05_task_start_a_v001.wav` | 2.142s | "I'll get right on it." | Fluid, polished, eager delivery | 100% |
-| 25 | `roy_06_task_start_b_v001.wav` | 1.802s | "Task beginning." | Disciplined, rhythmic articulation | 100% |
-| 26 | `roy_07_task_start_c_v001.wav` | 1.306s | "Underway." | Smooth, confident execution signal | 100% |
-| 27 | `roy_08_task_optional_v001.wav` | 1.202s | "On it." | Immediate, energetic response | 100% |
-| 28 | `roy_09_outage_v002.wav` | 8.098s | "FalkorDB is unavailable. [dramatic pause] Operations are... [sigh] offline." | Deliberate 2.30s pause, soft audible sigh (6.0-6.35s), grave acting | 100% |
-| 29 | `roy_10_ready_v001.wav` | 4.180s | "Current information loaded. Ready for your request." | Reassured, vibrant operational recovery cadence | 100% |
-
+### C. Scope & Human Listening Posture
+- **Strict Distinction:** This evaluation is strictly labeled a **bounded model audio capability test**, NOT a human listening or transcript QA pass. Broad all-29 intelligibility claims are explicitly disclaimed from automated tooling.
+- **Tome Issue #13 Gate:** Independent human listening, playback verification, and transcript QA across all 29 master recordings under Tome Issue #13 remain strictly open.
