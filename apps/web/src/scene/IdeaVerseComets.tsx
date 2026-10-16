@@ -31,15 +31,30 @@ export interface IdeaVerseCometItem {
   imported?: boolean;
 }
 
+/**
+ * Persisted workspace-import receipt (#40).
+ * Import membership is outside the licensing witness: must carry idea/file hash,
+ * workspace and membership identity, imported timestamp, and workspace revision,
+ * and must NEVER fabricate a licensing witnessHash.
+ */
 export interface PersistedImportReceipt {
+  receiptId?: string | undefined;
   ideaId: string;
-  sha256?: string;
-  fileHash?: string;
+  filename?: string | undefined;
+  fileSha256: string;
   workspaceId: string;
-  importedAt: string;
-  workspaceRevision: number;
   membershipId: string;
+  importedAt: string;
+  importedByRole?: string | undefined;
+  idempotencyKey?: string | undefined;
+  workspaceRevision: number;
+  replayed?: boolean | undefined;
+  witnessHash?: never;
+  nodeId?: never;
+  edgeId?: never;
 }
+
+const SHA256_HEX_RE = /^[a-f0-9]{64}$/;
 
 export interface ActiveCometSlot {
   idea: IdeaVerseCometItem;
@@ -432,7 +447,41 @@ export function recordNonPersistedImportAttempt(state: CometLifecycleState): Com
 }
 
 /**
- * Confirmed persisted #40 import receipt ONLY:
+ * Validate that a receipt matches the persisted workspace-import receipt contract (#40):
+ * - Must carry ideaId, 64-hex fileSha256, workspaceId, membershipId, valid UTC importedAt, and integer workspaceRevision >= 1.
+ * - Must NEVER carry a licensing witnessHash, nodeId, or edgeId (import membership is outside the licensing witness).
+ * - If the idea exists in allIdeas, receipt.fileSha256 must match idea.sha256.
+ */
+export function isValidWorkspaceImportReceipt(
+  receipt: unknown,
+  allIdeas?: readonly IdeaVerseCometItem[]
+): receipt is PersistedImportReceipt {
+  if (!receipt || typeof receipt !== 'object') return false;
+  const r = receipt as Record<string, unknown>;
+  if ('witnessHash' in r && r.witnessHash !== undefined) return false;
+  if ('nodeId' in r && r.nodeId !== undefined) return false;
+  if ('edgeId' in r && r.edgeId !== undefined) return false;
+  if (typeof r.ideaId !== 'string' || !r.ideaId.trim()) return false;
+  if (typeof r.fileSha256 !== 'string' || !SHA256_HEX_RE.test(r.fileSha256)) return false;
+  if (typeof r.workspaceId !== 'string' || !r.workspaceId.trim()) return false;
+  if (typeof r.membershipId !== 'string' || !r.membershipId.trim()) return false;
+  if (parseStrictUtcMs(r.importedAt) === null) return false;
+  if (
+    typeof r.workspaceRevision !== 'number' ||
+    !Number.isInteger(r.workspaceRevision) ||
+    r.workspaceRevision < 1
+  ) {
+    return false;
+  }
+  if (allIdeas) {
+    const matchedIdea = allIdeas.find(i => i.id === r.ideaId);
+    if (!matchedIdea || matchedIdea.sha256 !== r.fileSha256) return false;
+  }
+  return true;
+}
+
+/**
+ * Confirmed persisted #40 workspace-import receipt ONLY:
  * Marks the idea imported, begins the gentle pull-toward-cube + fade transition on that comet
  * (or immediately refreshes & replaces in reduced-motion mode), and closes the inspect hold.
  */
@@ -441,15 +490,7 @@ export function applyConfirmedCometImport(
   receipt: PersistedImportReceipt | null | undefined,
   nowMs: number
 ): CometLifecycleState {
-  if (
-    !receipt ||
-    typeof receipt.ideaId !== 'string' ||
-    !receipt.ideaId ||
-    typeof receipt.membershipId !== 'string' ||
-    !receipt.membershipId ||
-    typeof receipt.workspaceRevision !== 'number' ||
-    receipt.workspaceRevision < 1
-  ) {
+  if (!isValidWorkspaceImportReceipt(receipt, state.allIdeas)) {
     return state;
   }
 
