@@ -313,7 +313,12 @@ export async function agentProfileOverview(client: GraphClient, repoRoot: string
   const integrity: { id: string; reason: string }[] = [];
   const flag = (id: string, reason: string) => { integrity.push({ id, reason }); };
   const by = (label: string) => rows.filter(r => r.labels[0] === label);
-  const node = (label: string, id: string) => by(label).find(r => r.props['id'] === id);
+  // Two nodes with one label and id are never served (which one would win depends on row order); each id is flagged once.
+  const seenIds = new Map<string, number>();
+  for (const r of rows) { const k = `${r.labels[0]}|${String(r.props['id'])}`; seenIds.set(k, (seenIds.get(k) ?? 0) + 1); }
+  const dupIds = new Set([...seenIds].filter(([, n]) => n > 1).map(([k]) => k));
+  for (const k of dupIds) flag(k.split('|')[1]!, `more than one ${k.split('|')[0]} node has this id`);
+  const node = (label: string, id: string) => dupIds.has(`${label}|${id}`) ? undefined : by(label).find(r => r.props['id'] === id);
   const inTenant = (e: Edge) => e.toTenant === tenantId;
 
   // Sources: stored path and hash must equal the fixture file on disk.
@@ -364,8 +369,8 @@ export async function agentProfileOverview(client: GraphClient, repoRoot: string
     else if (!roles.has(roleId)) reason = 'assignment names a role that is unknown or did not verify';
     else if (roleId === 'role-owner' && agentKeys.has(principalKey)) reason = 'Owner must not be assigned to a synthetic agent';
     else if (!fixtureFor.has(principalKey) && !e.some(x => x.type === 'FOR_PRINCIPAL' && x.to === principalKey && x.toLabels[0] === 'Principal')) reason = 'assignment is for a principal that is neither in the fixture nor an existing Principal';
-    else if (p['workspaceId'] !== WORKSPACE_ID || !e.some(x => x.type === 'IN_WORKSPACE' && x.to === WORKSPACE_ID && inTenant(x))) reason = 'assignment is not for this workspace';
-    else if (!e.some(x => x.type === 'GRANTS_ROLE' && x.to === roleId && inTenant(x))) reason = 'assignment edge and role do not agree';
+    else if (p['workspaceId'] !== WORKSPACE_ID || e.filter(x => x.type === 'IN_WORKSPACE').length !== 1 || !e.some(x => x.type === 'IN_WORKSPACE' && x.to === WORKSPACE_ID && inTenant(x))) reason = 'assignment is not for this workspace (it needs exactly one workspace edge)';
+    else if (e.filter(x => x.type === 'GRANTS_ROLE').length !== 1 || !e.some(x => x.type === 'GRANTS_ROLE' && x.to === roleId && inTenant(x))) reason = 'assignment edge and role do not agree (there must be exactly one role edge)';
     else if (p['enforcement'] !== 'NOT_ENFORCED') reason = 'assignment claims enforcement, which no server policy implements';
     else if (status !== 'ACTIVE' && status !== 'REVOKED') reason = 'assignment status is invalid';
     else if (typeof p['revision'] !== 'number' || !Number.isInteger(p['revision']) || p['revision'] < 1) reason = 'assignment revision is invalid';
@@ -379,7 +384,8 @@ export async function agentProfileOverview(client: GraphClient, repoRoot: string
       else if (status === 'ACTIVE' && (fixtureFor.get(principalKey) !== roleId || p['assignedAt'] !== f.assignmentProvenance.decidedAt)) reason = 'fixture-sourced assignment differs from the current fixture (re-seed to apply an owner change)';
       else if (status === 'ACTIVE' && !fixtureFor.has(principalKey)) reason = 'fixture-sourced assignment is for a principal the fixture no longer lists';
     }
-    if (reason) flag(id, reason);
+    if (!reason && dupIds.has(`RoleAssignment|${id}`)) reason = 'more than one assignment node has this id';
+    if (reason && !(dupIds.has(`RoleAssignment|${id}`) && reason.startsWith('more than one'))) flag(id, reason);
     return { id, principalKey, reason, status, roleId, revision: typeof p['revision'] === 'number' ? p['revision'] : 0, assignedAt: String(p['assignedAt'] ?? ''), assignedBy: String(p['assignedBy'] ?? ''), source: String(p['source'] ?? '') };
   });
   const effective = (principalKey: string): EffectiveRole => {
