@@ -593,9 +593,17 @@ export function verifyOverviewReceiptMatch(
 export function applyConfirmedCometImport(
   state: CometLifecycleState,
   receipt: PersistedImportReceipt | null | undefined,
-  nowMs: number
+  nowMs: number,
+  overview?: {
+    status: string;
+    ideas?: Array<{ id: string; imported?: boolean; sha256: string; membershipId?: string }>;
+    integrity?: Array<{ id: string; reason: string }>;
+  } | null | undefined
 ): CometLifecycleState {
   if (!isValidWorkspaceImportReceipt(receipt, state.allIdeas)) {
+    return state;
+  }
+  if (overview && !verifyOverviewReceiptMatch(receipt, overview).verified) {
     return state;
   }
 
@@ -718,6 +726,15 @@ export interface IdeaVerseCometsProps {
   /** Backward-compatible alias for confirmed receipt */
   receipt?: PersistedImportReceipt | null | undefined;
   onMembershipRefreshed?: ((receipt: PersistedImportReceipt) => void) | undefined;
+  /**
+   * Optional server ideaverseOverview read-back to verify before applying confirmed receipt transition (#40/#48/v030).
+   * When provided, verifyOverviewReceiptMatch gates the transition.
+   */
+  overview?: {
+    status: string;
+    ideas?: Array<{ id: string; imported?: boolean; sha256: string; membershipId?: string }>;
+    integrity?: Array<{ id: string; reason: string }>;
+  } | null | undefined;
 }
 
 export const IdeaVerseComets: React.FC<IdeaVerseCometsProps> = ({
@@ -732,6 +749,7 @@ export const IdeaVerseComets: React.FC<IdeaVerseCometsProps> = ({
   confirmedReceipt,
   receipt,
   onMembershipRefreshed,
+  overview,
 }) => {
   const nowRef = useRef(now);
   nowRef.current = now;
@@ -747,7 +765,9 @@ export const IdeaVerseComets: React.FC<IdeaVerseCometsProps> = ({
     });
     const conf = confirmedReceipt ?? receipt;
     if (conf && isValidWorkspaceImportReceipt(conf, ideas)) {
-      return applyConfirmedCometImport(initial, conf, now());
+      if (!overview || verifyOverviewReceiptMatch(conf, overview).verified) {
+        return applyConfirmedCometImport(initial, conf, now(), overview);
+      }
     }
     return initial;
   });
@@ -784,15 +804,18 @@ export const IdeaVerseComets: React.FC<IdeaVerseCometsProps> = ({
 
   useEffect(() => {
     if (activeConfirmed && isValidWorkspaceImportReceipt(activeConfirmed, lifecycle.allIdeas)) {
+      if (overview && !verifyOverviewReceiptMatch(activeConfirmed, overview).verified) {
+        return;
+      }
       const receiptKey = `${activeConfirmed.ideaId}:${activeConfirmed.sha256}:${activeConfirmed.membershipId}:${activeConfirmed.workspaceRevision}`;
       if (appliedReceiptKeyRef.current === receiptKey) {
         return;
       }
       appliedReceiptKeyRef.current = receiptKey;
-      setLifecycle(prev => applyConfirmedCometImport(prev, activeConfirmed, nowRef.current()));
+      setLifecycle(prev => applyConfirmedCometImport(prev, activeConfirmed, nowRef.current(), overview));
       onMembershipRefreshed?.(activeConfirmed);
     }
-  }, [activeConfirmed, onMembershipRefreshed]);
+  }, [activeConfirmed, overview, onMembershipRefreshed]);
 
   const handleSelectComet = (idea: IdeaVerseCometItem) => {
     if (controlledInspectedId === undefined) {

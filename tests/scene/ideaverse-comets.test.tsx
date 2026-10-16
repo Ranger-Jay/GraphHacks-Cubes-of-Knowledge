@@ -516,6 +516,33 @@ test('server read-back verification: shape+hash is not proof of Added; fresh ide
   const unavailMatch = verifyOverviewReceiptMatch(realClaudeReceipt, unavailOverview);
   assert.equal(unavailMatch.verified, false);
   assert.ok(unavailMatch.reason?.includes(UNCONFIRMED_IMPORT_MESSAGE));
+
+  // 6. applyConfirmedCometImport gates on overview read-back when provided (#40/#48/v030):
+  const startMs = Date.parse(idea.createdAt);
+  const initialLifecycle = createCometLifecycle(items, { nowMs: startMs });
+  const activeTarget = initialLifecycle.activeComets[0]!.idea;
+  const targetReceipt: PersistedImportReceipt = {
+    ideaId: activeTarget.id,
+    sha256: activeTarget.sha256,
+    workspaceId: 'ws-wad-cube',
+    importedAt: '2026-10-15T20:00:02.000Z',
+    workspaceRevision: 1,
+    membershipId: `member-ws-wad-cube-${activeTarget.id}`,
+  };
+  const targetValidOverview = {
+    status: 'AVAILABLE',
+    ideas: [
+      { id: activeTarget.id, imported: true, sha256: activeTarget.sha256, membershipId: `member-ws-wad-cube-${activeTarget.id}` },
+    ],
+    integrity: [],
+  };
+  const blockedState = applyConfirmedCometImport(initialLifecycle, targetReceipt, startMs + 1000, zeroMatchOverview);
+  assert.equal(blockedState.activeComets.find(c => c.idea.id === activeTarget.id)?.status, 'flying');
+  assert.equal(blockedState.importedIds.has(activeTarget.id), false);
+
+  const verifiedState = applyConfirmedCometImport(initialLifecycle, targetReceipt, startMs + 1000, targetValidOverview);
+  assert.equal(verifiedState.activeComets.find(c => c.idea.id === activeTarget.id)?.status, 'importing');
+  assert.equal(verifiedState.importedIds.has(activeTarget.id), true);
 });
 
 test('single-card scene boundary: IdeaVerseComets omits duplicate card UI, holds comet on inspect, and animates confirmed event', () => {
@@ -550,6 +577,27 @@ test('single-card scene boundary: IdeaVerseComets omits duplicate card UI, holds
   );
   assert.ok(importingHtml.includes(`data-testid="ideaverse-comet-${targetId}"`));
   assert.ok(importingHtml.includes('status-importing'));
+
+  // 3. IdeaVerseComets with overview gates confirmedReceipt transition (#40/#48/v030):
+  const unverifiedOverview = {
+    status: 'AVAILABLE',
+    ideas: [{ id: targetId, imported: false, sha256: items[0]!.sha256 }],
+    integrity: [],
+  };
+  const verifiedOverview = {
+    status: 'AVAILABLE',
+    ideas: [{ id: targetId, imported: true, sha256: items[0]!.sha256, membershipId: `member-ws-wad-cube-${targetId}` }],
+    integrity: [],
+  };
+  const unverifiedHtml = renderToStaticMarkup(
+    <IdeaVerseComets ideas={items} confirmedReceipt={realReceipt} overview={unverifiedOverview} />
+  );
+  assert.ok(!unverifiedHtml.includes('status-importing'), 'unverified overview must not trigger importing state');
+
+  const verifiedOverviewHtml = renderToStaticMarkup(
+    <IdeaVerseComets ideas={items} confirmedReceipt={realReceipt} overview={verifiedOverview} />
+  );
+  assert.ok(verifiedOverviewHtml.includes('status-importing'), 'verified overview triggers importing state');
 });
 
 test('mounted component with default clock: confirmed receipt advances through pull and leaves importing state without stuck loop (#40/#48)', async () => {
