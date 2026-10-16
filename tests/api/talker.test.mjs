@@ -28,6 +28,35 @@ test('an unauthenticated talk is refused and a query string is not a route', asy
   }, { sessions, status: readyStatus });
 });
 
+test('an unauthorized or invalid talk does not probe the graph', async () => {
+  let probes = 0;
+  const counting = {
+    graphName: 'probe-graph',
+    async check() {
+      probes += 1;
+      return { state: 'available' };
+    },
+  };
+  await withApi(async origin => {
+    const missing = await post(origin, '/api/talk', talk);
+    assert.equal(missing.status, 401);
+    const malformed = await post(origin, '/api/talk', talk, 'short');
+    assert.equal(malformed.status, 401);
+    const unknown = await post(origin, '/api/talk', talk, 'unknown-session-token');
+    assert.equal(unknown.status, 401);
+    const agent = await post(origin, '/api/talk', talk, 'roy-session-token');
+    assert.equal(agent.status, 403);
+    const phase = await post(origin, '/api/talk', { ...talk, phase: 'READY' }, 'kanny-session-token');
+    assert.equal(phase.status, 400);
+    const burst = await Promise.all(Array.from({ length: 50 }, () => post(origin, '/api/talk', talk)));
+    assert.equal(burst.every(item => item.status === 401), true);
+    assert.equal(probes, 0);
+    const allowed = await post(origin, '/api/talk', talk, 'kanny-session-token');
+    assert.equal(allowed.status, 503);
+    assert.equal(probes, 1);
+  }, { sessions, status: counting });
+});
+
 test('a persona does not let an agent ask', async () => {
   await withApi(async origin => {
     const agent = await post(origin, '/api/talk', { ...talk, persona: 'roy' }, 'roy-session-token');

@@ -194,8 +194,20 @@ async function postTalk(
   request: IncomingMessage, response: ServerResponse, requestId: string,
   sessions: SessionStore, status: GraphStatusProbe | undefined, talker: TalkerConfig,
 ): Promise<void> {
-  const ready = await graphReady(status);
-  const decision = assessTalk(principalFrom(request, sessions), await readJson(request), ready, talker);
+  const principal = principalFrom(request, sessions);
+  const closed = assessTalk(principal, null, false, talker);
+  if (closed.status === 401 || closed.status === 403) {
+    sendError(response, closed.status, closed.code, closed.message, requestId);
+    return;
+  }
+  const body = await readJson(request);
+  // A false ready value only distinguishes a bad body. It is not the graph answer.
+  const invalid = assessTalk(principal, body, false, talker);
+  if (invalid.status === 400) {
+    sendError(response, invalid.status, invalid.code, invalid.message, requestId);
+    return;
+  }
+  const decision = assessTalk(principal, body, await graphReady(status), talker);
   sendError(response, decision.status, decision.code, decision.message, requestId);
 }
 
