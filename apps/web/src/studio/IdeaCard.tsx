@@ -1,33 +1,34 @@
-import { useEffect, useReducer, useRef, useState } from 'react';
+import { useEffect, useRef } from 'react';
 import {
-  IMPORT_FAILURE_COPY, IMPORT_UNBOUND_COPY, UNCONFIRMED_ACTION_COPY, UNCONFIRMED_COPY, formatUtcDate, importReducer, initialImportState, isCloseKey, confirmImport,
-  type IdeaSummary, type ImportIdea, type ImportReceipt, type ImportState, type ReadOverview,
+  IMPORT_FAILURE_COPY, UNCERTAIN_COPY, UNCERTAIN_FAILURES, UNCONFIRMED_ACTION_COPY, UNCONFIRMED_COPY,
+  cardActions, formatUtcDate, isBusy, isCloseKey, type IdeaSummary, type ImportState,
 } from './ideaImport';
 
-export interface IdeaCardProps {
+/** Where the verified idea text stands. The text comes from the server detail read, never a browser file fetch or a fallback. */
+export type IdeaDetailState = 'loading' | 'ready' | 'unavailable';
+export const DETAIL_LOADING_COPY = 'Loading the verified idea text...';
+export const DETAIL_UNAVAILABLE_COPY = 'The verified text for this idea is not available, so it cannot be added from here.';
+
+export interface IdeaCardViewProps {
   idea: IdeaSummary;
-  /** Injected import adapter (UNPROVEN contract, see ideaImport.ts). Absent: the button is disabled and says so. */
-  importIdea?: ImportIdea;
-  /** Injected FRESH overview read used to confirm a persisted receipt. Absent: an import can never be shown as Added. */
-  readOverview?: ReadOverview;
-  /** Called once, only after a fresh overview read confirmed the receipt (state `added`). The comet scene's owner decides the transition. */
-  onAdded?: (receipt: ImportReceipt) => void;
+  state: ImportState;
+  detail?: IdeaDetailState;
+  /** null = Add is allowed. A string = why it is not (READY / owner-access / binding guard); shown, never hidden. */
+  addBlockedReason: string | null;
+  onAdd: () => void;
+  onRecheck: () => void;
+  onNewAttempt: () => void;
   onClose: () => void;
-  /** Fresh key per card open so a retry of the same card reuses it. */
-  newIdempotencyKey?: () => string;
+  titleId: string;
+  bodyId: string;
 }
 
-const defaultKey = () => (globalThis.crypto?.randomUUID?.() ?? `idea-${Date.now()}-${Math.random().toString(36).slice(2)}`);
-
-/** Presentational part (also what the static-markup tests render). */
-export function IdeaCardView({ idea, state, bound, onAdd, onRecheck, onClose, titleId, bodyId }: {
-  idea: IdeaSummary; state: ImportState; bound: boolean; onAdd: () => void; onRecheck?: () => void; onClose: () => void; titleId: string; bodyId: string;
-}) {
-  const recheck = state.phase === 'unconfirmed' && state.receipt !== null;
-  const pending = state.phase === 'pending';
-  const verifying = state.phase === 'verifying';
-  const busy = pending || verifying;
-  const added = state.phase === 'added';
+/** Presentational part (also what the static-markup tests render). It decides nothing: `cardActions` and the guard do. */
+export function IdeaCardView({ idea, state, detail = 'ready', addBlockedReason, onAdd, onRecheck, onNewAttempt, onClose, titleId, bodyId }: IdeaCardViewProps) {
+  const actions = cardActions(state);
+  const busy = isBusy(state);
+  const blocked = addBlockedReason !== null || detail !== 'ready';
+  const uncertain = state.phase === 'unconfirmed' || (state.phase === 'error' && UNCERTAIN_FAILURES.has(state.reason));
   return (
     <section className="idea-card" role="dialog" aria-modal="false" aria-labelledby={titleId} aria-describedby={bodyId} data-testid="idea-card" data-import-phase={state.phase}>
       <h2 id={titleId} className="idea-card-title" tabIndex={-1}>{idea.filename}</h2>
@@ -36,82 +37,57 @@ export function IdeaCardView({ idea, state, bound, onAdd, onRecheck, onClose, ti
         <div><dt>Submitted</dt><dd>{formatUtcDate(idea.submittedAt)}</dd></div>
         <div><dt>Last updated</dt><dd>{formatUtcDate(idea.touchedAt)}</dd></div>
       </dl>
-      <p id={bodyId} className="idea-card-text">{idea.text}</p>
+      <p id={bodyId} className="idea-card-text">{detail === 'ready' ? idea.text : detail === 'loading' ? DETAIL_LOADING_COPY : DETAIL_UNAVAILABLE_COPY}</p>
       <div className="idea-card-status" role="status" aria-live="polite">
-        {pending && 'Adding to the cube...'}
-        {verifying && 'Confirming with the cube...'}
-        {added && 'Added to the cube.'}
-        {state.phase === 'unconfirmed' && `${UNCONFIRMED_COPY[state.reason]} ${recheck ? UNCONFIRMED_ACTION_COPY.recheck : UNCONFIRMED_ACTION_COPY.retry}`}
+        {state.phase === 'pending' && 'Adding to the cube...'}
+        {state.phase === 'checking' && 'Checking the cube (read only)...'}
+        {state.phase === 'verifying' && 'Confirming with the cube...'}
+        {state.phase === 'added' && 'Added to the cube.'}
+        {state.phase === 'present' && 'This idea is already in the cube.'}
+        {state.phase === 'unconfirmed' && <>{UNCERTAIN_COPY} <span className="idea-card-detail">{UNCONFIRMED_COPY[state.reason]}</span></>}
         {state.phase === 'error' && IMPORT_FAILURE_COPY[state.reason]}
-        {!bound && state.phase === 'idle' && IMPORT_UNBOUND_COPY}
+        {state.phase === 'idle' && addBlockedReason !== null && addBlockedReason}
       </div>
+      {uncertain && actions.recheck && <p className="idea-card-help">{UNCONFIRMED_ACTION_COPY.recheck} {UNCONFIRMED_ACTION_COPY.retry}</p>}
       <div className="idea-card-actions">
-        <button type="button" className="idea-card-add" onClick={recheck && onRecheck ? onRecheck : onAdd} disabled={!bound || busy || added} aria-busy={busy}>
-          {added ? 'Added' : pending ? 'Adding...' : verifying ? 'Confirming...' : recheck ? 'Re-check' : state.phase === 'error' || state.phase === 'unconfirmed' ? 'Retry Add to cube' : 'Add to cube'}
-        </button>
+        {actions.add !== null && (
+          <button type="button" className="idea-card-add" onClick={onAdd} disabled={blocked || busy} aria-busy={busy}>
+            {actions.add === 'retry' ? 'Retry Add to cube' : 'Add to cube'}
+          </button>)}
+        {actions.add === null && !actions.newAttempt && (state.phase === 'added' || busy) && (
+          <button type="button" className="idea-card-add" disabled aria-busy={busy}>{state.phase === 'added' ? 'Added' : state.phase === 'pending' ? 'Adding...' : state.phase === 'checking' ? 'Checking...' : 'Confirming...'}</button>)}
+        {actions.recheck && <button type="button" className="idea-card-recheck" onClick={onRecheck} disabled={addBlockedReason !== null}>Re-check</button>}
+        {actions.newAttempt && <button type="button" className="idea-card-new-attempt" onClick={onNewAttempt} disabled={addBlockedReason !== null}>Refresh and start a new attempt</button>}
         <button type="button" className="idea-card-close" onClick={onClose}>Close</button>
       </div>
+      {addBlockedReason !== null && state.phase !== 'idle' && <p className="idea-card-help">{addBlockedReason}</p>}
     </section>
   );
 }
 
+export interface IdeaCardProps extends Omit<IdeaCardViewProps, 'titleId' | 'bodyId'> {}
+
 /**
- * Accessible inspect card. Opening it never imports. Focus moves to the title on open and returns to the opener on
- * close. Escape closes. A completion that arrives after close or after the idea changed is discarded.
- * UNPROVEN: focus return and Escape in a real browser/screen reader; the logic is covered by pure tests only.
+ * Accessible inspect card, CONTROLLED: all import state, attempts and async work live in the studio controller, which
+ * outlives the card (close/reopen keeps an unresolved attempt). Opening never imports. Focus moves to the title on
+ * open and returns to the opener on close; Escape closes. UNPROVEN until the real-browser proof (see PR body).
  */
-export function IdeaCard({ idea, importIdea, readOverview, onAdded, onClose, newIdempotencyKey = defaultKey }: IdeaCardProps) {
-  const [state, dispatch] = useReducer(importReducer, initialImportState);
-  const [key, setKey] = useState(newIdempotencyKey);
+export function IdeaCard(props: IdeaCardProps) {
+  const { idea, onClose } = props;
   const openerRef = useRef<Element | null>(null);
-  const live = useRef({ ideaId: idea.id, mounted: true });
-  live.current.ideaId = idea.id;
   const titleId = `idea-title-${idea.id}`;
   const bodyId = `idea-body-${idea.id}`;
-
   useEffect(() => {
     openerRef.current = document.activeElement;
     document.getElementById(titleId)?.focus();
-    live.current.mounted = true;
-    return () => { live.current.mounted = false; (openerRef.current as HTMLElement | null)?.focus?.(); };
+    return () => { (openerRef.current as HTMLElement | null)?.focus?.(); };
   }, [titleId]);
-  useEffect(() => { dispatch({ type: 'reset' }); setKey(newIdempotencyKey()); }, [idea.id]); // eslint-disable-line react-hooks/exhaustive-deps
-
+  const closeRef = useRef(onClose);
+  closeRef.current = onClose;
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => { if (isCloseKey(e.key)) { e.stopPropagation(); onClose(); } };
+    const onKey = (e: KeyboardEvent) => { if (isCloseKey(e.key)) { e.stopPropagation(); closeRef.current(); } };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
-  }, [onClose]);
-
-  // Fresh read-back for the current `verifying` request. A stale or unmounted completion is discarded (cleanup flag +
-  // the reducer's requestId check); a missing or failing read is an unconfirmed result, never a success.
-  useEffect(() => {
-    if (state.phase !== 'verifying') return;
-    let active = true;
-    const { requestId, receipt } = state;
-    confirmImport(idea, receipt, readOverview).then(result => { if (active) dispatch({ type: 'verified', requestId, result }); });
-    return () => { active = false; };
-  }, [state.phase, state.requestId]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const announced = useRef(0);
-  useEffect(() => {
-    if (state.phase === 'added' && announced.current !== state.requestId) { announced.current = state.requestId; onAdded?.(state.receipt); }
-  }, [state]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const submit = () => {
-    if (!importIdea || state.phase === 'pending' || state.phase === 'verifying' || state.phase === 'added') return;
-    const requestId = state.requestId + 1;
-    const forIdea = idea.id;
-    dispatch({ type: 'submit' });
-    importIdea(idea, key).then(
-      outcome => {
-        // Closed or switched to another idea: the completion is stale for THIS card. The actual membership shows up on
-        // the next fresh cube read; no success transition is played from a stale completion.
-        if (!live.current.mounted || live.current.ideaId !== forIdea) return;
-        dispatch({ type: 'settled', requestId, outcome });
-      },
-      () => { if (live.current.mounted && live.current.ideaId === forIdea) dispatch({ type: 'settled', requestId, outcome: { kind: 'failed' } }); },
-    );
-  };
-  return <IdeaCardView idea={idea} state={state} bound={!!importIdea && !!readOverview} onAdd={submit} onRecheck={() => dispatch({ type: 'recheck' })} onClose={onClose} titleId={titleId} bodyId={bodyId} />;
+  }, []);
+  return <IdeaCardView {...props} titleId={titleId} bodyId={bodyId} />;
 }
