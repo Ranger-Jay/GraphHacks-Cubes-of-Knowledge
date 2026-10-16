@@ -10,7 +10,7 @@ import {
   agentPhrase,
 } from './dialogue';
 import { AgentPortrait } from './AgentPortrait';
-import { speakAuthorizedPhrase, cancelSpeech, enforcePhaseGate } from './audio';
+import { speakAuthorizedPhrase, cancelSpeechForAgent, getActiveAgentId, enforcePhaseGate } from './audio';
 import type { PhraseDefinition } from './types';
 
 // Module-level session greeting set (persists across remounts within the same session)
@@ -104,7 +104,9 @@ export const AgentPyramid: React.FC<AgentPyramidProps> = ({
   const animationTimerRef = useRef<number | null>(null);
   const speechCancelRef = useRef<(() => void) | null>(null);
 
-  // Clear timers and cancel speech
+  // Clear timers and cancel this pyramid's own speech only.
+  // A global cancel here would kill another agent's clip (closed siblings
+  // on mount, or a stale animation timer after a newer clip superseded).
   const stopActiveSpeech = () => {
     if (animationTimerRef.current !== null) {
       clearInterval(animationTimerRef.current);
@@ -114,13 +116,16 @@ export const AgentPyramid: React.FC<AgentPyramidProps> = ({
       speechCancelRef.current();
       speechCancelRef.current = null;
     }
-    cancelSpeech();
+    cancelSpeechForAgent(agent.id);
     setIsSpeaking(false);
     setViseme('rest');
     setExpression('idle');
   };
 
-  // Play a phrase with viseme synchronization and caption
+  // Play a phrase with viseme synchronization and caption.
+  // Completion is driven by the audio element's `ended` event (via onEnd),
+  // never by a duration timer: the timer only animates visemes, and a
+  // stale timer must never cancel a newer clip.
   const playPhrase = (
     phraseDef: PhraseDefinition,
     onFinish?: () => void
@@ -136,21 +141,35 @@ export const AgentPyramid: React.FC<AgentPyramidProps> = ({
     setExpression(phraseDef.expression);
     onSetCaption(phraseDef.phrase, agent.name);
 
-    // Speak via audio manager (respects muted state and the phase gate)
+    // Speak via audio manager (respects muted state and the phase gate).
+    // Natural end (or load error) stops the animation and resets speaking state.
     speechCancelRef.current = speakAuthorizedPhrase(phraseDef.phrase, agent, current, () => {
-      // Audio finished
+      stopActiveSpeech();
+      if (onFinish) onFinish();
     });
+
+    // Refused clips (muted, gated, no Audio) start nothing: do not leave
+    // the pyramid in a speaking state with a dangling timer.
+    if (getActiveAgentId() !== agent.id) {
+      stopActiveSpeech();
+      return;
+    }
 
     const startTime = Date.now();
     animationTimerRef.current = (setInterval as any)(() => {
+      // Ownership left this pyramid (cancelled, muted, or superseded by a
+      // newer clip): stop animating. Never cancel audio from this timer.
+      if (getActiveAgentId() !== agent.id) {
+        stopActiveSpeech();
+        return;
+      }
       const elapsed = Date.now() - startTime;
       if (elapsed >= phraseDef.durationMs) {
-        stopActiveSpeech();
-        if (onFinish) onFinish();
-      } else {
-        const nextViseme = findVisemeAtTime(phraseDef.visemes, elapsed);
-        setViseme(nextViseme);
+        // Viseme animation is done; the WAV keeps playing until `ended`.
+        setViseme('rest');
+        return;
       }
+      setViseme(findVisemeAtTime(phraseDef.visemes, elapsed));
     }, 40);
   };
 

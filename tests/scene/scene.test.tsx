@@ -26,6 +26,8 @@ import {
   isAudioMuted,
   setAudioMuted,
   cancelSpeech,
+  cancelSpeechForAgent,
+  getActiveAgentId,
   enforcePhaseGate,
   speakAuthorizedPhrase,
   speakAuthorizedClip,
@@ -45,6 +47,7 @@ type FakeAudioInstance = {
 };
 
 const playedSources: string[] = [];
+const audioInstances: FakeAudioInstance[] = [];
 
 class FakeAudio {
   src: string;
@@ -56,6 +59,7 @@ class FakeAudio {
   constructor(src: string) {
     this.src = src;
     playedSources.push(src);
+    audioInstances.push(this);
   }
 
   play(): Promise<void> {
@@ -652,6 +656,83 @@ test('22. Phase change away from the active clip gate cancels the WAV', () => {
   assert.equal(getActiveClipFile(), 'roy_01_greeting_v001.wav', 'ordinary stays while READY');
   enforcePhaseGate('GRAPH_UNAVAILABLE');
   assert.equal(getActiveClipFile(), null, 'ordinary stops when READY is lost');
+  setAudioMuted(true);
+});
+
+
+test('23. v037: closed-sibling and stale-timer cancellation is scoped to the owning agent', () => {
+  // Default layout: Ava open, Roy/Guz closed. The repo test harness renders
+  // without effects, so this test drives the EXACT manager calls each
+  // pyramid effect makes: a closed pyramid stops speech via
+  // cancelSpeechForAgent(own id), and a stale animation timer does the same.
+  // On the pre-fix code these sequences killed another agent's clip within 1 ms (P1)
+  // or cut a newer clip at the old timer expiry (P2).
+  playedSources.length = 0;
+  setAudioMuted(false);
+
+  // P1: Ava greets on READY; Roy/Guz closed-mount effects fire right after.
+  speakAuthorizedClip('ava', 'greeting', 'READY');
+  assert.equal(getActiveClipFile(), 'ava_01_greeting_v001.wav');
+  assert.equal(getActiveAgentId(), 'ava');
+  cancelSpeechForAgent('roy');
+  assert.equal(getActiveClipFile(), 'ava_01_greeting_v001.wav', 'closed Roy must not cancel Ava greeting');
+  assert.equal(getActiveAgentId(), 'ava');
+  cancelSpeechForAgent('guz');
+  assert.equal(getActiveClipFile(), 'ava_01_greeting_v001.wav', 'closed Guz must not cancel Ava greeting');
+  // Closing the owning pyramid still cancels its own clip.
+  cancelSpeechForAgent('ava');
+  assert.equal(getActiveClipFile(), null, 'own close cancels own clip');
+  assert.equal(getActiveAgentId(), null);
+
+  // P2: Roy asks help; Guz asks help 330 ms later and supersedes. Roy's
+  // expired animation timer then fires cancelSpeechForAgent('roy').
+  speakAuthorizedClip('roy', 'help', 'READY');
+  assert.equal(getActiveClipFile(), 'roy_02_help_v001.wav');
+  assert.equal(getActiveAgentId(), 'roy');
+  speakAuthorizedClip('guz', 'help', 'READY');
+  assert.equal(getActiveClipFile(), 'guz_02_help_v001.wav');
+  assert.equal(getActiveAgentId(), 'guz');
+  cancelSpeechForAgent('roy');
+  assert.equal(getActiveClipFile(), 'guz_02_help_v001.wav', 'stale Roy timer must not cut Guz clip');
+  assert.equal(getActiveAgentId(), 'guz');
+
+  cancelSpeech();
+  setAudioMuted(true);
+});
+
+test('24. v037: natural `ended` completes a clip; superseded clips do not fire onEnd', () => {
+  // P3: completion is driven by the element `ended` event, not a duration timer.
+  setAudioMuted(false);
+  audioInstances.length = 0;
+
+  let royEnded = 0;
+  speakAuthorizedPhrase('Greetings, Commander', AGENT_CONFIGS.roy, 'READY', () => {
+    royEnded++;
+  });
+  assert.equal(getActiveClipFile(), 'roy_01_greeting_v001.wav');
+  const royAudio = audioInstances.at(-1);
+  assert.ok(royAudio, 'FakeAudio instance must exist for the started clip');
+  royAudio.onended?.();
+  assert.equal(royEnded, 1, 'ended must fire onEnd exactly once');
+  assert.equal(getActiveClipFile(), null);
+
+  // Supersede: Roy starts, Guz supersedes. Roy's onEnd must not fire.
+  let royEnded2 = 0;
+  let guzEnded = 0;
+  speakAuthorizedPhrase('Greetings, Commander', AGENT_CONFIGS.roy, 'READY', () => {
+    royEnded2++;
+  });
+  speakAuthorizedPhrase('Greetings, Commander', AGENT_CONFIGS.guz, 'READY', () => {
+    guzEnded++;
+  });
+  assert.equal(royEnded2, 0, 'superseded clip must not fire onEnd');
+  const guzAudio = audioInstances.at(-1);
+  assert.ok(guzAudio, 'FakeAudio instance must exist for the superseding clip');
+  guzAudio.onended?.();
+  assert.equal(guzEnded, 1);
+  assert.equal(getActiveClipFile(), null);
+
+  cancelSpeech();
   setAudioMuted(true);
 });
 

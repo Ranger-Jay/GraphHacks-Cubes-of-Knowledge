@@ -13,6 +13,8 @@ import {
 let audioMuted = true;
 let activeAudio: HTMLAudioElement | null = null;
 let activeClipFile: string | null = null;
+/** Agent that owns the active clip. Cancellation is scoped to this owner. */
+let activeAgentId: AgentId | null = null;
 
 export type SpeakOptions = {
   onEnd?: () => void;
@@ -26,6 +28,11 @@ export function isAudioMuted(): boolean {
 
 export function getActiveClipFile(): string | null {
   return activeClipFile;
+}
+
+/** Agent that owns the active clip, or null when nothing is playing. */
+export function getActiveAgentId(): AgentId | null {
+  return activeAgentId;
 }
 
 export function setAudioMuted(muted: boolean): void {
@@ -44,6 +51,11 @@ export function cancelSpeech(): void {
       // Ignore synthesis cancellation failure in headless or unsupported environments
     }
   }
+  cancelActiveAudioElement();
+}
+
+/** Cancel the active WAV element only. Synthesis leftovers are not agent-owned. */
+function cancelActiveAudioElement(): void {
   if (activeAudio) {
     try {
       activeAudio.onended = null;
@@ -56,6 +68,17 @@ export function cancelSpeech(): void {
     activeAudio = null;
   }
   activeClipFile = null;
+  activeAgentId = null;
+}
+
+/**
+ * Cancel the active clip only when it belongs to `agentId`.
+ * A closed sibling pyramid or a stale timer for another agent must never
+ * cancel a clip it does not own.
+ */
+export function cancelSpeechForAgent(agentId: AgentId): void {
+  if (activeAgentId !== agentId) return;
+  cancelActiveAudioElement();
 }
 
 function clipUrl(clip: AudioClip): string {
@@ -82,7 +105,7 @@ export function enforcePhaseGate(phase: ScenePhase | undefined, recoveryAuthoriz
   }
 }
 
-function playClip(clip: AudioClip, onEnd?: () => void): () => void {
+function playClip(clip: AudioClip, agentId: AgentId, onEnd?: () => void): () => void {
   // WAV playback needs Audio; headless tests inject FakeAudio. Mute still refuses.
   if (audioMuted || typeof Audio === 'undefined') {
     return () => {};
@@ -94,12 +117,14 @@ function playClip(clip: AudioClip, onEnd?: () => void): () => void {
     const audio = new Audio(clipUrl(clip));
     activeAudio = audio;
     activeClipFile = clip.file;
+    activeAgentId = agentId;
 
     const finish = () => {
       // Cancelled or superseded clips must not fire onEnd (AbortError after pause).
       if (activeAudio !== audio) return;
       activeAudio = null;
       activeClipFile = null;
+      activeAgentId = null;
       onEnd?.();
     };
 
@@ -134,7 +159,7 @@ export function speakAuthorizedPhrase(
   const clip = findClipByAgentTranscript(agent.id, phrase);
   if (!clip) return () => {};
   if (!gateAllows(clip, phase, options.recoveryAuthorized === true)) return () => {};
-  return playClip(clip, options.onEnd);
+  return playClip(clip, agent.id, options.onEnd);
 }
 
 /** Resolve and play by accepted clip role. Same phase/recovery gates as speakAuthorizedPhrase. */
@@ -147,7 +172,7 @@ export function speakAuthorizedClip(
   const clip = findClipByAgentRole(agentId, role);
   if (!clip) return () => {};
   if (!gateAllows(clip, phase, options.recoveryAuthorized === true)) return () => {};
-  return playClip(clip, options.onEnd);
+  return playClip(clip, agentId, options.onEnd);
 }
 
 /** Recovery-only entry: refuses unless READY and recoveryAuthorized. */
