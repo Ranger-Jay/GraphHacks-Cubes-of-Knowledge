@@ -1,0 +1,565 @@
+{
+  "pass": "main",
+  "viewport": "1920x1080",
+  "base": 0,
+  "results": [
+    {
+      "vp": "1920x1080",
+      "scenario": "S1-happy",
+      "name": "dialog role/labelled/described, aria-modal=false, exactly one card",
+      "ok": true,
+      "extra": {
+        "role": "dialog",
+        "modal": "false",
+        "title": "idea-010-miniature-harbor-fog.txt",
+        "tabindex": "-1",
+        "focusIsTitle": true,
+        "desc": "Loading the verified idea text...",
+        "live": "polite",
+        "roleStatus": "status",
+        "cards": 1
+      }
+    },
+    {
+      "vp": "1920x1080",
+      "scenario": "S1-happy",
+      "name": "focus moved to the title (tabindex=-1)",
+      "ok": true
+    },
+    {
+      "vp": "1920x1080",
+      "scenario": "S1-happy",
+      "name": "status region is role=status aria-live=polite",
+      "ok": true
+    },
+    {
+      "vp": "1920x1080",
+      "scenario": "S1-happy",
+      "name": "verified text shown (1-30 words) with the synthetic tag",
+      "ok": true
+    },
+    {
+      "vp": "1920x1080",
+      "scenario": "S1-happy",
+      "name": "opening imported nothing",
+      "ok": true
+    },
+    {
+      "vp": "1920x1080",
+      "scenario": "S1-happy",
+      "name": "reaches Added",
+      "ok": true
+    },
+    {
+      "vp": "1920x1080",
+      "scenario": "S1-happy",
+      "name": "phases pending > verifying > added in order",
+      "ok": true,
+      "extra": [
+        "pending",
+        "verifying",
+        "added"
+      ]
+    },
+    {
+      "vp": "1920x1080",
+      "scenario": "S1-happy",
+      "name": "onAdded exactly once",
+      "ok": true,
+      "extra": 1
+    },
+    {
+      "vp": "1920x1080",
+      "scenario": "S1-happy",
+      "name": "exactly one import POST with the pinned tuple",
+      "ok": true,
+      "extra": [
+        {
+          "ideaId": "idea-010",
+          "key": "idea-88ebd005-335f-450f-ba18-49e42d210555",
+          "expectedRevision": 0
+        }
+      ]
+    },
+    {
+      "vp": "1920x1080",
+      "scenario": "S1-happy",
+      "name": "graph truth: membership present, revision +1",
+      "ok": true,
+      "extra": {
+        "rev0": 0,
+        "now": 1
+      }
+    },
+    {
+      "vp": "1920x1080",
+      "scenario": "S1-happy",
+      "name": "a fresh overview read happened after the import (read-back)",
+      "ok": true
+    },
+    {
+      "vp": "1920x1080",
+      "scenario": "S1-happy",
+      "name": "pool refreshed: the imported idea left the pool",
+      "ok": true
+    },
+    {
+      "vp": "1920x1080",
+      "scenario": "S1-happy",
+      "name": "status text Added, button disabled",
+      "ok": true
+    },
+    {
+      "vp": "1920x1080",
+      "scenario": "S1-happy",
+      "name": "no overflow / card inside viewport",
+      "ok": true,
+      "extra": {
+        "l": 1235.796875,
+        "t": 800.03125,
+        "r": 1688.203125,
+        "b": 1067.34375,
+        "vw": 1920,
+        "vh": 1080
+      }
+    },
+    {
+      "vp": "1920x1080",
+      "scenario": "S1-happy",
+      "name": "Escape closes the card",
+      "ok": true
+    },
+    {
+      "vp": "1920x1080",
+      "scenario": "S1-happy",
+      "name": "opener is gone after Added: focus falls back to the pool heading",
+      "ok": true,
+      "extra": "idea-pool-h"
+    },
+    {
+      "vp": "1920x1080",
+      "scenario": "S1-happy",
+      "name": "every studio request carried no-store semantics (Cache-Control/Pragma no-cache)",
+      "ok": true,
+      "extra": [
+        {
+          "n": 6,
+          "method": "GET",
+          "path": "/api/studio/ideas/idea-010",
+          "cache": "no-cache",
+          "pragma": "no-cache",
+          "hasAuth": false,
+          "browser": true
+        },
+        {
+          "n": 8,
+          "method": "GET",
+          "path": "/api/studio/ideas",
+          "cache": "no-cache",
+          "pragma": "no-cache",
+          "hasAuth": false,
+          "browser": true,
+          "status": 200
+        },
+        {
+          "n": 9,
+          "method": "POST",
+          "path": "/api/studio/ideas/idea-010/import",
+          "cache": "no-cache",
+          "pragma": "no-cache",
+          "hasAuth": false,
+          "browser": true,
+          "body": {
+            "ideaId": "idea-010",
+            "key": "idea-88ebd005-335f-450f-ba18-49e42d210555",
+            "expectedRevision": 0
+          },
+          "status": 200
+        }
+      ]
+    },
+    {
+      "vp": "1920x1080",
+      "scenario": "S1-happy",
+      "name": "the browser sent no Authorization header on any studio request",
+      "ok": true
+    },
+    {
+      "vp": "1920x1080",
+      "scenario": "S2-keyboard",
+      "name": "Enter on the opener opens the card, focus on title",
+      "ok": true
+    },
+    {
+      "vp": "1920x1080",
+      "scenario": "S2-keyboard",
+      "name": "Tab order: Add then Close (no disabled control, nothing behind the card)",
+      "ok": true,
+      "extra": [
+        "idea-card-add",
+        "idea-card-close"
+      ]
+    },
+    {
+      "vp": "1920x1080",
+      "scenario": "S2-keyboard",
+      "name": "Escape closes; focus returns to the opener button",
+      "ok": true
+    },
+    {
+      "vp": "1920x1080",
+      "scenario": "S2-keyboard",
+      "name": "closing imported nothing",
+      "ok": true
+    },
+    {
+      "vp": "1920x1080",
+      "scenario": "S3-double-click",
+      "name": "reaches Added",
+      "ok": true,
+      "extra": {
+        "phases": [
+          "idle",
+          "pending",
+          "verifying",
+          "added"
+        ],
+        "text": "6-10-15 UTC\n\nA synthetic makeup artist sculpts a delicate silver-leaf prosthetic seam along the android courier cheek to catch rim light during close-up interrogations.\n\nAdded to the cube.\nAdded\nClose"
+      }
+    },
+    {
+      "vp": "1920x1080",
+      "scenario": "S3-double-click",
+      "name": "triple click = one import POST, one pull",
+      "ok": true
+    },
+    {
+      "vp": "1920x1080",
+      "scenario": "S4a-lost-reply-recheck",
+      "name": "uncertain state shown",
+      "ok": true
+    },
+    {
+      "vp": "1920x1080",
+      "scenario": "S4a-lost-reply-recheck",
+      "name": "ruled sentence, never \"Nothing was saved\"",
+      "ok": true,
+      "extra": "Could not confirm whether this was saved. Re-check the cube before retrying."
+    },
+    {
+      "vp": "1920x1080",
+      "scenario": "S4a-lost-reply-recheck",
+      "name": "Re-check and same-tuple Retry are offered",
+      "ok": true
+    },
+    {
+      "vp": "1920x1080",
+      "scenario": "S4a-lost-reply-recheck",
+      "name": "the write really committed (graph truth)",
+      "ok": true
+    },
+    {
+      "vp": "1920x1080",
+      "scenario": "S4a-lost-reply-recheck",
+      "name": "Re-check ends Added",
+      "ok": true
+    },
+    {
+      "vp": "1920x1080",
+      "scenario": "S4a-lost-reply-recheck",
+      "name": "Re-check made ZERO import POSTs (read-only status check only)",
+      "ok": true,
+      "extra": [
+        "POST /api/studio/ideas/idea-013/import-status",
+        "GET /api/studio/ideas",
+        "GET /api/studio/ideas"
+      ]
+    },
+    {
+      "vp": "1920x1080",
+      "scenario": "S4a-lost-reply-recheck",
+      "name": "one pull",
+      "ok": true
+    },
+    {
+      "vp": "1920x1080",
+      "scenario": "S4b-lost-reply-retry",
+      "name": "another actor moved the workspace revision",
+      "ok": true
+    },
+    {
+      "vp": "1920x1080",
+      "scenario": "S4b-lost-reply-retry",
+      "name": "Retry ends Added",
+      "ok": true
+    },
+    {
+      "vp": "1920x1080",
+      "scenario": "S4b-lost-reply-retry",
+      "name": "two POSTs with the IDENTICAL {key, expectedRevision} tuple; revision not re-read",
+      "ok": true,
+      "extra": [
+        {
+          "ideaId": "idea-014",
+          "key": "idea-a8b687cd-0d2e-468a-885b-125e6081d8b0",
+          "expectedRevision": 3
+        },
+        {
+          "ideaId": "idea-014",
+          "key": "idea-a8b687cd-0d2e-468a-885b-125e6081d8b0",
+          "expectedRevision": 3
+        }
+      ]
+    },
+    {
+      "vp": "1920x1080",
+      "scenario": "S4b-lost-reply-retry",
+      "name": "one pull",
+      "ok": true
+    },
+    {
+      "vp": "1920x1080",
+      "scenario": "S5-close-mid-flight",
+      "name": "the import POST is in flight before closing",
+      "ok": true
+    },
+    {
+      "vp": "1920x1080",
+      "scenario": "S5-close-mid-flight",
+      "name": "card closed while pending; focus on the opener",
+      "ok": true
+    },
+    {
+      "vp": "1920x1080",
+      "scenario": "S5-close-mid-flight",
+      "name": "late completion discarded: no Added, no pull, no card",
+      "ok": true,
+      "extra": {
+        "phases": [
+          "idle",
+          "pending"
+        ],
+        "added": 0,
+        "active": "BODY",
+        "scrollW": 1920,
+        "innerW": 1920
+      }
+    },
+    {
+      "vp": "1920x1080",
+      "scenario": "S5-close-mid-flight",
+      "name": "but the committed idea left the pool via a fresh read",
+      "ok": true,
+      "extra": {
+        "imported": true,
+        "poolCount": 0,
+        "log": [
+          "GET /api/studio/ideas 200",
+          "POST /api/studio/ideas/idea-015/import 200",
+          "GET /api/studio/ideas 200",
+          "GET /api/studio/ideas 200",
+          "GET /api/studio/ideas 200"
+        ]
+      }
+    },
+    {
+      "vp": "1920x1080",
+      "scenario": "S6-reopen-unresolved",
+      "name": "the import POST is in flight before closing",
+      "ok": true
+    },
+    {
+      "vp": "1920x1080",
+      "scenario": "S6-reopen-unresolved",
+      "name": "reopened card shows the unresolved attempt with the ruled sentence",
+      "ok": true,
+      "extra": "Could not confirm whether this was saved. Re-check the cube before retrying.\nAn earlier attempt for this idea was interrupted and has not been resolved."
+    },
+    {
+      "vp": "1920x1080",
+      "scenario": "S6-reopen-unresolved",
+      "name": "reopening did not submit again",
+      "ok": true,
+      "extra": [
+        "GET /api/studio/ideas 200",
+        "POST /api/studio/ideas/idea-016/import undefined",
+        "GET /api/studio/ideas/idea-016 undefined"
+      ]
+    },
+    {
+      "vp": "1920x1080",
+      "scenario": "S6-reopen-unresolved",
+      "name": "Re-check before the commit: no matching receipt, says it proves nothing",
+      "ok": true,
+      "extra": "Could not confirm whether this was saved. Re-check the cube before retrying.\nThe status check saw no matching receipt. That does not rule out a request that is still completing."
+    },
+    {
+      "vp": "1920x1080",
+      "scenario": "S6-reopen-unresolved",
+      "name": "late first completion discarded (no pull yet)",
+      "ok": true
+    },
+    {
+      "vp": "1920x1080",
+      "scenario": "S6-reopen-unresolved",
+      "name": "second Re-check finds the receipt and confirms Added",
+      "ok": true
+    },
+    {
+      "vp": "1920x1080",
+      "scenario": "S6-reopen-unresolved",
+      "name": "still exactly ONE import POST; Re-checks used import-status only",
+      "ok": true,
+      "extra": {
+        "imports": 1,
+        "status": 2
+      }
+    },
+    {
+      "vp": "1920x1080",
+      "scenario": "S6-reopen-unresolved",
+      "name": "one pull",
+      "ok": true
+    },
+    {
+      "vp": "1920x1080",
+      "scenario": "S7-phase-leaves-ready",
+      "name": "the import POST is in flight before leaving READY",
+      "ok": true
+    },
+    {
+      "vp": "1920x1080",
+      "scenario": "S7-phase-leaves-ready",
+      "name": "Add disabled with the READY copy or card shows unresolved while phase is not READY",
+      "ok": true
+    },
+    {
+      "vp": "1920x1080",
+      "scenario": "S7-phase-leaves-ready",
+      "name": "late completion after leaving READY: no Added, no pull",
+      "ok": true,
+      "extra": [
+        "idle",
+        "pending",
+        "unconfirmed"
+      ]
+    },
+    {
+      "vp": "1920x1080",
+      "scenario": "S7-phase-leaves-ready",
+      "name": "committed idea left the pool after READY returned",
+      "ok": true
+    },
+    {
+      "vp": "1920x1080",
+      "scenario": "S9-denied",
+      "name": "POST refused: refusal wording, not \"Nothing was saved\"",
+      "ok": true,
+      "extra": "idea-019-amber-darkroom-montage.txt\n\nSynthetic demo idea. A fictional proposal, not a verified fact or a clearance.\n\nSubmitted\n2026-10-13 UTC\nLast updated\n2026-10-15 UTC\n\nA fictional director storyboards a silent ninety-second montage where a photographer develops surveillance prints under pulsing red safelights while footsteps approach upstairs.\n\nAdding ideas needs owner access. The server refused this request.\nClose\n\nThe server refused owner access for this session, so adding is off."
+    },
+    {
+      "vp": "1920x1080",
+      "scenario": "S9-denied",
+      "name": "no same-tuple Retry offered after a refusal",
+      "ok": true,
+      "extra": 0
+    },
+    {
+      "vp": "1920x1080",
+      "scenario": "S9-denied",
+      "name": "exactly one import POST",
+      "ok": true
+    },
+    {
+      "vp": "1920x1080",
+      "scenario": "S9-denied",
+      "name": "refused overview read before submit: says no request was sent, never \"Nothing was saved\"",
+      "ok": true,
+      "extra": "idea-023-stunt-driver-mirror-gambit.txt\n\nSynthetic demo idea. A fictional proposal, not a verified fact or a clearance.\n\nSubmitted\n2026-10-13 UTC\nLast updated\n2026-10-15 UTC\n\nAn imagined precision driver rehearses a reverse alley slalom using only rainwater puddles and convex shop mirrors to spot the camera car.\n\nCould not read the cube to start this add, so no request was sent.\nRetry Add to cube\nClose"
+    },
+    {
+      "vp": "1920x1080",
+      "scenario": "S9-denied",
+      "name": "and zero import POSTs",
+      "ok": true
+    },
+    {
+      "vp": "1920x1080",
+      "scenario": "S10-stale",
+      "name": "stale copy, no same-tuple Retry, new-attempt action offered",
+      "ok": true,
+      "extra": {
+        "phase": "error",
+        "t": "t a new attempt\nClose",
+        "log": [
+          "GET /api/studio/ideas 200",
+          "POST /api/studio/ideas/idea-020/import 409",
+          "GET /api/studio/ideas 200"
+        ]
+      }
+    },
+    {
+      "vp": "1920x1080",
+      "scenario": "S10-stale",
+      "name": "new attempt returns to idle (not auto-submitted)",
+      "ok": true
+    },
+    {
+      "vp": "1920x1080",
+      "scenario": "S10-stale",
+      "name": "then Added",
+      "ok": true
+    },
+    {
+      "vp": "1920x1080",
+      "scenario": "S10-stale",
+      "name": "second POST has a NEW key and a newer expectedRevision",
+      "ok": true,
+      "extra": [
+        {
+          "ideaId": "idea-020",
+          "key": "idea-dbddae90-7ad5-4a72-b574-0d09129bb083",
+          "expectedRevision": 8
+        },
+        {
+          "ideaId": "idea-020",
+          "key": "idea-0baf065c-52fa-40e4-a4a4-9cb279843cbd",
+          "expectedRevision": 9
+        }
+      ]
+    },
+    {
+      "vp": "1920x1080",
+      "scenario": "S11-reader",
+      "name": "Add disabled with the owner-access reason",
+      "ok": true,
+      "extra": "This session can read ideas but needs owner access to add them."
+    },
+    {
+      "vp": "1920x1080",
+      "scenario": "S11-reader",
+      "name": "no import POST from a reader session",
+      "ok": true
+    },
+    {
+      "vp": "1920x1080",
+      "scenario": "S12-strict-mode",
+      "name": "Added under StrictMode",
+      "ok": true
+    },
+    {
+      "vp": "1920x1080",
+      "scenario": "S12-strict-mode",
+      "name": "one import POST and one pull",
+      "ok": true
+    }
+  ],
+  "pageErrors": [
+    "1920 console: Failed to load resource: the server responded with a status of 404 (Not Found)",
+    "1920 console: Failed to load resource: the server responded with a status of 502 (Bad Gateway)",
+    "1920 console: Failed to load resource: the server responded with a status of 502 (Bad Gateway)",
+    "1920 console: Failed to load resource: the server responded with a status of 403 (Forbidden)",
+    "1920 console: Failed to load resource: the server responded with a status of 403 (Forbidden)",
+    "1920 console: Failed to load resource: the server responded with a status of 409 (Conflict)"
+  ]
+}

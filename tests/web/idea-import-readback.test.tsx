@@ -21,7 +21,7 @@ const overview = (over: Partial<Extract<IdeaverseOverviewView, { status: 'AVAILA
   status: 'AVAILABLE', tenantId: 't-wad', domain: 'studio', workspace: { id: 'ws-wad-cube', revision: 2 }, ideas: [listed], counts: { ideas: 1, imported: 1 }, integrity: [], ...over,
 });
 const view = (state: ImportState) =>
-  renderToStaticMarkup(<IdeaCardView idea={idea} state={state} bound onAdd={() => {}} onRecheck={() => {}} onClose={() => {}} titleId="t" bodyId="b" />);
+  renderToStaticMarkup(<IdeaCardView idea={idea} state={state} addBlockedReason={null} onAdd={() => {}} onRecheck={() => {}} onNewAttempt={() => {}} onClose={() => {}} titleId="t" bodyId="b" />);
 const verifying = (): Extract<ImportState, { phase: 'verifying' }> => {
   const p = importReducer(initialImportState, { type: 'submit' });
   const v = importReducer(p, { type: 'settled', requestId: p.requestId, outcome: { kind: 'persisted', receipt } });
@@ -43,7 +43,7 @@ test('receipt contract: fileSha256 (and every other alias) is rejected, never ma
     { ...receipt, importedAt: 'soon' }, { ...receipt, membershipId: '' }, { ...receipt, ideaId: 3 }]) assert.equal(parseImportReceipt(bad), null, JSON.stringify(bad));
 });
 
-test('persisted outcome whose receipt uses fileSha256 never reaches Added: unconfirmed (receipt-invalid), no re-check, retry offered', () => {
+test('persisted outcome whose receipt uses fileSha256 never reaches Added: unconfirmed (receipt-invalid), retry and a read-only status Re-check offered', () => {
   const p = importReducer(initialImportState, { type: 'submit' });
   const { sha256: _omit, ...rest } = receipt;
   const bad = { kind: 'persisted', receipt: { ...rest, fileSha256: HASH } } as unknown as Parameters<typeof importReducer>[1] extends infer E ? (E extends { outcome: infer O } ? O : never) : never;
@@ -52,7 +52,8 @@ test('persisted outcome whose receipt uses fileSha256 never reaches Added: uncon
   assert.equal(s.phase === 'unconfirmed' && s.reason, 'receipt-invalid');
   assert.equal(s.phase === 'unconfirmed' && s.receipt, null);
   const html = view(s);
-  assert.ok(!html.includes('Added to the cube.') && html.includes('Retry Add to cube') && !html.includes('Re-check'));
+  assert.ok(!html.includes('Added to the cube.') && html.includes('Retry Add to cube') && html.includes('Re-check'), 'no receipt kept: Re-check is the read-only status check, not a read-back of a forged receipt');
+  assert.equal(importReducer(s, { type: 'recheck' }), s, 'a read-back Re-check needs a kept valid receipt');
 });
 
 test('read-back: exactly one matching entry (receipt, membership, hash) is confirmed', () => {

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { IdeaCardView } from '../../apps/web/src/studio/IdeaCard';
 import {
-  IMPORT_FAILURE_COPY, IMPORT_UNBOUND_COPY, formatUtcDate, importReducer, initialImportState, isCloseKey,
+  IMPORT_FAILURE_COPY, IMPORT_UNBOUND_COPY, cardActions, formatUtcDate, importReducer, initialImportState, isCloseKey,
   type IdeaSummary, type ImportOutcome, type ImportReceipt, type ImportState,
 } from '../../apps/web/src/studio/ideaImport';
 
@@ -13,9 +13,9 @@ const idea: IdeaSummary = {
   text: 'A fictional fixture idea used only by the unit tests.',
 };
 const receipt: ImportReceipt = { ideaId: idea.id, sha256: 'f'.repeat(64), workspaceId: 'ws', importedAt: '2026-10-15T23:00:00Z', workspaceRevision: 2, membershipId: 'm1' };
-const view = (state: ImportState, bound = true) =>
-  renderToStaticMarkup(<IdeaCardView idea={idea} state={state} bound={bound} onAdd={() => {}} onClose={() => {}} titleId="t" bodyId="b" />);
-const FAILURES: Array<Exclude<ImportOutcome['kind'], 'persisted'>> = ['denied', 'unavailable', 'conflict', 'ambiguous', 'failed'];
+const view = (state: ImportState, addBlockedReason: string | null = null) =>
+  renderToStaticMarkup(<IdeaCardView idea={idea} state={state} addBlockedReason={addBlockedReason} onAdd={() => {}} onRecheck={() => {}} onNewAttempt={() => {}} onClose={() => {}} titleId="t" bodyId="b" />);
+const FAILURES: Array<Exclude<ImportOutcome['kind'], 'persisted' | 'existing'>> = ['denied', 'rejected', 'stale', 'key-reused', 'unavailable', 'unconfirmed', 'ambiguous', 'failed', 'not-started'];
 
 test('card: inspection shows filename, both dates, the synthetic tag and the text, and never imports', () => {
   const html = view(initialImportState);
@@ -25,8 +25,8 @@ test('card: inspection shows filename, both dates, the synthetic tag and the tex
   assert.ok(!html.includes('Added') && !html.includes('disabled'));
 });
 
-test('card: unbound adapter disables Add and says so (the shell binds none today)', () => {
-  const html = view(initialImportState, false);
+test('card: a blocked guard disables Add and says why (the shell binds none today)', () => {
+  const html = view(initialImportState, IMPORT_UNBOUND_COPY);
   assert.ok(html.includes(IMPORT_UNBOUND_COPY));
   assert.match(html, /<button[^>]*class="idea-card-add"[^>]*disabled/);
 });
@@ -54,8 +54,9 @@ test('reducer: every non-persisted outcome is an error with its own honest copy 
     const html = view(e);
     assert.ok(html.includes(IMPORT_FAILURE_COPY[kind].replace(/'/g, '&#x27;')) || html.includes(IMPORT_FAILURE_COPY[kind]), kind);
     assert.ok(!html.includes('Added to the cube.'), kind);
-    assert.ok(html.includes('Retry Add to cube'), 'card preserved for retry');
-    assert.notEqual(importReducer(e, { type: 'submit' }).phase, 'error', 'retry allowed');
+    const act = cardActions(e);
+    if (act.add) { assert.ok(html.includes('Retry Add to cube'), `${kind}: retry offered`); assert.notEqual(importReducer(e, { type: 'submit' }).phase, 'error', 'retry allowed'); }
+    else assert.ok(!html.includes('Retry Add to cube'), `${kind}: no retry for a proven refusal or a stale tuple`);
   }
   for (const kind of FAILURES) assert.doesNotMatch(IMPORT_FAILURE_COPY[kind], /nothing was saved|not saved|was not added/i, kind);
 });
