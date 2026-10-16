@@ -1,7 +1,7 @@
 import { useEffect, useReducer, useRef, useState } from 'react';
 import {
-  IMPORT_FAILURE_COPY, IMPORT_UNBOUND_COPY, UNCONFIRMED_ACTION_COPY, UNCONFIRMED_COPY, formatUtcDate, importReducer, initialImportState, isCloseKey, verifyImportReadback,
-  type IdeaSummary, type ImportIdea, type ImportReceipt, type ImportState, type ReadOverview, type VerifyResult,
+  IMPORT_FAILURE_COPY, IMPORT_UNBOUND_COPY, UNCONFIRMED_ACTION_COPY, UNCONFIRMED_COPY, formatUtcDate, importReducer, initialImportState, isCloseKey, confirmImport,
+  type IdeaSummary, type ImportIdea, type ImportReceipt, type ImportState, type ReadOverview,
 } from './ideaImport';
 
 export interface IdeaCardProps {
@@ -89,12 +89,7 @@ export function IdeaCard({ idea, importIdea, readOverview, onAdded, onClose, new
     if (state.phase !== 'verifying') return;
     let active = true;
     const { requestId, receipt } = state;
-    const done = (result: VerifyResult) => { if (active) dispatch({ type: 'verified', requestId, result }); };
-    if (!readOverview) { done({ ok: false, reason: 'readback-unavailable' }); return () => { active = false; }; }
-    readOverview().then(
-      overview => done(verifyImportReadback(idea, receipt, overview)),
-      () => done({ ok: false, reason: 'readback-unavailable' }),
-    );
+    confirmImport(idea, receipt, readOverview).then(result => { if (active) dispatch({ type: 'verified', requestId, result }); });
     return () => { active = false; };
   }, [state.phase, state.requestId]); // eslint-disable-line react-hooks/exhaustive-deps
 

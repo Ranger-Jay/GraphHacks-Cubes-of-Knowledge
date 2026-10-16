@@ -131,6 +131,16 @@ export function verifyImportReadback(idea: IdeaSummary, receipt: ImportReceipt, 
 }
 
 /**
+ * One fresh read-back for a persisted receipt: the pure async part of the card's `verifying` step. A missing reader, a
+ * rejected read or a thrown error is `readback-unavailable`; it never resolves to success without `verifyImportReadback`.
+ */
+export async function confirmImport(idea: IdeaSummary, receipt: ImportReceipt, readOverview: ReadOverview | undefined): Promise<VerifyResult> {
+  if (!readOverview) return { ok: false, reason: 'readback-unavailable' };
+  try { return verifyImportReadback(idea, receipt, await readOverview()); }
+  catch { return { ok: false, reason: 'readback-unavailable' }; }
+}
+
+/**
  * `verifying`: the server reported a persisted receipt; a fresh overview read is in flight. NOT a success state.
  * `unconfirmed`: the outcome is not proven. `receipt` is kept (when the adapter's receipt was valid) so a re-check can
  * read again without resubmitting.
