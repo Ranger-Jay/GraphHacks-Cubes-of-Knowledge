@@ -41,8 +41,10 @@ export function taskButtonLabel(
   if (resolved === 'ACCESS_DENIED') return 'Task Blocked (Access)';
   if (resolved === 'NOT_FOUND') return 'Task Blocked (Not Found)';
   if (resolved === 'UNAVAILABLE') return 'Task Blocked (Unavailable)';
-  if (!bound) return 'Task Unbound';
+  // v025.01: CHECKING is a settled-nothing state, so it reads "Checking" whether or not a handler is bound; "Task Unbound"
+  // is reserved for READY with no handler (the shell binds none today).
   if (resolved !== 'READY') return 'Task Blocked (Checking)';
+  if (!bound) return 'Task Unbound';
   if (status !== 'AVAILABLE') return 'Task Blocked (Unverified)';
   return 'Start Task';
 }

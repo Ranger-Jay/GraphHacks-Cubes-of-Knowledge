@@ -1,5 +1,7 @@
 # Shared contract v1
 
+The v026 IdeaVerse read/import/reconciliation endpoints are specified in [IdeaVerse HTTP contract](ideaverse-api-v026.md), with exported transport types in `packages/contracts/src/ideaverse.ts`. Partial candidate v034 includes the reviewed API adapter and real manifest, but keeps the browser import binding disabled. Transport is reconciled with the accepted graph: an ambiguous workspace has `revision: null`, and imports may reject `AMBIGUOUS_IDENTITY`. A raw graph receipt or local shape check is not confirmed HTTP success. See [partial candidate status](integration-v034.md).
+
 Types: packages/contracts/src/index.ts. These are transport types, not runtime input validation or authorization. Coordinate contract/dependency edits before changing a consumer. The table distinguishes shipped candidate routes from planned writes/recovery. The types alone do not prove implementation or combined-head acceptance.
 
 | Route | Contract | Success | Failure / enforcement |

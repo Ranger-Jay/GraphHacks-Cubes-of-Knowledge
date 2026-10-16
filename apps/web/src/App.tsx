@@ -7,18 +7,22 @@ import { SceneMount, toSceneData, type SceneProps } from './components/SceneMoun
 import { StatusArea } from './components/StatusArea';
 import { currentAnalysis, deriveScenePhase, nextRecovery, toRuntimeContext, type RecoveryState } from './sceneState';
 import { nextRoute, parseRoute, type Route } from './route';
+import { StudioPanel, type StudioBinding } from './studio/StudioPanel';
+export type { StudioBinding } from './studio/StudioPanel';
 
 /** Seeded demo release (graph seed: Release rel-wad, tenant t-wad). */
 export const SEEDED_RELEASE_ID = 'rel-wad';
 
 export const IDENTITY = 'Cubes of Knowledge: A company brain built on FalkorDB, with traceable decisions and persistent agent memory.';
 
-export function Shell({ route, health, graph, analysis, Scene, reducedMotion, selected, onSelect, onRequery, recovered = false, generation }: {
+export function Shell({ route, health, graph, analysis, Scene, reducedMotion, selected, onSelect, onRequery, recovered = false, generation, studio }: {
   route: Route; health: Loadable<HealthResponse>; graph: Loadable<GraphStatusResponse>;
   analysis: ApiResult<AnalysisResponse> | null; Scene: ComponentType<SceneProps> | null;
   reducedMotion: boolean; selected: string | null; onSelect: (id: string) => void; onRequery?: () => void;
   /** Fresh READY after a settled GRAPH_UNAVAILABLE (see nextRecovery). Never set from a click alone. */
   recovered?: boolean; generation?: number;
+  /** The single IdeaVerse card surface. Absent (the production default) = nothing mounted, nothing can import. */
+  studio?: StudioBinding;
 }) {
   // Phase first: proof reaches the scene only in READY (authorized AVAILABLE read + healthy probe, same generation).
   const phase = route.name === 'release' ? deriveScenePhase(graph, analysis) : null;
@@ -42,6 +46,7 @@ export function Shell({ route, health, graph, analysis, Scene, reducedMotion, se
               <div className="side-col">
                 <StatusArea phase={phase ?? 'CHECKING'} releaseId={route.releaseId} analysis={analysis} recovered={recovered} />
                 <AnalysisView releaseId={route.releaseId} result={analysis} phase={phase} />
+                {studio && <StudioPanel controller={studio.controller} phase={phase} {...(studio.access ? { access: studio.access } : {})} />}
               </div>
             </div>)}
           {route.name === 'not_found' && (
@@ -98,7 +103,7 @@ function useReducedMotion(): boolean {
   return v;
 }
 
-export function App({ Scene, fetcher }: { Scene: ComponentType<SceneProps> | null; fetcher?: Fetcher }) {
+export function App({ Scene, fetcher, studio }: { Scene: ComponentType<SceneProps> | null; fetcher?: Fetcher; studio?: StudioBinding }) {
   const [route, setRoute] = useState<Route>(() => { const h = window.location.hash; return parseRoute(h.startsWith('#source-') ? '#/' : h); });
   const [health, setHealth] = useState<Loadable<HealthResponse>>({ state: 'loading' });
   const [graph, setGraph] = useState<Loadable<GraphStatusResponse>>({ state: 'loading' });
@@ -118,5 +123,5 @@ export function App({ Scene, fetcher }: { Scene: ComponentType<SceneProps> | nul
   useEffect(() => { setRecovery(prev => { const next = nextRecovery(prev, phase); return next.settled === prev.settled && next.recovered === prev.recovered ? prev : next; }); }, [phase]);
   return <Shell route={route} health={health} graph={graph} analysis={analysis} Scene={Scene}
     reducedMotion={reducedMotion} selected={selected} onSelect={setSelected} onRequery={() => setNonce(n => n + 1)}
-    recovered={recovery.recovered && phase === 'READY'} generation={generation} />;
+    recovered={recovery.recovered && phase === 'READY'} generation={generation} {...(studio ? { studio } : {})} />;
 }

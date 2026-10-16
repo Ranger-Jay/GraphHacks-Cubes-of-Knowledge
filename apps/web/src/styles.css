@@ -81,3 +81,23 @@ blockquote { border-left: 3px solid #2c3442; margin: .25rem 0; padding-left: .75
    Padding exists only on the cited record and the negative margin cancels it, so unmarked records and the cited text do not move. */
 .source-records li[data-cited] { padding: .25rem .5rem; margin: -.25rem -.5rem; outline: 3px solid #ffd166; outline-offset: 2px; background: #2a2616; }
 .source-records li[data-cited]::before { content: "Cited source"; display: block; font-weight: 600; color: #ffd166; }
+
+/* IdeaVerse inspect card (v025.06). Text-first: state is words, not colour. Not mounted until the #39 comets exist. */
+.idea-card { border: 2px solid #8cc8ff; border-radius: 8px; padding: .6rem .8rem; background: #151b25; max-width: 28rem; }
+.idea-card-title { margin: 0 0 .2rem; font-size: 1rem; overflow-wrap: anywhere; } .idea-card-title:focus-visible { outline: 3px solid #ffd166; outline-offset: 2px; }
+.idea-card-tag { margin: .2rem 0; font-size: .85rem; }
+.idea-card-dates { display: flex; gap: 1rem; margin: .2rem 0; font-size: .85rem; } .idea-card-dates dt { font-weight: 600; } .idea-card-dates dd { margin: 0; }
+.idea-card-text { margin: .4rem 0; }
+.idea-card-status { min-height: 1.4em; margin: .3rem 0; font-size: .9rem; }
+.idea-card[data-import-phase="error"] .idea-card-status { border-left: 4px double #ff6b6b; padding-left: .5rem; }
+.idea-card[data-import-phase="added"] .idea-card-status { border-left: 4px solid #3fb27f; padding-left: .5rem; }
+.idea-card-actions { display: flex; gap: .5rem; } .idea-card-actions button:disabled { opacity: .6; cursor: not-allowed; }
+
+/* IdeaVerse studio panel (v025.18): the single shell surface for the one IdeaCard. */
+.studio-panel .idea-pool { display: flex; flex-wrap: wrap; gap: .4rem; margin: .4rem 0; padding: 0; list-style: none; }
+.studio-panel .idea-pool-item { max-width: 100%; overflow-wrap: anywhere; text-align: left; }
+.studio-panel .idea-pool-item[aria-pressed="true"] { outline: 2px solid #8cc8ff; }
+.idea-card-detail { display: block; opacity: .9; }
+.idea-card-help { margin: .2rem 0; font-size: .8rem; opacity: .9; }
+.idea-card[data-import-phase="present"] .idea-card-status { border-left: 4px solid #3fb27f; padding-left: .5rem; }
+.idea-card[data-import-phase="unconfirmed"] .idea-card-status, .idea-card[data-import-phase="checking"] .idea-card-status { border-left: 4px dashed #ffd166; padding-left: .5rem; }

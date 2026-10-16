@@ -1,0 +1,85 @@
+{
+  "pass": "outage",
+  "viewport": "1920x1080",
+  "base": 60,
+  "results": [
+    {
+      "vp": "1920x1080",
+      "scenario": "S8-db-stop",
+      "name": "real DB stop mid-flight ends uncertain, never \"Nothing was saved\"",
+      "ok": true,
+      "extra": "Could not confirm whether this was saved. Re-check the cube before retrying."
+    },
+    {
+      "vp": "1920x1080",
+      "scenario": "S8-db-stop",
+      "name": "DB down + Re-query: shell GRAPH_UNAVAILABLE, panel not ready, pool hidden, Add disabled with the READY copy",
+      "ok": true,
+      "extra": {
+        "shell": "GRAPH_UNAVAILABLE",
+        "ready": "false",
+        "pool": 0,
+        "addDisabled": true,
+        "text": "idea-078-stunt-zipline-freight-hook.txt\n\nSynthetic demo idea. A fictional proposal, not a verified fact or a clearance.\n\nSubmitted\n2026-10-11 UTC\nLast updated\n2026-10-12 UTC\n\nA synthetic stunt rigger conceals a high-tensile spectra line inside a crane cable so the hero can ride a cargo hook.\n\nCould "
+      }
+    },
+    {
+      "vp": "1920x1080",
+      "scenario": "S8-db-stop",
+      "name": "DB back + Re-query: READY, panel ready again",
+      "ok": true
+    },
+    {
+      "vp": "1920x1080",
+      "scenario": "S8-db-stop",
+      "name": "graph data survived the restart (UNPROVEN if false)",
+      "ok": true,
+      "extra": "AVAILABLE"
+    },
+    {
+      "vp": "1920x1080",
+      "scenario": "S8-db-stop",
+      "name": "unresolved attempt survived the outage (card shows the uncertain state, not idle)",
+      "ok": true,
+      "extra": "error"
+    },
+    {
+      "vp": "1920x1080",
+      "scenario": "S8-db-stop",
+      "name": "Re-check after recovery is read only",
+      "ok": true
+    },
+    {
+      "vp": "1920x1080",
+      "scenario": "S8-db-stop",
+      "name": "same-tuple Retry after the outage ends Added once",
+      "ok": true
+    },
+    {
+      "vp": "1920x1080",
+      "scenario": "S8-db-stop",
+      "name": "Retry used the SAME pinned key and expectedRevision as the interrupted attempt",
+      "ok": true,
+      "extra": [
+        {
+          "ideaId": "idea-078",
+          "key": "idea-32f2badc-b0a5-4035-8327-e8f5fc472443",
+          "expectedRevision": 22
+        }
+      ]
+    },
+    {
+      "vp": "1920x1080",
+      "scenario": "S8-db-stop",
+      "name": "one pull",
+      "ok": true
+    }
+  ],
+  "pageErrors": [
+    "1920 console: Failed to load resource: the server responded with a status of 404 (Not Found)",
+    "1920 console: Failed to load resource: the server responded with a status of 503 (Service Unavailable)",
+    "1920 console: Failed to load resource: the server responded with a status of 503 (Service Unavailable)",
+    "1920 console: Failed to load resource: the server responded with a status of 503 (Service Unavailable)",
+    "1920 console: Failed to load resource: the server responded with a status of 503 (Service Unavailable)"
+  ]
+}

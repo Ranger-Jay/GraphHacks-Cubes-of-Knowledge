@@ -8,7 +8,7 @@ A Graph Hacks entry exploring a fictional studio's current-cut licensing, eviden
 
 ## Status
 
-Isolated integration candidate v015, pending independent combined-head review. It composes graph P3, shipped API sessions/status, the web reader binding, and the Company Cube scene for synthetic Warnings After Dark Studios. Component reviews do not accept this combined candidate. See [candidate manifest](docs/integration-v015.md) for exact sources, reproduction commands and remaining gates.
+Partial integration review candidate v034.00, pending independent exact-head review. It combines the reviewed IdeaVerse API, real 100-file manifest, graph/profile hardening, fixture layout, single-card client slice (unbound), import transport contract and approved outage text. It is not the completed import/comet browser journey. See [partial candidate manifest](docs/integration-v034.md) for exact inputs, reproduction commands and held gates. The earlier [v015 manifest](docs/integration-v015.md) remains historical evidence.
 
 The implemented path is a scoped, source-linked release analysis through a real graph adapter, server-configured sessions, and the local web proxy. Approval writes remain disabled; agent tools, durable agent handoff, real model execution, hosted runtime and deployment are not included in this candidate. The tagline describes the product goal; it is not proof that every capability is complete.
 

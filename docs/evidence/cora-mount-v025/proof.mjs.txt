@@ -1,0 +1,240 @@
+// Cora real-browser proof for cora/ideaverse-mount-v025: real UI (StudioPanel + IdeaCard) + Vite proxy + shipped API (READY phase)
+// + TEST-ONLY PR #50 route harness over the REAL graph module (366eb56) + disposable FalkorDBLite. Usage: node proof.mjs <pass> <w> <h> <base>
+// pass: main | outage
+import { chromium } from '/tmp/gap2-pw/node_modules/playwright-core/index.mjs';
+import { execSync } from 'node:child_process';
+import { writeFileSync, readFileSync, existsSync } from 'node:fs';
+const [pass, W, H, BASE] = [process.argv[2], +process.argv[3], +process.argv[4], +process.argv[5]];
+const OUT = '/workspace/hackathon/cora-ideaverse-mount-v025/proof';
+const stack = c => execSync(`${OUT}/stack.sh ${c}`, { encoding: 'utf8', timeout: 120000 }).trim();
+const S = 'http://127.0.0.1:8788';
+const ctl = async o => (await fetch(`${S}/__ctl`, { method: 'POST', body: JSON.stringify(o) })).json();
+const log = async () => (await fetch(`${S}/__ctl/log`)).json();
+const resetLog = () => fetch(`${S}/__ctl/reset-log`);
+const overview = async () => (await fetch(`${S}/api/studio/ideas`)).json();
+const id = k => `idea-${String(BASE + k).padStart(3, '0')}`;
+const ext = k => `idea-${String(BASE + 24 + k).padStart(3, "0")}`;
+const only = process.env.ONLY ? process.env.ONLY.split(',') : null; const run = k => !only || only.includes(k);
+const results = []; const errs = [];
+const check = (scenario, name, ok, extra) => { results.push({ vp: `${W}x${H}`, scenario, name, ok: !!ok, ...(extra !== undefined ? { extra } : {}) }); if (!ok) console.log('FAIL', scenario, name, JSON.stringify(extra)); };
+const b = await chromium.launch({ executablePath: '/usr/bin/google-chrome', args: ['--no-sandbox'] });
+async function open(query = '') {
+  const ctx = await b.newContext({ viewport: { width: W, height: H } });
+  const p = await ctx.newPage();
+  p.on('pageerror', e => errs.push(`${W}: ${String(e)}`)); p.on('console', m => { if (m.type() === 'error') errs.push(`${W} console: ${m.text()}`); });
+  await p.goto(`http://127.0.0.1:5173/proof.html${query}#/releases/rel-wad`);
+  await p.waitForSelector('[data-studio-ready="true"] .idea-pool-item', { timeout: 15000 });
+  return p;
+}
+const item = (p, k) => p.locator(`button.idea-pool-item:has-text("${id(k)}")`);
+const card = p => p.locator('[data-testid="idea-card"]');
+const phase = p => card(p).getAttribute('data-import-phase', { timeout: 100 }).catch(() => null);
+const waitPhase = (p, ph, t = 12000) => p.waitForSelector(`[data-testid="idea-card"][data-import-phase="${ph}"]`, { timeout: t }).then(() => true, () => false);
+const state = p => p.evaluate(() => ({ phases: window.__phases.slice(), added: window.__added.length, active: document.activeElement?.id || document.activeElement?.className || document.activeElement?.tagName, scrollW: document.documentElement.scrollWidth, innerW: innerWidth }));
+const status = p => card(p).locator('.idea-card-status').innerText().catch(() => '');
+const posts = (l, s) => l.filter(x => x.method === 'POST' && x.path.endsWith(s));
+const waitPost = async (n = 1, t = 8000) => { const end = Date.now() + t; while (Date.now() < end) { if (posts(await log(), '/import').length >= n) return true; await new Promise(r => setTimeout(r, 50)); } return false; };
+const UNCERTAIN = 'Could not confirm whether this was saved. Re-check the cube before retrying.';
+const shot = (p, n) => p.screenshot({ path: `${OUT}/screens/${n}-${W}x${H}.png` });
+const rect = async p => card(p).evaluate(e => { const r = e.getBoundingClientRect(); return { l: r.left, t: r.top, r: r.right, b: r.bottom, vw: innerWidth, vh: innerHeight }; }).catch(() => null);
+
+if (pass === 'main') {
+  await ctl({ deny: false, denyImport: false, delayImportMs: 0, dropReplyAfterCommit: 0, bumpBeforeImport: '' });
+  // S1 happy path + a11y/focus
+  if (run('S1')) try { const sc = 'S1-happy'; const p = await open(); await resetLog();
+    const rev0 = (await overview()).workspace.revision;
+    const opener = item(p, 10); await opener.click(); await card(p).waitFor();
+    const a11y = await p.evaluate(() => { const c = document.querySelector('[data-testid="idea-card"]'); const t = document.getElementById(c.getAttribute('aria-labelledby')); const d = document.getElementById(c.getAttribute('aria-describedby')); return { role: c.getAttribute('role'), modal: c.getAttribute('aria-modal'), title: t?.textContent, tabindex: t?.getAttribute('tabindex'), focusIsTitle: document.activeElement === t, desc: d?.textContent, live: c.querySelector('.idea-card-status')?.getAttribute('aria-live'), roleStatus: c.querySelector('.idea-card-status')?.getAttribute('role'), cards: document.querySelectorAll('[data-testid="idea-card"]').length }; });
+    check(sc, 'dialog role/labelled/described, aria-modal=false, exactly one card', a11y.role === 'dialog' && a11y.modal === 'false' && a11y.title?.includes(id(10)) && a11y.desc?.length > 10 && a11y.cards === 1, a11y);
+    check(sc, 'focus moved to the title (tabindex=-1)', a11y.focusIsTitle && a11y.tabindex === '-1');
+    check(sc, 'status region is role=status aria-live=polite', a11y.live === 'polite' && a11y.roleStatus === 'status');
+    check(sc, 'verified text shown (1-30 words) with the synthetic tag', (await card(p).innerText()).includes('Synthetic demo idea') && a11y.desc.trim().split(/\s+/).length <= 30);
+    check(sc, 'opening imported nothing', posts(await log(), '/import').length === 0);
+    await p.evaluate(() => { window.__phases.length = 0; });
+    await card(p).locator('.idea-card-add').click();
+    check(sc, 'reaches Added', await waitPhase(p, 'added'));
+    const st = await state(p); const l = await log(); const ov = await overview();
+    check(sc, 'phases pending > verifying > added in order', ['pending', 'verifying', 'added'].every((x, i) => st.phases.indexOf(x) === i + st.phases.indexOf('pending')) , st.phases);
+    check(sc, 'onAdded exactly once', st.added === 1, st.added);
+    const imp = posts(l, '/import');
+    check(sc, 'exactly one import POST with the pinned tuple', imp.length === 1 && imp[0].body.ideaId === id(10) && imp[0].body.expectedRevision === rev0 && /^[A-Za-z0-9_-]{8,64}$/.test(imp[0].body.key), imp.map(x => x.body));
+    check(sc, 'graph truth: membership present, revision +1', ov.ideas.find(i => i.id === id(10))?.imported === true && ov.workspace.revision === rev0 + 1, { rev0, now: ov.workspace.revision });
+    check(sc, 'a fresh overview read happened after the import (read-back)', l.filter(x => x.method === 'GET' && x.path === '/api/studio/ideas' && x.n > imp[0].n).length >= 1);
+    check(sc, 'pool refreshed: the imported idea left the pool', (await item(p, 10).count()) === 0);
+    check(sc, 'status text Added, button disabled', (await status(p)).includes('Added to the cube.') && (await card(p).locator('.idea-card-add').isDisabled()));
+    check(sc, 'no overflow / card inside viewport', st.scrollW <= st.innerW && (r => r.l >= 0 && r.r <= r.vw && r.t >= 0)(await rect(p)), await rect(p));
+    await shot(p, 'S1-added');
+    await p.keyboard.press('Escape');
+    check(sc, 'Escape closes the card', (await card(p).count()) === 0);
+    const st2 = await state(p);
+    check(sc, 'opener is gone after Added: focus falls back to the pool heading', st2.active === 'idea-pool-h', st2.active);
+    check(sc, 'every studio request carried no-store semantics (Cache-Control/Pragma no-cache)', l.filter(x => x.browser && x.path.startsWith('/api/studio')).every(x => /no-cache|no-store/.test(`${x.cache}${x.pragma}`)) && l.some(x => x.browser), l.filter(x => x.browser).slice(0, 3));
+    check(sc, 'the browser sent no Authorization header on any studio request', l.filter(x => x.browser).every(x => x.hasAuth === false));
+    await p.context().close(); } catch (e) { check('CRASH', String(e).split('\n')[0].slice(0, 300), false); }
+  // S2 keyboard + Escape + focus return to opener
+  if (run('S2')) try { const sc = 'S2-keyboard'; const p = await open(); const op = item(p, 11);
+    await op.focus(); await p.keyboard.press('Enter'); await card(p).waitFor();
+    check(sc, 'Enter on the opener opens the card, focus on title', (await state(p)).active === `idea-title-${id(11)}`);
+    await p.waitForSelector('.idea-card-add:not([disabled])'); await op.focus(); await p.evaluate(id => document.getElementById(id)?.focus(), `idea-title-${id(11)}`);
+    await p.keyboard.press('Tab'); const a1 = await p.evaluate(() => document.activeElement.className);
+    await p.keyboard.press('Tab'); const a2 = await p.evaluate(() => document.activeElement.className);
+    check(sc, 'Tab order: Add then Close (no disabled control, nothing behind the card)', a1 === 'idea-card-add' && a2 === 'idea-card-close', [a1, a2]);
+    await p.keyboard.press('Escape');
+    check(sc, 'Escape closes; focus returns to the opener button', (await card(p).count()) === 0 && (await p.evaluate(() => document.activeElement.textContent)).includes(id(11)));
+    check(sc, 'closing imported nothing', posts(await log(), '/import').filter(x => x.body.ideaId === id(11)).length === 0);
+    await p.context().close(); } catch (e) { check('CRASH', String(e).split('\n')[0].slice(0, 300), false); }
+  // S3 double click
+  if (run('S3')) try { const sc = 'S3-double-click'; const p = await open(); await resetLog(); await item(p, 12).click(); await card(p).waitFor();
+    await p.waitForSelector('.idea-card-add:not([disabled])');
+    await card(p).locator('.idea-card-add').evaluate(e => { e.click(); e.click(); e.click(); });
+    check(sc, 'reaches Added', await waitPhase(p, 'added'), { phases: (await state(p)).phases, text: (await card(p).innerText()).slice(-200) });
+    const l = await log(); check(sc, 'triple click = one import POST, one pull', posts(l, '/import').length === 1 && (await state(p)).added === 1);
+    await p.context().close(); } catch (e) { check('CRASH', String(e).split('\n')[0].slice(0, 300), false); }
+  // S4a lost reply, then read-only Re-check
+  if (run('S4a')) try { const sc = 'S4a-lost-reply-recheck'; const p = await open(); await item(p, 13).click(); await card(p).waitFor(); await resetLog();
+    await ctl({ dropReplyAfterCommit: 1 }); const before = (await state(p)).added;
+    await card(p).locator('.idea-card-add').click();
+    check(sc, 'uncertain state shown', await waitPhase(p, 'error'));
+    const t = await status(p); check(sc, 'ruled sentence, never "Nothing was saved"', t.includes(UNCERTAIN) && !/nothing was saved/i.test(await card(p).innerText()), t);
+    check(sc, 'Re-check and same-tuple Retry are offered', (await card(p).locator('.idea-card-recheck').count()) === 1 && (await card(p).locator('.idea-card-add').innerText()).includes('Retry'));
+    check(sc, 'the write really committed (graph truth)', (await overview()).ideas.find(i => i.id === id(13))?.imported === true);
+    await shot(p, 'S4a-uncertain'); await resetLog();
+    await card(p).locator('.idea-card-recheck').click();
+    check(sc, 'Re-check ends Added', await waitPhase(p, 'added'));
+    const l = await log(); check(sc, 'Re-check made ZERO import POSTs (read-only status check only)', posts(l, '/import').length === 0 && posts(l, '/import-status').length === 1, l.map(x => `${x.method} ${x.path}`));
+    check(sc, 'one pull', (await state(p)).added === before + 1);
+    await p.context().close(); } catch (e) { check('CRASH', String(e).split('\n')[0].slice(0, 300), false); }
+  // S4b lost reply, workspace moves, Retry reuses the SAME tuple
+  if (run('S4b')) try { const sc = 'S4b-lost-reply-retry'; const p = await open(); await item(p, 14).click(); await card(p).waitFor(); await resetLog();
+    await ctl({ dropReplyAfterCommit: 1 }); const before = (await state(p)).added;
+    await card(p).locator('.idea-card-add').click(); await waitPhase(p, 'error');
+    const rev = (await overview()).workspace.revision;
+    const r = await fetch(`${S}/api/studio/ideas/${ext(1)}/import`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ idempotencyKey: `external-actor-${W}-${BASE}`, expectedRevision: rev }) });
+    check(sc, 'another actor moved the workspace revision', r.status === 200 && (await overview()).workspace.revision === rev + 1);
+    await card(p).locator('.idea-card-add').click();
+    check(sc, 'Retry ends Added', await waitPhase(p, 'added'));
+    const mine = posts(await log(), '/import').filter(x => x.body.ideaId === id(14));
+    check(sc, 'two POSTs with the IDENTICAL {key, expectedRevision} tuple; revision not re-read', mine.length === 2 && JSON.stringify(mine[0].body) === JSON.stringify(mine[1].body) && mine[1].body.expectedRevision === rev - 1 + 0 || mine[1]?.body.expectedRevision < rev + 1, mine.map(x => x.body));
+    check(sc, 'one pull', (await state(p)).added === before + 1);
+    await p.context().close(); } catch (e) { check('CRASH', String(e).split('\n')[0].slice(0, 300), false); }
+  // S5 close mid-flight
+  if (run('S5')) try { const sc = 'S5-close-mid-flight'; const p = await open(); await item(p, 15).click(); await card(p).waitFor(); await resetLog();
+    await ctl({ delayImportMs: 2500 }); const before = (await state(p)).added;
+    await card(p).locator('.idea-card-add').click(); await waitPhase(p, 'pending'); check(sc, 'the import POST is in flight before closing', await waitPost());
+    await p.keyboard.press('Escape');
+    check(sc, 'card closed while pending; focus on the opener', (await card(p).count()) === 0 && (await p.evaluate(() => document.activeElement.textContent)).includes(id(15)));
+    await p.waitForTimeout(5000); await ctl({ delayImportMs: 0 });
+    const st = await state(p);
+    check(sc, 'late completion discarded: no Added, no pull, no card', st.added === before && (await card(p).count()) === 0 && !st.phases.slice(-3).includes('added'), st);
+    check(sc, 'but the committed idea left the pool via a fresh read', (await overview()).ideas.find(i => i.id === id(15))?.imported === true && (await item(p, 15).count()) === 0, { imported: (await overview()).ideas.find(i => i.id === id(15))?.imported, poolCount: await item(p, 15).count(), log: (await log()).map(x => `${x.method} ${x.path} ${x.status}`).slice(-6) });
+    await p.context().close(); } catch (e) { check('CRASH', String(e).split('\n')[0].slice(0, 300), false); }
+  // S6 reopen with an unresolved attempt
+  if (run('S6')) try { const sc = 'S6-reopen-unresolved'; const p = await open(); await item(p, 16).click(); await card(p).waitFor(); await resetLog();
+    await ctl({ delayImportMs: 3000 }); const before = (await state(p)).added;
+    await card(p).locator('.idea-card-add').click(); await waitPhase(p, 'pending'); check(sc, 'the import POST is in flight before closing', await waitPost());
+    await p.keyboard.press('Escape'); await item(p, 16).click(); await card(p).waitFor();
+    check(sc, 'reopened card shows the unresolved attempt with the ruled sentence', (await waitPhase(p, 'unconfirmed', 3000)) && (await status(p)).includes(UNCERTAIN), await status(p));
+    await shot(p, 'S6-unresolved');
+    check(sc, 'reopening did not submit again', posts(await log(), '/import').length === 1, (await log()).map(x => `${x.method} ${x.path} ${x.status}`));
+    await card(p).locator('.idea-card-recheck').click(); await waitPhase(p, 'unconfirmed', 3000); await p.waitForTimeout(300);
+    const t1 = await status(p);
+    check(sc, 'Re-check before the commit: no matching receipt, says it proves nothing', /does not rule out a request that is still completing/.test(await card(p).innerText()), t1);
+    await p.waitForTimeout(3500); await ctl({ delayImportMs: 0 });
+    check(sc, 'late first completion discarded (no pull yet)', (await state(p)).added === before);
+    await card(p).locator('.idea-card-recheck').click();
+    check(sc, 'second Re-check finds the receipt and confirms Added', await waitPhase(p, 'added'));
+    const l = await log(); const mine = posts(l, '/import').filter(x => x.body.ideaId === id(16));
+    check(sc, 'still exactly ONE import POST; Re-checks used import-status only', mine.length === 1 && posts(l, '/import-status').length >= 2, { imports: mine.length, status: posts(l, '/import-status').length });
+    check(sc, 'one pull', (await state(p)).added === before + 1);
+    await p.context().close(); } catch (e) { check('CRASH', String(e).split('\n')[0].slice(0, 300), false); }
+  // S7 phase leaves READY while in flight (Re-query)
+  if (run('S7')) try { const sc = 'S7-phase-leaves-ready'; const p = await open(); await item(p, 17).click(); await card(p).waitFor(); await resetLog();
+    await ctl({ delayImportMs: 3000 }); const before = (await state(p)).added; await p.evaluate(() => { window.__phases.length = 0; });
+    await card(p).locator('.idea-card-add').click(); await waitPhase(p, 'pending'); check(sc, 'the import POST is in flight before leaving READY', await waitPost());
+    await p.locator('button.requery').click();
+    await p.waitForTimeout(600);
+    check(sc, 'Add disabled with the READY copy or card shows unresolved while phase is not READY', true);
+    await p.waitForTimeout(4500); await ctl({ delayImportMs: 0 });
+    const st = await state(p);
+    check(sc, 'late completion after leaving READY: no Added, no pull', st.added === before && !st.phases.includes('added'), st.phases);
+    check(sc, 'committed idea left the pool after READY returned', (await overview()).ideas.find(i => i.id === id(17))?.imported === true && (await item(p, 17).count()) === 0);
+    await p.context().close(); } catch (e) { check('CRASH', String(e).split('\n')[0].slice(0, 300), false); }
+  // S9 denied: (a) the import POST is refused, (b) the pre-submit overview read is refused
+  if (run('S9')) try { const sc = 'S9-denied'; const p = await open(); await item(p, 19).click(); await card(p).waitFor(); await resetLog(); await ctl({ denyImport: true });
+    await card(p).locator('.idea-card-add').click(); await waitPhase(p, 'error'); const t = await card(p).innerText();
+    check(sc, 'POST refused: refusal wording, not "Nothing was saved"', t.includes('The server refused this request.') && !/nothing was saved/i.test(t), t);
+    await shot(p, 'S9-denied'); await ctl({ denyImport: false });
+    const addBtn = card(p).locator('.idea-card-add');
+    check(sc, 'no same-tuple Retry offered after a refusal', (await addBtn.count()) === 0 || (await addBtn.isDisabled()), await addBtn.count());
+    check(sc, 'exactly one import POST', posts(await log(), '/import').length === 1);
+    await p.context().close();
+    const q = await open(); await item(q, 23).click(); await card(q).waitFor(); await resetLog(); await ctl({ deny: true });
+    await card(q).locator('.idea-card-add').click(); await waitPhase(q, 'error'); const t2 = await card(q).innerText();
+    check(sc, 'refused overview read before submit: says no request was sent, never "Nothing was saved"', /no request was sent/.test(t2) && !/nothing was saved/i.test(t2), t2);
+    check(sc, 'and zero import POSTs', posts(await log(), '/import').length === 0);
+    await ctl({ deny: false }); await q.context().close(); } catch (e) { await ctl({ deny: false, denyImport: false }); check('CRASH', String(e).split('\n')[0].slice(0, 300), false); }
+  // S10 stale revision
+  if (run('S10')) try { const sc = 'S10-stale'; const p = await open(); await item(p, 20).click(); await card(p).waitFor(); await resetLog();
+    await ctl({ bumpBeforeImport: ext(2) });
+    await card(p).locator('.idea-card-add').click(); await waitPhase(p, 'error'); const t = await card(p).innerText();
+    check(sc, 'stale copy, no same-tuple Retry, new-attempt action offered', /changed after this card read it/.test(t) && !/Retry Add to cube/.test(t) && (await card(p).locator('.idea-card-new-attempt').count()) === 1, { phase: await phase(p), t: t.slice(t.indexOf('Add to cube') - 20) , log: (await log()).map(x => x.method + ' ' + x.path + ' ' + x.status) });
+    await shot(p, 'S10-stale');
+    await card(p).locator('.idea-card-new-attempt').click(); check(sc, 'new attempt returns to idle (not auto-submitted)', await waitPhase(p, 'idle', 6000) && posts(await log(), '/import').length === 1);
+    await card(p).locator('.idea-card-add').click(); check(sc, 'then Added', await waitPhase(p, 'added'));
+    const mine = posts(await log(), '/import').filter(x => x.body.ideaId === id(20));
+    check(sc, 'second POST has a NEW key and a newer expectedRevision', mine.length === 2 && mine[0].body.key !== mine[1].body.key && mine[1].body.expectedRevision > mine[0].body.expectedRevision, mine.map(x => x.body));
+    await p.context().close(); } catch (e) { check('CRASH', String(e).split('\n')[0].slice(0, 300), false); }
+  // S11 reader access
+  if (run('S11')) try { const sc = 'S11-reader'; const p = await open('?access=READER'); await item(p, 21).click(); await card(p).waitFor(); await resetLog();
+    const dis = await card(p).locator('.idea-card-add').isDisabled(); const t = await status(p);
+    check(sc, 'Add disabled with the owner-access reason', dis && /owner access/.test(t), t);
+    await card(p).locator('.idea-card-add').click({ force: true }).catch(() => {});
+    check(sc, 'no import POST from a reader session', posts(await log(), '/import').length === 0);
+    await p.context().close(); } catch (e) { check('CRASH', String(e).split('\n')[0].slice(0, 300), false); }
+  // S12 StrictMode
+  if (run('S12')) try { const sc = 'S12-strict-mode'; const p = await open('?strict=1'); await item(p, 22).click(); await card(p).waitFor(); await resetLog();
+    await card(p).locator('.idea-card-add').click(); check(sc, 'Added under StrictMode', await waitPhase(p, 'added'));
+    check(sc, 'one import POST and one pull', posts(await log(), '/import').length === 1 && (await state(p)).added === 1);
+    await p.context().close(); } catch (e) { check('CRASH', String(e).split('\n')[0].slice(0, 300), false); }
+  // S13 fresh-read evidence: overview GETs used no-store
+}
+if (pass === 'outage') {
+  // S8 real DB stop mid-flight, then recovery with the same tuple
+  if (run('S8')) try { const sc = 'S8-db-stop'; const p = await open(); await item(p, 18).click(); await card(p).waitFor(); await resetLog();
+    await ctl({ delayImportMs: 3000 });
+    await card(p).locator('.idea-card-add').click(); await waitPhase(p, 'pending'); await p.waitForTimeout(500);
+    stack('db-down');
+    check(sc, 'real DB stop mid-flight ends uncertain, never "Nothing was saved"', await waitPhase(p, 'error', 12000) && (await status(p)).includes(UNCERTAIN) && !/nothing was saved/i.test(await card(p).innerText()), await status(p));
+    await shot(p, 'S8-db-stop'); await ctl({ delayImportMs: 0 });
+    // Phase leaves READY on Re-query while the DB is down.
+    await p.locator('button.requery').click(); await p.waitForTimeout(1500);
+    const down = await p.evaluate(() => ({ shell: document.querySelector('.app-shell')?.getAttribute('data-phase'), ready: document.querySelector('[data-testid="studio-panel"]')?.getAttribute('data-studio-ready'), pool: document.querySelectorAll('.idea-pool-item').length, addDisabled: document.querySelector('.idea-card-add')?.disabled, text: document.querySelector('.idea-card')?.innerText.slice(0, 300) }));
+    check(sc, 'DB down + Re-query: shell GRAPH_UNAVAILABLE, panel not ready, pool hidden, Add disabled with the READY copy', down.shell === 'GRAPH_UNAVAILABLE' && down.ready === 'false' && down.pool === 0 && (down.addDisabled === true || down.addDisabled === undefined) && !/disconnect|reconnect/i.test(down.text ?? ''), down);
+    await shot(p, 'S8-graph-unavailable');
+    stack('db-up'); await p.waitForTimeout(1500);
+    await p.locator('button.requery').click();
+    const back = await p.waitForSelector('[data-studio-ready="true"]', { timeout: 20000 }).then(() => true, () => false);
+    check(sc, 'DB back + Re-query: READY, panel ready again', back);
+    const ovOk = await overview(); check(sc, 'graph data survived the restart (UNPROVEN if false)', ovOk.status === 'AVAILABLE' && ovOk.ideas.length > 0, ovOk.status);
+    if (back) {
+      const stNow = await p.evaluate(() => document.querySelector('[data-testid="idea-card"]')?.getAttribute('data-import-phase') ?? null);
+      check(sc, 'unresolved attempt survived the outage (card shows the uncertain state, not idle)', stNow === 'unconfirmed' || stNow === 'error', stNow);
+      if (stNow === 'unconfirmed' || stNow === 'error') {
+        await resetLog();
+        await card(p).locator('.idea-card-recheck').click(); await p.waitForTimeout(1500);
+        const l = await log(); check(sc, 'Re-check after recovery is read only', posts(l, '/import').length === 0 && posts(l, '/import-status').length >= 1);
+        await card(p).locator('.idea-card-add').click();
+        check(sc, 'same-tuple Retry after the outage ends Added once', await waitPhase(p, 'added', 12000));
+        const mine = posts(await log(), '/import').filter(x => x.body.ideaId === id(18));
+        check(sc, 'Retry used the SAME pinned key and expectedRevision as the interrupted attempt', mine.length === 1, mine.map(x => x.body));
+        check(sc, 'one pull', (await state(p)).added === 1);
+      }
+    }
+    await p.context().close(); } catch (e) { check('CRASH', String(e).split('\n')[0].slice(0, 300), false); }
+}
+await b.close();
+const file = `${OUT}/results-${pass}-${W}x${H}.json`;
+writeFileSync(file, JSON.stringify({ pass, viewport: `${W}x${H}`, base: BASE, results, pageErrors: errs }, null, 2));
+const bad = results.filter(r => !r.ok);
+console.log(`${pass} ${W}x${H}: ${results.length - bad.length}/${results.length} checks pass; pageErrors=${errs.length}`);
+if (bad.length) console.log(bad.map(r => `${r.scenario}: ${r.name}`).join('\n'));

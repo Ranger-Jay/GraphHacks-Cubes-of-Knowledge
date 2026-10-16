@@ -26,9 +26,11 @@ Reversible candidate for Buddy to reconcile. Not accepted, not merged, no releas
 
 ## Known open items (not fixed here)
 
-- Mara's approved fixed agent outage notices (issue #29) say "disconnected" and "reconnects". They play for any GRAPH_UNAVAILABLE, including a QUERY_FAILED-only case. Left as approved; Buddy/Jay to rule.
+- Mara's approved fixed agent outage notices (issue #29) say "disconnected" and "reconnects". They play for any GRAPH_UNAVAILABLE, including a QUERY_FAILED-only case. Left as approved at v021.10. UPDATE v025.00 (branch `cora/studio-ui-v025`): wording-only change to "unavailable" / "is available again"; needs Mara/Buddy acceptance.
 - The cube's own fallback when `runtime` is absent (non-AVAILABLE data reads as GRAPH_UNAVAILABLE) is unchanged. `scene/index.tsx` always passes `runtime` now, so only a direct `<CompanyCube>` render without it is affected.
-- The shell binds no task handler, so Start Task is "Task Unbound" in READY (honest: no task action exists).
+- The shell binds no task handler, so Start Task is "Task Unbound" in READY (honest: no task action exists). UPDATE v025.01: during CHECKING it reads "Task Blocked (Checking)".
 - With all three pyramids open the page scrolls; the default state (Ava open) fits one screen at 1920x1080 and 1280x800.
 - A database lost while the page stays open shows READY until the next Re-query (unchanged).
 - `tests/scene` has three type errors in `scene.test.tsx` (lines 91-93) that already exist on #31's head.
+
+Evidence README (commit map, per-commit results, browser proof, UNPROVEN list): [`docs/evidence/combined-candidate-v021-README.md`](evidence/combined-candidate-v021-README.md) and `docs/evidence/combined-candidate-v021-per-commit.txt`.
