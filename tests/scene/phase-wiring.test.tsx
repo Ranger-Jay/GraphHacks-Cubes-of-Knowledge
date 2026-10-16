@@ -121,12 +121,12 @@ test('copy (PROPOSED): cube notice per phase; no "disconnected" or "severed" in 
   assert.equal(SYSTEM_CAPTIONS.UNAVAILABLE, 'Graph status unavailable.');
 });
 
-test('labels: with no task handler bound (as the shell ships today) a settled blocked phase is still named, not "Task Unbound"', () => {
+test('labels: with no task handler bound (as the shell ships today) a blocked phase (settled or CHECKING) is named, never "Task Unbound"; Task Unbound is READY-only', () => {
   const unbound = (phase: ScenePhase) => renderToStaticMarkup(
     <CompanyCubeScene data={stale} onSelectNode={() => {}} reducedMotion={false} runtime={{ phase }} />);
   const want: Record<ScenePhase, string> = {
     GRAPH_UNAVAILABLE: 'Task Blocked (Outage)', ACCESS_DENIED: 'Task Blocked (Access)', NOT_FOUND: 'Task Blocked (Not Found)',
-    UNAVAILABLE: 'Task Blocked (Unavailable)', CHECKING: 'Task Unbound', READY: 'Task Unbound',
+    UNAVAILABLE: 'Task Blocked (Unavailable)', CHECKING: 'Task Blocked (Checking)', READY: 'Task Unbound',
   };
   for (const phase of PHASES) {
     const btn = taskButton(unbound(phase));

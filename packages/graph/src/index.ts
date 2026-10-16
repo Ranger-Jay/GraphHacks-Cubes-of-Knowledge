@@ -15,3 +15,7 @@ export { seedStudio, studioOverview, parseCrew, parseDepartments, STUDIO_SEED_VE
 export type { StudioOverview, StudioNodeOut, StudioEdgeOut, StudioIntegrityItem, StudioSeedResult, CrewRow, DepartmentRow } from './studio.js';
 export { loadIdeaManifest, seedIdeaverse, importIdea, importStatus, ideaverseOverview, IDEAVERSE_SEED_VERSION, WORKSPACE_ID } from './ideaverse.js';
 export type { IdeaManifest, IdeaManifestEntry, IdeaverseSeedResult, IdeaverseOverview, IdeaverseIdea, ImportRequest, ImportResult, ImportReceipt } from './ideaverse.js';
+export { loadAgentFixtures, seedAgentProfiles, normalizeResourcePath, AGENT_PROFILES_SEED_VERSION } from './agent-profiles.js';
+export type { AgentFixtures, AgentProfileFixture, AgentProfilesSeedResult } from './agent-profiles.js';
+export { agentProfileOverview, effectiveRoleFor, resolveResource } from './agent-profiles.js';
+export type { AgentProfileResult, AgentProfileOverview, AgentProfileView, EffectiveRole, RoleView, ResourceView } from './agent-profiles.js';
