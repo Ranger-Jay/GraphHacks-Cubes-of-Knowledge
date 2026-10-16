@@ -18,6 +18,12 @@ Mint the tokens outside this repo and put them only in the server process enviro
 
 The tenant is `API_TENANT_ID` only. The graph address, evidence key, and witness directory stay in their existing server variables.
 
+## IdeaVerse routes
+
+`GET /api/studio/ideas` and `GET /api/studio/ideas/:ideaId` accept the owner session or the reader session. `POST /api/studio/ideas/:ideaId/import` and `POST .../import-status` accept only the owner session (`API_OWNER_TOKEN`). The dev proxy still injects only `API_READER_TOKEN` and cannot authorize an import. These routes authenticate before a body read or a graph call. A confirmed import is returned only after a fresh overview agrees with the receipt. A null workspace revision, a failed read-back, or `REJECTED` / `AMBIGUOUS_IDENTITY` is not success. `import-status` does not write. No route returns 201.
+
+The tenant is still `API_TENANT_ID`. Without that id the routes answer 503 and do not claim a saved idea.
+
 ## Graph status
 
 `GET /api/graph/status` calls the graph lane's `graphHealth` read. No session is required, and the response has no release, evidence, or token fields. HTTP 200 `AVAILABLE` with `ready: true` means that read returned at least one `Release`. A refused connection is 503 `CONNECTION_FAILED`. An empty graph or a failed read is 503 `QUERY_FAILED`. `NOT_IMPLEMENTED` remains only when `createApiServer` is called without a status probe. This is not a Docker, hosted, or Cloud claim.

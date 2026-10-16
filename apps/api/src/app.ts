@@ -1,6 +1,7 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import { randomUUID } from 'node:crypto';
 import type { AnalysisResponse, ApiError, ApprovalResponse, GraphStatusResponse } from '@cubes/contracts';
+import { dispatchStudio, type IdeaverseGateway } from './ideaverse.js';
 
 export interface Principal {
   id: 'kanny' | 'serena' | 'roy' | 'ava' | 'guz';
@@ -74,18 +75,19 @@ interface ApprovalBody {
   evidenceSourceIds: string[];
 }
 
-export function createApiServer(options?: { sessions?: SessionStore; graph?: ApprovalGraph; analysis?: ReleaseReader; status?: GraphStatusProbe }): Server {
+export function createApiServer(options?: { sessions?: SessionStore; graph?: ApprovalGraph; analysis?: ReleaseReader; status?: GraphStatusProbe; ideaverse?: IdeaverseGateway }): Server {
   const sessions = options?.sessions ?? denyAllSessions;
   const graph = options?.graph ?? unavailableGraph;
   const analysis = options?.analysis ?? unconfiguredAnalysis;
   const status = options?.status;
+  const ideaverse = options?.ideaverse;
   return createServer((request, response) => {
-    void route(request, response, sessions, graph, analysis, status);
+    void route(request, response, sessions, graph, analysis, status, ideaverse);
   });
 }
 
 async function route(
-  request: IncomingMessage, response: ServerResponse, sessions: SessionStore, graph: ApprovalGraph, analysis: ReleaseReader, status?: GraphStatusProbe,
+  request: IncomingMessage, response: ServerResponse, sessions: SessionStore, graph: ApprovalGraph, analysis: ReleaseReader, status?: GraphStatusProbe, ideaverse?: IdeaverseGateway,
 ): Promise<void> {
   const requestId = randomUUID();
   response.setHeader('Content-Type', 'application/json; charset=utf-8');
@@ -97,6 +99,10 @@ async function route(
     }
     if (request.method === 'GET' && request.url === '/api/graph/status') {
       await getGraphStatus(response, requestId, status);
+      return;
+    }
+    if (typeof request.url === 'string' && request.url.startsWith('/api/studio')) {
+      await dispatchStudio(request, response, () => principalFrom(request, sessions), ideaverse, requestId);
       return;
     }
     const releaseId = releaseIdFrom(request);
