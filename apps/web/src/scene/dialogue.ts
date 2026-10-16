@@ -1,12 +1,17 @@
 import type { AgentId, ScenePhase } from '@cubes/contracts';
 import type { AgentVisualConfig, PhraseDefinition, VisemeFrame } from './types';
+import {
+  findClipByAgentRole,
+  outageTranscript,
+  type AudioClipRole,
+} from './audioClips';
 
 export const AGENT_CONFIGS: Record<AgentId, AgentVisualConfig> = {
   roy: {
     id: 'roy',
     name: 'Roy',
     role: 'Operations & Strategy Agent',
-    circuitryColor: '#FFD700', // Gold circuitry
+    circuitryColor: '#FFD700',
     secondaryColor: '#FF8F00',
     glowColor: 'rgba(255, 215, 0, 0.45)',
     hairStyle: 'military',
@@ -17,10 +22,10 @@ export const AGENT_CONFIGS: Record<AgentId, AgentVisualConfig> = {
     id: 'ava',
     name: 'Ava',
     role: 'Graph & Evidence Reasoning Agent',
-    circuitryColor: '#B388FF', // Purple circuitry
+    circuitryColor: '#B388FF',
     secondaryColor: '#7C4DFF',
     glowColor: 'rgba(179, 136, 255, 0.45)',
-    hairStyle: 'asymmetric', // Approved asymmetric hairstyle
+    hairStyle: 'asymmetric',
     speechPitch: 1.15,
     speechRate: 1.05,
   },
@@ -28,7 +33,7 @@ export const AGENT_CONFIGS: Record<AgentId, AgentVisualConfig> = {
     id: 'guz',
     name: 'Guz',
     role: 'Verification & Audit Agent',
-    circuitryColor: '#00E676', // Green circuitry
+    circuitryColor: '#00E676',
     secondaryColor: '#00B0FF',
     glowColor: 'rgba(0, 230, 118, 0.45)',
     hairStyle: 'spikes',
@@ -37,115 +42,42 @@ export const AGENT_CONFIGS: Record<AgentId, AgentVisualConfig> = {
   },
 };
 
-export const PHRASE_GREETING: PhraseDefinition = {
-  phrase: 'Greetings, Commander',
-  expression: 'smile',
-  durationMs: 1350,
-  visemes: [
-    { timeMs: 0, viseme: 'viseme_narrow' },   // "Gr-"
-    { timeMs: 160, viseme: 'viseme_open' },    // "-ee-"
-    { timeMs: 380, viseme: 'viseme_narrow' },  // "-tings"
-    { timeMs: 550, viseme: 'rest' },           // comma pause
-    { timeMs: 650, viseme: 'viseme_round' },   // "Co-"
-    { timeMs: 850, viseme: 'viseme_open' },    // "-mma-n-"
-    { timeMs: 1100, viseme: 'viseme_narrow' }, // "-der"
-    { timeMs: 1300, viseme: 'smile' },         // brief welcoming smile
-  ],
-};
+function phraseFromRole(agentId: AgentId, role: AudioClipRole): PhraseDefinition {
+  const clip = findClipByAgentRole(agentId, role);
+  if (!clip) {
+    return { phrase: '', expression: 'idle', durationMs: 0, visemes: [] };
+  }
+  return {
+    phrase: clip.transcript,
+    expression: clip.expression,
+    durationMs: clip.durationMs,
+    visemes: clip.visemes as VisemeFrame[],
+  };
+}
 
-export const PHRASE_HELP: PhraseDefinition = {
-  phrase: 'how may I help',
-  expression: 'attentive',
-  durationMs: 950,
-  visemes: [
-    { timeMs: 0, viseme: 'viseme_open' },     // "how"
-    { timeMs: 220, viseme: 'viseme_open' },   // "may"
-    { timeMs: 420, viseme: 'viseme_narrow' }, // "I"
-    { timeMs: 580, viseme: 'viseme_open' },   // "he-"
-    { timeMs: 760, viseme: 'viseme_narrow' }, // "-lp"
-    { timeMs: 900, viseme: 'rest' },
-  ],
-};
-
-export const PHRASE_AFFIRMATIVE: PhraseDefinition = {
-  phrase: 'yes',
-  expression: 'nod',
-  durationMs: 480,
-  visemes: [
-    { timeMs: 0, viseme: 'viseme_narrow' },   // "y-"
-    { timeMs: 100, viseme: 'viseme_open' },   // "-es"
-    { timeMs: 280, viseme: 'viseme_narrow' }, // "-ss"
-    { timeMs: 420, viseme: 'rest' },
-  ],
-};
-
-export const PHRASE_NEGATIVE: PhraseDefinition = {
-  phrase: 'no',
-  expression: 'shake',
-  durationMs: 480,
-  visemes: [
-    { timeMs: 0, viseme: 'viseme_narrow' },   // "n-"
-    { timeMs: 100, viseme: 'viseme_round' },  // "-o"
-    { timeMs: 360, viseme: 'rest' },
-  ],
-};
+/** Shared-role fallbacks (Roy timings) for callers that still use the old constants. */
+export const PHRASE_GREETING: PhraseDefinition = phraseFromRole('roy', 'greeting');
+export const PHRASE_HELP: PhraseDefinition = phraseFromRole('roy', 'help');
+export const PHRASE_AFFIRMATIVE: PhraseDefinition = phraseFromRole('roy', 'yes');
+export const PHRASE_NEGATIVE: PhraseDefinition = phraseFromRole('roy', 'no');
+export const PHRASE_TASK_OPTIONAL: PhraseDefinition = phraseFromRole('roy', 'task_optional');
 
 export const TASK_START_CYCLE: readonly PhraseDefinition[] = [
-  {
-    phrase: "I'll get right on it.",
-    expression: 'focused',
-    durationMs: 1150,
-    visemes: [
-      { timeMs: 0, viseme: 'viseme_narrow' },   // "I'll"
-      { timeMs: 180, viseme: 'viseme_open' },   // "get"
-      { timeMs: 380, viseme: 'viseme_narrow' }, // "right"
-      { timeMs: 600, viseme: 'viseme_round' },  // "on"
-      { timeMs: 820, viseme: 'viseme_narrow' }, // "it."
-      { timeMs: 1050, viseme: 'rest' },
-    ],
-  },
-  {
-    phrase: 'Task beginning',
-    expression: 'focused',
-    durationMs: 1050,
-    visemes: [
-      { timeMs: 0, viseme: 'viseme_narrow' },   // "Ta-"
-      { timeMs: 160, viseme: 'viseme_open' },   // "-sk"
-      { timeMs: 400, viseme: 'viseme_narrow' }, // "be-"
-      { timeMs: 600, viseme: 'viseme_open' },   // "-gin-"
-      { timeMs: 820, viseme: 'viseme_narrow' }, // "-ning"
-      { timeMs: 1000, viseme: 'rest' },
-    ],
-  },
-  {
-    phrase: 'Underway.',
-    expression: 'focused',
-    durationMs: 850,
-    visemes: [
-      { timeMs: 0, viseme: 'viseme_round' },    // "Un-"
-      { timeMs: 200, viseme: 'viseme_open' },   // "-der-"
-      { timeMs: 480, viseme: 'viseme_narrow' }, // "-way."
-      { timeMs: 780, viseme: 'rest' },
-    ],
-  },
+  phraseFromRole('roy', 'task_start_a'),
+  phraseFromRole('roy', 'task_start_b'),
+  phraseFromRole('roy', 'task_start_c'),
 ] as const;
 
-export const PHRASE_TASK_OPTIONAL: PhraseDefinition = {
-  phrase: 'On it.',
-  expression: 'focused',
-  durationMs: 550,
-  visemes: [
-    { timeMs: 0, viseme: 'viseme_round' },    // "On"
-    { timeMs: 220, viseme: 'viseme_narrow' }, // "it."
-    { timeMs: 500, viseme: 'rest' },
-  ],
-};
+/** Per-agent phrase defs from accepted handoff pin fce5110. */
+export function agentPhrase(agentId: AgentId, role: AudioClipRole): PhraseDefinition {
+  return phraseFromRole(agentId, role);
+}
 
-/** Approved fixed notices. Apostrophes are U+2019, matching issue #29. */
+/** Approved outage WAV transcripts (pin fce5110 / Jay attestation). */
 export const GRAPH_OUTAGE_NOTICES: Record<AgentId, string> = {
-  roy: 'FalkorDB is disconnected. Operations are offline.',
-  ava: 'I can\u2019t access the company\u2019s knowledge. Information is unavailable until FalkorDB reconnects.',
-  guz: 'I can\u2019t verify any sources. I won\u2019t provide an answer without evidence.',
+  roy: outageTranscript('roy'),
+  ava: outageTranscript('ava'),
+  guz: outageTranscript('guz'),
 };
 
 const BLOCKED_STATUS_CAPTIONS: Record<Exclude<ScenePhase, 'READY' | 'GRAPH_UNAVAILABLE'>, string> = {
@@ -171,14 +103,18 @@ export function blockedStatusCaption(agentId: AgentId, phase: ScenePhase | undef
   return BLOCKED_STATUS_CAPTIONS[resolved];
 }
 
-export function getNextTaskStartPhrase(currentIndex: number): {
+export function getNextTaskStartPhrase(
+  currentIndex: number,
+  agentId: AgentId = 'roy'
+): {
   phraseDef: PhraseDefinition;
   nextIndex: number;
 } {
-  const normalizedIndex = Math.abs(currentIndex) % TASK_START_CYCLE.length;
+  const cycle: AudioClipRole[] = ['task_start_a', 'task_start_b', 'task_start_c'];
+  const normalizedIndex = Math.abs(currentIndex) % cycle.length;
   return {
-    phraseDef: TASK_START_CYCLE[normalizedIndex]!,
-    nextIndex: (normalizedIndex + 1) % TASK_START_CYCLE.length,
+    phraseDef: phraseFromRole(agentId, cycle[normalizedIndex]!),
+    nextIndex: (normalizedIndex + 1) % cycle.length,
   };
 }
 

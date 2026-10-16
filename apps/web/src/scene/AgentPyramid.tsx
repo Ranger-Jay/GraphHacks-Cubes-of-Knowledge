@@ -2,18 +2,16 @@ import React, { useState, useEffect, useRef } from 'react';
 import type { AgentId, SceneData, ScenePhase, SceneRuntimeContext } from '@cubes/contracts';
 import type { AgentVisualConfig, ExpressionId, VisemeId } from './types';
 import {
-  PHRASE_GREETING,
-  PHRASE_HELP,
-  PHRASE_AFFIRMATIVE,
-  PHRASE_NEGATIVE,
   blockedStatusCaption,
   findVisemeAtTime,
   getNextTaskStartPhrase,
   isApprovedOutageNotice,
   normalSpeechAllowed,
+  agentPhrase,
 } from './dialogue';
 import { AgentPortrait } from './AgentPortrait';
-import { speakAuthorizedPhrase, cancelSpeech } from './audio';
+import { speakAuthorizedPhrase, cancelSpeech, enforcePhaseGate } from './audio';
+import type { PhraseDefinition } from './types';
 
 // Module-level session greeting set (persists across remounts within the same session)
 const SESSION_GREETED_AGENTS = new Set<AgentId>();
@@ -124,7 +122,7 @@ export const AgentPyramid: React.FC<AgentPyramidProps> = ({
 
   // Play a phrase with viseme synchronization and caption
   const playPhrase = (
-    phraseDef: typeof PHRASE_GREETING,
+    phraseDef: PhraseDefinition,
     onFinish?: () => void
   ) => {
     const current = phaseRef.current;
@@ -177,16 +175,19 @@ export const AgentPyramid: React.FC<AgentPyramidProps> = ({
     if (!normalSpeechAllowed(phase)) return;
     if (!SESSION_GREETED_AGENTS.has(agent.id)) {
       SESSION_GREETED_AGENTS.add(agent.id);
-      playPhrase(PHRASE_GREETING);
+      playPhrase(agentPhrase(agent.id, 'greeting'));
     }
     return () => {
       if (!isOpen) stopActiveSpeech();
     };
   }, [isOpen, agent.id, phase]);
 
-  // Leave READY: cancel stale speech. Graph loss shows only the approved notice.
+  // Phase change: drop clips the new phase does not allow (outage must stop on READY).
+  // Blocked phases still show only the approved notice.
   useEffect(() => {
-    if (!isOpen || normalSpeechAllowed(phase)) return;
+    if (!isOpen) return;
+    enforcePhaseGate(phase);
+    if (normalSpeechAllowed(phase)) return;
     showBlockedCaption();
   }, [isOpen, phase, agent.id]);
 
@@ -205,7 +206,7 @@ export const AgentPyramid: React.FC<AgentPyramidProps> = ({
       showBlockedCaption();
       return;
     }
-    playPhrase(PHRASE_HELP);
+    playPhrase(agentPhrase(agent.id, 'help'));
   };
 
   // Trigger 3: Confirmed affirmative
@@ -215,7 +216,7 @@ export const AgentPyramid: React.FC<AgentPyramidProps> = ({
       showBlockedCaption();
       return;
     }
-    playPhrase(PHRASE_AFFIRMATIVE);
+    playPhrase(agentPhrase(agent.id, 'yes'));
   };
 
   // Trigger 4: Confirmed negative
@@ -225,7 +226,7 @@ export const AgentPyramid: React.FC<AgentPyramidProps> = ({
       showBlockedCaption();
       return;
     }
-    playPhrase(PHRASE_NEGATIVE);
+    playPhrase(agentPhrase(agent.id, 'no'));
   };
 
   // Trigger 5: Actual task start (strictly guarded by application truth with synchronous in-flight lock)
@@ -252,7 +253,7 @@ export const AgentPyramid: React.FC<AgentPyramidProps> = ({
         phaseRef.current
       );
       if (started && phaseRef.current === 'READY') {
-        const { phraseDef, nextIndex } = getNextTaskStartPhrase(taskCycleIndex);
+        const { phraseDef, nextIndex } = getNextTaskStartPhrase(taskCycleIndex, agent.id);
         setTaskCycleIndex(nextIndex);
         playPhrase(phraseDef);
       }

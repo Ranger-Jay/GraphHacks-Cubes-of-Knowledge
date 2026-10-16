@@ -1,11 +1,31 @@
-import type { ScenePhase } from '@cubes/contracts';
+import type { AgentId, ScenePhase } from '@cubes/contracts';
 import type { AgentVisualConfig } from './types';
-import { isApprovedOutageNotice } from './dialogue';
+import {
+  AUDIO_BASE_PATH,
+  findClipByAgentRole,
+  findClipByAgentTranscript,
+  findClipByFile,
+  normalizeTranscript,
+  type AudioClip,
+  type AudioClipRole,
+} from './audioClips';
 
 let audioMuted = true;
+let activeAudio: HTMLAudioElement | null = null;
+let activeClipFile: string | null = null;
+
+export type SpeakOptions = {
+  onEnd?: () => void;
+  /** Required for recovery clips. Ordinary/outage clips ignore this flag. */
+  recoveryAuthorized?: boolean;
+};
 
 export function isAudioMuted(): boolean {
   return audioMuted;
+}
+
+export function getActiveClipFile(): string | null {
+  return activeClipFile;
 }
 
 export function setAudioMuted(muted: boolean): void {
@@ -15,6 +35,7 @@ export function setAudioMuted(muted: boolean): void {
   }
 }
 
+/** Stop browser synthesis leftovers and any active WAV element. */
 export function cancelSpeech(): void {
   if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
     try {
@@ -23,63 +44,143 @@ export function cancelSpeech(): void {
       // Ignore synthesis cancellation failure in headless or unsupported environments
     }
   }
+  if (activeAudio) {
+    try {
+      activeAudio.onended = null;
+      activeAudio.onerror = null;
+      activeAudio.pause();
+      activeAudio.currentTime = 0;
+    } catch {
+      // Safe cancellation
+    }
+    activeAudio = null;
+  }
+  activeClipFile = null;
 }
 
-/** Ready speech, or the approved graph-outage line. Every other phrase is refused. */
-export function speakAuthorizedPhrase(
-  phrase: string,
-  agent: AgentVisualConfig,
-  phase: ScenePhase | undefined,
-  onEnd?: () => void
-): () => void {
-  const allowed = phase === 'READY' || (phase === 'GRAPH_UNAVAILABLE' && isApprovedOutageNotice(phrase));
-  if (!allowed) return () => {};
-  return speakPhrase(phrase, agent, onEnd);
+function clipUrl(clip: AudioClip): string {
+  return `${AUDIO_BASE_PATH}/${clip.file}`;
 }
 
-export function speakPhrase(
-  phrase: string,
-  agent: AgentVisualConfig,
-  onEnd?: () => void
-): () => void {
-  // If muted or in non-browser environment, don't synthesize audio, invoke onEnd cleanly
-  if (audioMuted || typeof window === 'undefined' || !('speechSynthesis' in window)) {
+function gateAllows(clip: AudioClip, phase: ScenePhase | undefined, recoveryAuthorized: boolean): boolean {
+  if (clip.kind === 'ordinary') {
+    return phase === 'READY';
+  }
+  if (clip.kind === 'outage') {
+    return phase === 'GRAPH_UNAVAILABLE';
+  }
+  // recovery
+  return phase === 'READY' && recoveryAuthorized === true;
+}
+
+/** Cancel the active WAV when the current phase no longer allows that clip. */
+export function enforcePhaseGate(phase: ScenePhase | undefined, recoveryAuthorized = false): void {
+  if (!activeClipFile) return;
+  const clip = findClipByFile(activeClipFile);
+  if (!clip || !gateAllows(clip, phase, recoveryAuthorized)) {
+    cancelSpeech();
+  }
+}
+
+function playClip(clip: AudioClip, onEnd?: () => void): () => void {
+  // WAV playback needs Audio; headless tests inject FakeAudio. Mute still refuses.
+  if (audioMuted || typeof Audio === 'undefined') {
     return () => {};
   }
 
+  cancelSpeech();
+
   try {
-    window.speechSynthesis.cancel(); // Prevent audio queue buildup on rapid clicks
-    const utterance = new SpeechSynthesisUtterance(phrase);
-    utterance.pitch = agent.speechPitch;
-    utterance.rate = agent.speechRate;
-    
-    // Choose appropriate voice if available
-    const voices = window.speechSynthesis.getVoices?.() || [];
-    if (voices.length > 0) {
-      // Fallback selector by agent characteristic
-      if (agent.id === 'ava') {
-        const femaleVoice = voices.find(v => v.lang.startsWith('en') && (v.name.includes('Female') || v.name.includes('Zira') || v.name.includes('Samantha')));
-        if (femaleVoice) utterance.voice = femaleVoice;
-      } else {
-        const maleVoice = voices.find(v => v.lang.startsWith('en') && (v.name.includes('Male') || v.name.includes('David') || v.name.includes('Alex')));
-        if (maleVoice) utterance.voice = maleVoice;
-      }
-    }
+    const audio = new Audio(clipUrl(clip));
+    activeAudio = audio;
+    activeClipFile = clip.file;
 
-    if (onEnd) {
-      utterance.onend = () => onEnd();
-      utterance.onerror = () => onEnd();
-    }
+    const finish = () => {
+      // Cancelled or superseded clips must not fire onEnd (AbortError after pause).
+      if (activeAudio !== audio) return;
+      activeAudio = null;
+      activeClipFile = null;
+      onEnd?.();
+    };
 
-    window.speechSynthesis.speak(utterance);
+    audio.onended = finish;
+    audio.onerror = finish;
+    void audio.play().catch(() => {
+      finish();
+    });
+
     return () => {
-      try {
-        window.speechSynthesis.cancel();
-      } catch {
-        // Safe cancellation
+      if (activeAudio === audio) {
+        cancelSpeech();
       }
     };
   } catch {
     return () => {};
   }
+}
+
+/**
+ * Ready ordinary WAV, approved outage WAV on GRAPH_UNAVAILABLE, or recovery WAV when
+ * recoveryAuthorized is true after a real recovery / fresh authorized analysis.
+ */
+export function speakAuthorizedPhrase(
+  phrase: string,
+  agent: AgentVisualConfig,
+  phase: ScenePhase | undefined,
+  onEndOrOptions?: (() => void) | SpeakOptions
+): () => void {
+  const options: SpeakOptions =
+    typeof onEndOrOptions === 'function' ? { onEnd: onEndOrOptions } : onEndOrOptions ?? {};
+  const clip = findClipByAgentTranscript(agent.id, phrase);
+  if (!clip) return () => {};
+  if (!gateAllows(clip, phase, options.recoveryAuthorized === true)) return () => {};
+  return playClip(clip, options.onEnd);
+}
+
+/** Resolve and play by accepted clip role. Same phase/recovery gates as speakAuthorizedPhrase. */
+export function speakAuthorizedClip(
+  agentId: AgentId,
+  role: AudioClipRole,
+  phase: ScenePhase | undefined,
+  options: SpeakOptions = {}
+): () => void {
+  const clip = findClipByAgentRole(agentId, role);
+  if (!clip) return () => {};
+  if (!gateAllows(clip, phase, options.recoveryAuthorized === true)) return () => {};
+  return playClip(clip, options.onEnd);
+}
+
+/** Recovery-only entry: refuses unless READY and recoveryAuthorized. */
+export function speakRecoveryClip(
+  agentId: AgentId,
+  phase: ScenePhase | undefined,
+  recoveryAuthorized: boolean,
+  onEnd?: () => void
+): () => void {
+  if (!recoveryAuthorized || phase !== 'READY') return () => {};
+  // Guz has no recovery master in the accepted 29; refuse rather than invent.
+  if (agentId === 'guz') return () => {};
+  const role: AudioClipRole = agentId === 'ava' ? 'reconnect_check' : 'ready';
+  const options: SpeakOptions = { recoveryAuthorized: true };
+  if (onEnd) options.onEnd = onEnd;
+  return speakAuthorizedClip(agentId, role, phase, options);
+}
+
+export function isApprovedOutageTranscript(agentId: AgentId, phrase: string): boolean {
+  const clip = findClipByAgentRole(agentId, 'outage');
+  if (!clip) return false;
+  return normalizeTranscript(clip.transcript) === normalizeTranscript(phrase);
+}
+
+/** @deprecated Prefer WAV path; kept so older call sites cancel cleanly. */
+export function speakPhrase(
+  _phrase: string,
+  agent: AgentVisualConfig,
+  onEnd?: () => void
+): () => void {
+  // No ungated synthesis fallback: recorded masters only.
+  void _phrase;
+  void agent;
+  void onEnd;
+  return () => {};
 }

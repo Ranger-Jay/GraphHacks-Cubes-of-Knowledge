@@ -22,8 +22,53 @@ import {
   findVisemeAtTime,
   normalSpeechAllowed,
 } from '../../apps/web/src/scene/dialogue';
-import { isAudioMuted, setAudioMuted, cancelSpeech, speakAuthorizedPhrase } from '../../apps/web/src/scene/audio';
+import {
+  isAudioMuted,
+  setAudioMuted,
+  cancelSpeech,
+  enforcePhaseGate,
+  speakAuthorizedPhrase,
+  speakAuthorizedClip,
+  speakRecoveryClip,
+  getActiveClipFile,
+} from '../../apps/web/src/scene/audio';
+import { AUDIO_CLIPS, findClipByAgentRole } from '../../apps/web/src/scene/audioClips';
 
+type FakeAudioInstance = {
+  src: string;
+  paused: boolean;
+  currentTime: number;
+  onended: ((ev?: unknown) => void) | null;
+  onerror: ((ev?: unknown) => void) | null;
+  play: () => Promise<void>;
+  pause: () => void;
+};
+
+const playedSources: string[] = [];
+
+class FakeAudio {
+  src: string;
+  paused = true;
+  currentTime = 0;
+  onended: ((ev?: unknown) => void) | null = null;
+  onerror: ((ev?: unknown) => void) | null = null;
+
+  constructor(src: string) {
+    this.src = src;
+    playedSources.push(src);
+  }
+
+  play(): Promise<void> {
+    this.paused = false;
+    return Promise.resolve();
+  }
+
+  pause(): void {
+    this.paused = true;
+  }
+}
+
+(globalThis as { Audio?: typeof FakeAudio }).Audio = FakeAudio;
 
 // Test Fixtures
 const availableData: SceneData = {
@@ -108,9 +153,11 @@ test('2. Dialogue trigger phrases and visemes match the exact brief specificatio
 
 test('3. Viseme frame timing lookup returns correct mouth positions', () => {
   const visemes = PHRASE_GREETING.visemes;
+  // Accepted Roy greeting curve from pin fce5110
   assert.equal(findVisemeAtTime(visemes, 0), 'viseme_narrow');
   assert.equal(findVisemeAtTime(visemes, 200), 'viseme_open');
-  assert.equal(findVisemeAtTime(visemes, 650), 'viseme_round');
+  assert.equal(findVisemeAtTime(visemes, 650), 'rest');
+  assert.equal(findVisemeAtTime(visemes, 700), 'viseme_round');
   assert.equal(findVisemeAtTime(visemes, 1300), 'smile');
 });
 
@@ -455,14 +502,15 @@ test('15. P3 Synchronous lock releases cleanly if handler throws/rejects', async
 });
 
 test('16. Approved outage notices are exact and other blocked phases do not use them', () => {
-  assert.equal(GRAPH_OUTAGE_NOTICES.roy, 'FalkorDB is disconnected. Operations are offline.');
+  // Match accepted WAV masters (pin fce5110); Guz uses "will not".
+  assert.equal(GRAPH_OUTAGE_NOTICES.roy, 'FalkorDB is unavailable. Operations are offline.');
   assert.equal(
     GRAPH_OUTAGE_NOTICES.ava,
-    'I can\u2019t access the company\u2019s knowledge. Information is unavailable until FalkorDB reconnects.'
+    'I can\u2019t access the company\u2019s knowledge. Information is unavailable until FalkorDB is available again.'
   );
   assert.equal(
     GRAPH_OUTAGE_NOTICES.guz,
-    'I can\u2019t verify any sources. I won\u2019t provide an answer without evidence.'
+    'I can\u2019t verify any sources. I will not provide an answer without evidence.'
   );
   assert.equal(normalSpeechAllowed('READY'), true);
   assert.equal(normalSpeechAllowed(undefined), false);
@@ -540,5 +588,70 @@ test('19. Authorized speech refuses ordinary phrases while the graph is unavaila
   assert.equal(typeof allowed, 'function');
   const ready = speakAuthorizedPhrase(PHRASE_GREETING.phrase, AGENT_CONFIGS.roy, 'READY');
   assert.equal(typeof ready, 'function');
+});
+
+test('20. Recorded WAV catalog matches the accepted 29-clip pin', () => {
+  assert.equal(AUDIO_CLIPS.length, 29);
+  assert.equal(findClipByAgentRole('roy', 'outage')?.file, 'roy_09_outage_v002.wav');
+  assert.equal(GRAPH_OUTAGE_NOTICES.guz.includes('will not'), true);
+  assert.equal(GRAPH_OUTAGE_NOTICES.roy, 'FalkorDB is unavailable. Operations are offline.');
+});
+
+test('21. WAV gates: mute default, READY ordinary, outage-only on GRAPH_UNAVAILABLE, recovery requires auth', () => {
+  playedSources.length = 0;
+  setAudioMuted(true);
+  speakAuthorizedClip('roy', 'greeting', 'READY');
+  assert.equal(playedSources.length, 0, 'muted refuses playback');
+
+  setAudioMuted(false);
+  speakAuthorizedClip('roy', 'greeting', 'CHECKING');
+  assert.equal(playedSources.length, 0, 'non-READY refuses ordinary');
+
+  speakAuthorizedClip('roy', 'greeting', 'READY');
+  assert.equal(playedSources.at(-1), '/art/audio/roy_01_greeting_v001.wav');
+  assert.equal(getActiveClipFile(), 'roy_01_greeting_v001.wav');
+
+  speakAuthorizedClip('roy', 'outage', 'READY');
+  assert.notEqual(getActiveClipFile(), 'roy_09_outage_v002.wav', 'outage refused while READY');
+
+  speakAuthorizedClip('roy', 'outage', 'GRAPH_UNAVAILABLE');
+  assert.equal(getActiveClipFile(), 'roy_09_outage_v002.wav');
+
+  const beforeRecovery = playedSources.length;
+  speakRecoveryClip('roy', 'READY', false);
+  assert.equal(playedSources.length, beforeRecovery, 'recovery refused without authorization');
+
+  speakRecoveryClip('roy', 'GRAPH_UNAVAILABLE', true);
+  assert.equal(playedSources.length, beforeRecovery, 'recovery refused off READY');
+
+  speakRecoveryClip('roy', 'READY', true);
+  assert.equal(getActiveClipFile(), 'roy_10_ready_v001.wav');
+  const afterRoyRecovery = getActiveClipFile();
+  const playedAfterRoy = playedSources.length;
+
+  speakRecoveryClip('guz', 'READY', true);
+  assert.equal(getActiveClipFile(), afterRoyRecovery);
+  assert.equal(playedSources.length, playedAfterRoy, 'guz has no recovery master');
+
+  cancelSpeech();
+  assert.equal(getActiveClipFile(), null);
+  setAudioMuted(true);
+});
+
+test('22. Phase change away from the active clip gate cancels the WAV', () => {
+  playedSources.length = 0;
+  setAudioMuted(false);
+  speakAuthorizedClip('ava', 'outage', 'GRAPH_UNAVAILABLE');
+  assert.equal(getActiveClipFile(), 'ava_09_outage_v002.wav');
+  enforcePhaseGate('READY');
+  assert.equal(getActiveClipFile(), null, 'outage must stop when phase returns to READY');
+
+  speakAuthorizedClip('roy', 'greeting', 'READY');
+  assert.equal(getActiveClipFile(), 'roy_01_greeting_v001.wav');
+  enforcePhaseGate('READY');
+  assert.equal(getActiveClipFile(), 'roy_01_greeting_v001.wav', 'ordinary stays while READY');
+  enforcePhaseGate('GRAPH_UNAVAILABLE');
+  assert.equal(getActiveClipFile(), null, 'ordinary stops when READY is lost');
+  setAudioMuted(true);
 });
 
