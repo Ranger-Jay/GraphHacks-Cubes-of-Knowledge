@@ -109,7 +109,7 @@ export interface ImportRequest { tenantId: string; ideaId: string; idempotencyKe
 export type ImportResult =
   | { status: 'IMPORTED'; replayed: boolean; receipt: ImportReceipt }
   | { status: 'CONFLICT'; reason: 'KEY_REUSED' | 'STALE_REVISION' | 'ALREADY_IMPORTED'; currentRevision?: number; receipt?: ImportReceipt }
-  | { status: 'REJECTED'; reason: 'INVALID_REQUEST' | 'UNKNOWN_IDEA' | 'SOURCE_MISMATCH' | 'NOT_SEEDED' }
+  | { status: 'REJECTED'; reason: 'INVALID_REQUEST' | 'UNKNOWN_IDEA' | 'SOURCE_MISMATCH' | 'NOT_SEEDED' | 'AMBIGUOUS_IDENTITY' }
   | { status: 'UNAVAILABLE'; reason: 'CONNECTION_FAILED' | 'QUERY_FAILED' | 'MANIFEST_INVALID' };
 
 const sha = (s: string) => createHash('sha256').update(s).digest('hex');
@@ -119,10 +119,13 @@ const RECEIPT_FIELDS = 'r.ideaId AS ideaId, r.sha256 AS sha256, r.workspaceId AS
  * ONE write query. Every precondition is a guard of the same statement that bumps the revision and
  * creates the receipt and the membership edge: tenant on both endpoints, expected workspace revision,
  * every stored field the overview checks (hash, filename, size, timestamps) equal to the verified
- * manifest, idea not yet a member, key not yet used. The graph serializes writes, so concurrent
+ * manifest, idea not yet a member, key not yet used, and exactly ONE workspace and ONE idea node with those ids (duplicate
+ * identities would otherwise run the statement once per pair: a revision jump of 2 and twin receipts). The graph serializes writes, so concurrent
  * requests cannot both pass the guards. No row means nothing changed.
  */
 export const IMPORT_WRITE_QUERY = `
+MATCH (w0:Workspace {id: $workspaceId, tenantId: $tenantId}) WITH count(w0) AS wc WHERE wc = 1
+MATCH (i0:IdeaFile {id: $ideaId, tenantId: $tenantId}) WITH count(i0) AS ic WHERE ic = 1
 MATCH (w:Workspace {id: $workspaceId, tenantId: $tenantId}), (i:IdeaFile {id: $ideaId, tenantId: $tenantId})
 WHERE w.revision = $expectedRevision AND i.sha256 = $sha256 AND i.filename = $filename AND i.byteCount = $byteCount
   AND i.submittedAt = $submittedAt AND i.touchedAt = $touchedAt AND NOT (i)-[:IMPORTED_INTO]->(w)
@@ -172,6 +175,10 @@ export async function importIdea(client: GraphClient, repoRoot: string, req: Imp
     // No row: nothing changed. Classify why from a fresh read.
     const raced = settle(await receiptByKey(client, req.tenantId, keyHash));
     if (raced) return raced;
+    const dupCounts = (await client.read<{ w: number; i: number }>(
+      `OPTIONAL MATCH (w:Workspace {id: $workspaceId, tenantId: $tenantId}) WITH count(w) AS w
+       OPTIONAL MATCH (i:IdeaFile {id: $ideaId, tenantId: $tenantId}) RETURN w, count(i) AS i`, { workspaceId: WORKSPACE_ID, ideaId: idea.id, tenantId: req.tenantId }))[0];
+    if (dupCounts && (dupCounts.w > 1 || dupCounts.i > 1)) return { status: 'REJECTED', reason: 'AMBIGUOUS_IDENTITY' };
     const state = await client.read<{ revision: number | null; props: Record<string, unknown> | null; exists: boolean }>(
       `OPTIONAL MATCH (w:Workspace {id: $workspaceId, tenantId: $tenantId})
        OPTIONAL MATCH (i:IdeaFile {id: $ideaId, tenantId: $tenantId})
