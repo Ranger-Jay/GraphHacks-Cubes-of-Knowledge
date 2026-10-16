@@ -33,15 +33,17 @@ const copyFixtures = async (mutate: (name: string, doc: Record<string, unknown>)
 };
 const roleOf = (o: AgentProfileOverview, key: string) => { const a = o.assignments.find(x => x.principalKey === key)!.access; return a.state === 'ASSIGNED' ? a.role.name : a.state; };
 
-test('fixtures: owner text is verbatim, ids and voices exact, five roles, no Owner for an agent', async () => {
+test('fixtures: owner text is verbatim apart from two owner-confirmed spelling fixes, ids and voices exact, five roles, no Owner for an agent', async () => {
   const f = await loadAgentFixtures(root);
   const by = Object.fromEntries(f.profiles.map(p => [p.actorKey, p]));
   assert.deepEqual(f.profiles.map(p => [p.agentId, p.actorKey, p.name, p.apparentAge, p.color, p.emoji]), [['Agent012', 'ava', 'Ava', 28, '#B388FF', '😸'], ['Agent013', 'roy', 'Roy', 50, '#FFD700', '🐬'], ['Agent014', 'guz', 'Guz', 41, '#00E676', '🦁']]);
   assert.deepEqual([by['ava']!.voice.voiceId, by['roy']!.voice.voiceId, by['guz']!.voice.voiceId], ['XlDdozLmuTofIxK4BjPD', 'fPIfC3elMLbN9tNwMXkw', 'U7wWSnxIJwCjioxt86mk']);
   assert.deepEqual([by['ava']!.voice.voiceName, by['roy']!.voice.voiceName, by['guz']!.voice.voiceName], ['Misa (Asian-American)', 'Viraj (Indian-American)', 'Olaniyi (Nigerian-English)']);
-  // The owner's spelling is preserved, not corrected.
-  assert.equal(by['ava']!.personality, 'Warm, delightful, & aggreeable.');
-  assert.equal(by['roy']!.knownFor, 'Caution and relucant to deviate from source of truth.');
+  // The owner's text is kept verbatim except the two spelling mistakes the owner confirmed and asked us to correct (v032.00).
+  assert.equal(by['ava']!.personality, 'Warm, delightful, & agreeable.');
+  assert.equal(by['roy']!.knownFor, 'Caution and reluctant to deviate from source of truth.');
+  const doc = JSON.parse(await readFile(join(root, 'graph/seed/agents/agent-profiles.json'), 'utf8')) as { profiles: Record<string, unknown>[] };
+  assert.ok(!doc.profiles.some(p => /aggreeable|relucant/.test(JSON.stringify(p))), 'the corrected misspellings are gone from every profile (the fixture note records the change)');
   assert.equal(by['roy']!.assignment, 'Database Administrator of FalkorDb WAD Studios Cube');
   assert.equal(by['ava']!.skills.declaredPath, '..nodes/agents/agent012/skills.md');
   assert.equal(by['ava']!.skills.proposedPath, 'nodes/agents/agent012/skills.md');
@@ -315,4 +317,17 @@ test('a fixture-sourced assignment with forged provenance or a wrong DEFINED_IN 
   await g4.write("MATCH (:RoleAssignment {id: 'ra-ava-ws-wad-cube', tenantId: 't-wad'})-[e:GRANTS_ROLE|DEFINED_IN]->() DELETE e");
   await g4.write("MATCH (a:RoleAssignment {id: 'ra-ava-ws-wad-cube', tenantId: 't-wad'}), (r:AccessRole {id: 'role-operator', tenantId: 't-wad'}) SET a.roleId = 'role-operator', a.revision = 2, a.source = 'server-operation', a.assignedBy = 'owner' CREATE (a)-[:GRANTS_ROLE {id: 'e-authorized-2'}]->(r)");
   assert.equal(roleOf(await ov(g4), 'ava'), 'Operator');
+});
+
+test('after the spelling correction a graph seeded from the old text is flagged, and a re-seed brings it in line', async () => {
+  const g = await fresh('typofix');
+  await g.write("MATCH (n:AgentProfile {id: 'agentprofile-agent012', tenantId: 't-wad'}) SET n.personality = 'Warm, delightful, & aggreeable.'");
+  await g.write("MATCH (n:AgentProfile {id: 'agentprofile-agent013', tenantId: 't-wad'}) SET n.knownFor = 'Caution and relucant to deviate from source of truth.'");
+  const stale = await ov(g);
+  assert.deepEqual(stale.profiles.map(p => p.agentId), ['Agent014'], 'the two profiles still carrying the old text are withheld');
+  assert.ok(stale.integrity.some(i => i.id === 'agentprofile-agent012') && stale.integrity.some(i => i.id === 'agentprofile-agent013'));
+  await seedAgentProfiles(g, root);
+  const fixed = await ov(g); assert.deepEqual(fixed.integrity, []);
+  assert.equal(fixed.profiles.find(p => p.agentId === 'Agent012')!.personality, 'Warm, delightful, & agreeable.');
+  assert.equal(fixed.profiles.find(p => p.agentId === 'Agent013')!.knownFor, 'Caution and reluctant to deviate from source of truth.');
 });
