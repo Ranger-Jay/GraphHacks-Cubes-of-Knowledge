@@ -194,12 +194,17 @@ export function selectEligibleIdeaPool(
   };
 }
 
+export const COMET_INITIAL_OPACITY = 0.35;
+export const COMET_TICK_INTERVAL_MS = 250;
+
 export function computeCometOpacity(flightProgress: number, pullToCubeProgress: number, status: 'flying' | 'importing'): number {
   if (status === 'importing') {
     return Math.max(0, Number((1 - pullToCubeProgress).toFixed(4)));
   }
   const p = Math.max(0, Math.min(1, flightProgress));
-  if (p < 0.08) return Number((p / 0.08).toFixed(4));
+  if (p < 0.08) {
+    return Number((COMET_INITIAL_OPACITY + (1 - COMET_INITIAL_OPACITY) * (p / 0.08)).toFixed(4));
+  }
   if (p > 0.85) return Number(Math.max(0, (1 - p) / 0.15).toFixed(4));
   return 1;
 }
@@ -213,7 +218,7 @@ function makeCometSlot(idea: IdeaVerseCometItem, laneIndex: 0 | 1 | 2): ActiveCo
     importPullMs: 0,
     flightProgress: 0,
     pullToCubeProgress: 0,
-    opacity: 0,
+    opacity: COMET_INITIAL_OPACITY,
   };
 }
 
@@ -606,7 +611,7 @@ export const IdeaVerseComets: React.FC<IdeaVerseCometsProps> = ({
   importedIds,
   reducedMotion = false,
   initialPaused = false,
-  now = () => Date.parse(IDEAVERSE_REFERENCE_NOW_ISO),
+  now = () => Date.now(),
   onInspectIdea,
   onRequestImport,
   onMembershipRefreshed,
@@ -635,6 +640,16 @@ export const IdeaVerseComets: React.FC<IdeaVerseCometsProps> = ({
     }
     return undefined;
   }, [now]);
+
+  useEffect(() => {
+    if (reducedMotion || lifecycle.paused || lifecycle.tabHidden) {
+      return undefined;
+    }
+    const timer = setInterval(() => {
+      setLifecycle(prev => tickCometLifecycle(prev, now()));
+    }, COMET_TICK_INTERVAL_MS);
+    return () => clearInterval(timer);
+  }, [reducedMotion, lifecycle.paused, lifecycle.tabHidden, now]);
 
   const inspectedIdea =
     lifecycle.inspectedIdeaId !== null
