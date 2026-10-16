@@ -1,12 +1,14 @@
 /**
- * IdeaVerse card import state (v025.05). PURE, no network, no DOM.
+ * IdeaVerse card import state. PURE, no network, no DOM.
  *
- * UNPROVEN ADAPTER BOUNDARY: the types below mirror the PROPOSED contract in issue #40
- * (POST /api/studio/ideas/:ideaId/import with idempotencyKey + expected workspace revision, persisted receipt).
- * No such route, manifest or shared transport type exists in the repo at this base, and Mara/Buddy own the final
- * contract. The card therefore takes an injected `ImportIdea` function and never calls fetch itself. Until that
- * function is bound to a real, reviewed route the shell binds none and the card says so honestly.
+ * Transport types come from `@cubes/contracts` (PR #50 `buddy/import-contract-v030` v030.01 4abc0cb, merged unchanged at
+ * v025.13). Those are transport declarations, not runtime validation: every value that crosses the adapter boundary is
+ * still parsed here (`parseImportReceipt`) and joined to a FRESH overview read (`verifyImportReadback`). No shipped route
+ * implements the contract yet (Mara v026), so the card takes injected functions and the shell binds none.
  */
+import type {
+  IdeaImportReceipt, IdeaverseIdeaView as ContractIdeaView, IdeaverseOverviewResponse,
+} from '@cubes/contracts';
 
 /** Fields #39 puts on the card. `text` is a short fictional proposal, never a verified fact. */
 export interface IdeaSummary {
@@ -21,21 +23,16 @@ export interface IdeaSummary {
 }
 
 /**
- * Persisted receipt. Field names mirror `ImportReceipt` in packages/graph/src/ideaverse.ts at claude/studio-data-v023-followup
- * 366eb56c59da7c084d540cee00b86ba041e15600 EXACTLY. Integration ruling (issue #40, comment 6206859588): the canonical
- * receipt hash field is `sha256`. No `fileHash`, `fileSha256`, `witnessHash` or other alias exists, and none is accepted.
+ * Persisted receipt: exactly the six canonical fields of the contract's `IdeaImportReceipt` (graph `ImportReceipt` at
+ * 366eb56). Integration ruling (issue #40, comment 6206859588): the hash field is `sha256`. No `fileHash`, `fileSha256`,
+ * `witnessHash`, `nodeId` or `edgeId` exists, and none is accepted.
  */
-export interface ImportReceipt {
-  ideaId: string;
-  sha256: string;
-  workspaceId: string;
-  importedAt: string;
-  workspaceRevision: number;
-  membershipId: string;
-}
+export type ImportReceipt = IdeaImportReceipt;
 
 const RECEIPT_KEYS = ['ideaId', 'sha256', 'workspaceId', 'importedAt', 'workspaceRevision', 'membershipId'] as const;
 const SHA256 = /^[0-9a-f]{64}$/;
+/** Strict UTC instant, as the graph writes it (`2026-10-15T23:00:00.000Z`). Offsets and bare dates are refused. */
+const STRICT_UTC = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,9})?Z$/;
 
 /**
  * Runtime guard for a receipt that crosses the adapter boundary (types alone cannot stop an adapter that returns an
@@ -49,33 +46,18 @@ export function parseImportReceipt(raw: unknown): ImportReceipt | null {
   const { ideaId, sha256, workspaceId, importedAt, workspaceRevision, membershipId } = o;
   if (typeof ideaId !== 'string' || !ideaId || typeof workspaceId !== 'string' || !workspaceId || typeof membershipId !== 'string' || !membershipId) return null;
   if (typeof sha256 !== 'string' || !SHA256.test(sha256)) return null;
-  if (typeof importedAt !== 'string' || !Number.isFinite(Date.parse(importedAt))) return null;
-  if (typeof workspaceRevision !== 'number' || !Number.isInteger(workspaceRevision) || workspaceRevision < 1) return null;
+  if (typeof importedAt !== 'string' || !STRICT_UTC.test(importedAt) || !Number.isFinite(Date.parse(importedAt))) return null;
+  if (typeof workspaceRevision !== 'number' || !Number.isSafeInteger(workspaceRevision) || workspaceRevision < 1) return null;
   return { ideaId, sha256, workspaceId, importedAt, workspaceRevision, membershipId };
 }
 
 /**
- * Read-back shapes. Mirror `IdeaverseIdea` / `IdeaverseOverview` in packages/graph/src/ideaverse.ts at 366eb56 (the
- * overview already withholds any idea whose import state is not exactly one consistent receipt + membership + current
- * manifest hash, and lists it under `integrity`). UNPROVEN until a server adapter returns this over a reviewed route.
+ * Read-back shapes: the contract's `IdeaverseOverviewResponse` (the graph `ideaverseOverview` unchanged). The overview
+ * already withholds any idea whose import state is not exactly one consistent receipt + membership + current manifest
+ * hash, and lists it under `integrity`. Metadata only: it deliberately has no idea `text`.
  */
-export interface IdeaverseIdeaView {
-  id: string;
-  filename: string;
-  sha256: string;
-  byteCount: number;
-  submittedAt: string;
-  touchedAt: string;
-  synthetic: true;
-  classification: 'proposal';
-  imported: boolean;
-  importedAt?: string;
-  membershipId?: string;
-}
-export type IdeaverseOverviewView =
-  | { status: 'AVAILABLE'; tenantId: string; domain: 'studio'; workspace: { id: string; revision: number }; ideas: IdeaverseIdeaView[]; counts: { ideas: number; imported: number }; integrity: { id: string; reason: string }[] }
-  | { status: 'EMPTY'; tenantId: string; domain: 'studio' }
-  | { status: 'UNAVAILABLE'; reason: 'CONNECTION_FAILED' | 'QUERY_FAILED' | 'MANIFEST_INVALID' };
+export type IdeaverseIdeaView = ContractIdeaView;
+export type IdeaverseOverviewView = IdeaverseOverviewResponse;
 
 /** Fresh read of the studio overview (a NEW read, never a cached one). Injected like `ImportIdea`; the shell binds none. */
 export type ReadOverview = () => Promise<IdeaverseOverviewView>;
