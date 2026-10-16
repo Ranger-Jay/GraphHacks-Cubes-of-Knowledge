@@ -126,7 +126,7 @@ test('an assignment change shows on a fresh read, survives a re-seed, and a revo
 test('missing, unknown, conflicting, enforcing or wrong-workspace assignments show no role and no capability', async () => {
   const cases: [string, string, (a: string) => string, RegExp | null][] = [
     ['unknown role', 'unk', () => "MATCH (a:RoleAssignment {id: 'ra-roy-ws-wad-cube'}) SET a.roleId = 'role-superuser'", /unknown or did not verify/],
-    ['role changed without its edge', 'noedge', () => "MATCH (a:RoleAssignment {id: 'ra-roy-ws-wad-cube'}) SET a.roleId = 'role-owner'", /edge and role do not agree/],
+    ['role changed without its edge', 'noedge', () => "MATCH (a:RoleAssignment {id: 'ra-roy-ws-wad-cube'}) SET a.roleId = 'role-operator'", /edge and role do not agree/],
     ['claims enforcement', 'enf', () => "MATCH (a:RoleAssignment {id: 'ra-roy-ws-wad-cube'}) SET a.enforcement = 'ENFORCED'", /claims enforcement/],
     ['wrong workspace', 'ws', () => "MATCH (a:RoleAssignment {id: 'ra-roy-ws-wad-cube'}) SET a.workspaceId = 'ws-elsewhere'", /not for this workspace/],
     ['bad revision', 'rev', () => "MATCH (a:RoleAssignment {id: 'ra-roy-ws-wad-cube'}) SET a.revision = 0", /revision is invalid/],
