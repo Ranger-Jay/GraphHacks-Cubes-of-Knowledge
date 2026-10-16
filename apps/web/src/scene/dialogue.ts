@@ -150,7 +150,7 @@ export const PHRASE_TASK_OPTIONAL: PhraseDefinition = {
 export const GRAPH_OUTAGE_NOTICES: Record<AgentId, string> = {
   roy: 'FalkorDB is unavailable. Operations are offline.',
   ava: 'I can\u2019t access the company\u2019s knowledge. Information is unavailable until FalkorDB is available again.',
-  guz: 'I can\u2019t verify any sources. I won\u2019t provide an answer without evidence.',
+  guz: 'I can\u2019t verify any sources. I will not provide an answer without evidence.',
 };
 
 const BLOCKED_STATUS_CAPTIONS: Record<Exclude<ScenePhase, 'READY' | 'GRAPH_UNAVAILABLE'>, string> = {

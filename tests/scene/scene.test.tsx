@@ -462,7 +462,7 @@ test('16. Approved outage notices are exact and other blocked phases do not use 
   );
   assert.equal(
     GRAPH_OUTAGE_NOTICES.guz,
-    'I can\u2019t verify any sources. I won\u2019t provide an answer without evidence.'
+    'I can\u2019t verify any sources. I will not provide an answer without evidence.'
   );
   for (const notice of Object.values(GRAPH_OUTAGE_NOTICES)) {
     assert.ok(!/disconnect|reconnect|sever/i.test(notice), `outage notice must not claim a lost connection: ${notice}`);
