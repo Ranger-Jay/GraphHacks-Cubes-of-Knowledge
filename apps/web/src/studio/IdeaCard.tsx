@@ -1,6 +1,6 @@
 import { useEffect, useReducer, useRef, useState } from 'react';
 import {
-  IMPORT_FAILURE_COPY, IMPORT_UNBOUND_COPY, UNCONFIRMED_COPY, formatUtcDate, importReducer, initialImportState, isCloseKey, verifyImportReadback,
+  IMPORT_FAILURE_COPY, IMPORT_UNBOUND_COPY, UNCONFIRMED_ACTION_COPY, UNCONFIRMED_COPY, formatUtcDate, importReducer, initialImportState, isCloseKey, verifyImportReadback,
   type IdeaSummary, type ImportIdea, type ImportReceipt, type ImportState, type ReadOverview, type VerifyResult,
 } from './ideaImport';
 
@@ -20,9 +20,10 @@ export interface IdeaCardProps {
 const defaultKey = () => (globalThis.crypto?.randomUUID?.() ?? `idea-${Date.now()}-${Math.random().toString(36).slice(2)}`);
 
 /** Presentational part (also what the static-markup tests render). */
-export function IdeaCardView({ idea, state, bound, onAdd, onClose, titleId, bodyId }: {
-  idea: IdeaSummary; state: ImportState; bound: boolean; onAdd: () => void; onClose: () => void; titleId: string; bodyId: string;
+export function IdeaCardView({ idea, state, bound, onAdd, onRecheck, onClose, titleId, bodyId }: {
+  idea: IdeaSummary; state: ImportState; bound: boolean; onAdd: () => void; onRecheck?: () => void; onClose: () => void; titleId: string; bodyId: string;
 }) {
+  const recheck = state.phase === 'unconfirmed' && state.receipt !== null;
   const pending = state.phase === 'pending';
   const verifying = state.phase === 'verifying';
   const busy = pending || verifying;
@@ -40,13 +41,13 @@ export function IdeaCardView({ idea, state, bound, onAdd, onClose, titleId, body
         {pending && 'Adding to the cube...'}
         {verifying && 'Confirming with the cube...'}
         {added && 'Added to the cube.'}
-        {state.phase === 'unconfirmed' && UNCONFIRMED_COPY[state.reason]}
+        {state.phase === 'unconfirmed' && `${UNCONFIRMED_COPY[state.reason]} ${recheck ? UNCONFIRMED_ACTION_COPY.recheck : UNCONFIRMED_ACTION_COPY.retry}`}
         {state.phase === 'error' && IMPORT_FAILURE_COPY[state.reason]}
         {!bound && state.phase === 'idle' && IMPORT_UNBOUND_COPY}
       </div>
       <div className="idea-card-actions">
-        <button type="button" className="idea-card-add" onClick={onAdd} disabled={!bound || busy || added} aria-busy={busy}>
-          {added ? 'Added' : pending ? 'Adding...' : verifying ? 'Confirming...' : state.phase === 'error' || state.phase === 'unconfirmed' ? 'Retry Add to cube' : 'Add to cube'}
+        <button type="button" className="idea-card-add" onClick={recheck && onRecheck ? onRecheck : onAdd} disabled={!bound || busy || added} aria-busy={busy}>
+          {added ? 'Added' : pending ? 'Adding...' : verifying ? 'Confirming...' : recheck ? 'Re-check' : state.phase === 'error' || state.phase === 'unconfirmed' ? 'Retry Add to cube' : 'Add to cube'}
         </button>
         <button type="button" className="idea-card-close" onClick={onClose}>Close</button>
       </div>
@@ -117,5 +118,5 @@ export function IdeaCard({ idea, importIdea, readOverview, onAdded, onClose, new
       () => { if (live.current.mounted && live.current.ideaId === forIdea) dispatch({ type: 'settled', requestId, outcome: { kind: 'failed' } }); },
     );
   };
-  return <IdeaCardView idea={idea} state={state} bound={!!importIdea && !!readOverview} onAdd={submit} onClose={onClose} titleId={titleId} bodyId={bodyId} />;
+  return <IdeaCardView idea={idea} state={state} bound={!!importIdea && !!readOverview} onAdd={submit} onRecheck={() => dispatch({ type: 'recheck' })} onClose={onClose} titleId={titleId} bodyId={bodyId} />;
 }

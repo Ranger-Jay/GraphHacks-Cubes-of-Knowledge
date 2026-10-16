@@ -199,14 +199,24 @@ export const UNCONFIRMED_COPY: Record<UnconfirmedReason, string> = {
   mismatch: 'The cube record does not match the receipt, so it is not confirmed.',
 };
 
-/** Honest, plain-language reasons. None of them claims anything was saved. */
+/**
+ * Honest, plain-language reasons. None of them claims that anything was or was not saved: only an outcome the cube
+ * confirmed can say "Added", and a refusal or failure without proof is "unconfirmed", never "Nothing was saved"
+ * (issue #40 ruling, comment 6206859588).
+ */
 export const IMPORT_FAILURE_COPY: Record<ImportFailure, string> = {
-  denied: 'Adding ideas needs owner access. Nothing was saved.',
-  unavailable: 'The cube data is unavailable right now. Nothing was saved.',
-  conflict: 'The cube changed since this card opened. Close it, look again, then retry. Nothing was saved.',
+  denied: 'Adding ideas needs owner access. The server refused this request.',
+  unavailable: 'The cube data is unavailable right now, so the result is unconfirmed. Retry reuses the same request key, so it cannot add a second copy.',
+  conflict: 'The cube changed since this card opened, or this idea may already be in it. Close the card and look again before retrying.',
   ambiguous: 'Could not confirm whether this was saved. Retry reuses the same request key, so it cannot add a second copy.',
-  failed: 'Could not save this idea. Nothing was saved.',
+  failed: 'Could not confirm whether this was saved. Retry reuses the same request key, so it cannot add a second copy.',
 };
+
+/** Appended to an unconfirmed reason: what the one available action does. */
+export const UNCONFIRMED_ACTION_COPY = {
+  recheck: 'Not shown as added. Re-check reads the cube again and adds nothing.',
+  retry: 'Not shown as added. Retry reuses the same request key, so it cannot add a second copy.',
+} as const;
 
 /** Shown when no import function is bound (the shell binds none today). */
 export const IMPORT_UNBOUND_COPY = 'Adding to the cube is not connected yet.';

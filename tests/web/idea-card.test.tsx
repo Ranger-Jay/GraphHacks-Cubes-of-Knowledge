@@ -57,7 +57,7 @@ test('reducer: every non-persisted outcome is an error with its own honest copy 
     assert.ok(html.includes('Retry Add to cube'), 'card preserved for retry');
     assert.notEqual(importReducer(e, { type: 'submit' }).phase, 'error', 'retry allowed');
   }
-  for (const kind of ['denied', 'unavailable', 'failed'] as const) assert.match(IMPORT_FAILURE_COPY[kind], /Nothing was saved/);
+  for (const kind of FAILURES) assert.doesNotMatch(IMPORT_FAILURE_COPY[kind], /nothing was saved|not saved|was not added/i, kind);
 });
 
 test('reducer: a completion for a stale request, after reset, or outside pending is discarded', () => {
