@@ -152,8 +152,8 @@ export interface AgentProfilesSeedResult {
 
 /**
  * Deterministic idempotent seed on (id, tenantId). Profile, voice, resource, role and capability nodes are refreshed
- * from the fixtures; RoleAssignment nodes are created once and NEVER overwritten by a re-seed, so a later authorized
- * change to an assignment is not reverted. The workspace is created only if absent (revision untouched). No Principal
+ * from the fixtures. A RoleAssignment is created once; a re-seed applies an owner fixture change only to a row the fixture still
+ * manages (source 'fixture', untouched since seeding) and never touches a row an authorized change has taken over. The workspace is created only if absent (revision untouched). No Principal
  * is created, renamed or given membership.
  */
 export async function seedAgentProfiles(client: GraphClient, repoRoot: string, options: { tenantId?: string } = {}): Promise<AgentProfilesSeedResult> {
@@ -200,18 +200,30 @@ export async function seedAgentProfiles(client: GraphClient, repoRoot: string, o
     await link('AgentProfile', id, 'ASSIGNED_TO', 'Workspace', WORKSPACE_ID, `e-${id}-assigned-to`);
     await linkPrincipal('AgentProfile', id, 'IS_PRINCIPAL', p.actorKey, `e-${id}-is-principal`);
   }
+  // Fixture-managed rows: source 'fixture' and untouched since the seed (revision equals fixtureRevision; a row seeded
+  // before this field existed counts as managed at revision 1). An authorized change bumps the revision and sets its own
+  // source, which makes the row unmanaged: a re-seed then never touches the row or its edges.
+  const MANAGED = "n.source = 'fixture' AND coalesce(n.fixtureRevision, 1) = n.revision";
   for (const a of f.assignments) {
     const id = assignmentNodeId(a.principalKey);
-    // ON CREATE only: a re-seed never reverts a later authorized change or revocation.
     await client.write('MERGE (n:RoleAssignment {id: $id, tenantId: $tenantId}) ON CREATE SET n += $props', { id, tenantId, props: {
-      tenantId, principalId: a.principalKey, roleId: a.roleId, workspaceId: WORKSPACE_ID, status: 'ACTIVE', enforcement: 'NOT_ENFORCED', revision: 1,
+      tenantId, principalId: a.principalKey, roleId: a.roleId, workspaceId: WORKSPACE_ID, status: 'ACTIVE', enforcement: 'NOT_ENFORCED', revision: 1, fixtureRevision: 1,
       assignedAt: f.assignmentProvenance.decidedAt, assignedBy: 'owner decision (fixture)', source: 'fixture', sourceId: srcFor.assignments, synthetic: true
     } });
+    // The owner changed the fixture: apply it to a row the fixture still manages (a later authorized change is left alone).
+    await client.write(`MATCH (n:RoleAssignment {id: $id, tenantId: $tenantId}) WHERE ${MANAGED} AND (n.roleId <> $roleId OR n.assignedAt <> $at OR n.status <> 'ACTIVE')
+      SET n.roleId = $roleId, n.assignedAt = $at, n.status = 'ACTIVE', n.revision = n.revision + 1 WITH n SET n.fixtureRevision = n.revision`, { id, tenantId, roleId: a.roleId, at: f.assignmentProvenance.decidedAt });
+    const managed = (await client.write<{ n: number }>(`MATCH (n:RoleAssignment {id: $id, tenantId: $tenantId}) WHERE ${MANAGED} RETURN count(n) AS n`, { id, tenantId }))[0]?.n === 1;
+    if (!managed) continue; // an authorized change owns this row and its edges
+    await client.write("MATCH (:RoleAssignment {id: $id, tenantId: $tenantId})-[e:GRANTS_ROLE]->(r) WHERE r.id <> $roleId DELETE e", { id, tenantId, roleId: a.roleId });
     await link('RoleAssignment', id, 'GRANTS_ROLE', 'AccessRole', a.roleId, `e-${id}-grants-role`);
     await link('RoleAssignment', id, 'IN_WORKSPACE', 'Workspace', WORKSPACE_ID, `e-${id}-in-workspace`);
     await link('RoleAssignment', id, 'DEFINED_IN', 'ProfileSource', srcFor.assignments, `e-${id}-defined-in`);
     await linkPrincipal('RoleAssignment', id, 'FOR_PRINCIPAL', a.principalKey, `e-${id}-for-principal`);
   }
+  // A principal the owner removed from the fixture: revoke the row the fixture manages. Never deletes, never touches an authorized row.
+  await client.write(`MATCH (n:RoleAssignment {tenantId: $tenantId}) WHERE ${MANAGED} AND NOT n.principalId IN $keys AND n.status <> 'REVOKED'
+    SET n.status = 'REVOKED', n.revision = n.revision + 1 WITH n SET n.fixtureRevision = n.revision`, { tenantId, keys: f.assignments.map(a => a.principalKey) });
   return { seedVersion: AGENT_PROFILES_SEED_VERSION, tenantId, profiles: f.profiles.length, roles: f.roles.length, capabilities: f.capabilities.length, assignments: f.assignments.length, edges, principalLinks };
 }
 
