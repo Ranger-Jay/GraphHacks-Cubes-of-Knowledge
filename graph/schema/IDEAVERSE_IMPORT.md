@@ -21,7 +21,7 @@ Graph-lane operation only. The API route, owner authorization, and the comet/car
 
 ## `importIdea(client, repoRoot, {tenantId, ideaId, idempotencyKey, expectedRevision})`
 
-Tenant comes from the server's session, never the request. The request names an allowlisted idea id only: no text, path, tenant or actor. The function loads and verifies the manifest and the file, then issues **one write statement** whose guards are: tenant on both endpoints, `workspace.revision = expectedRevision`, stored `sha256` equals the verified manifest hash, idea not already a member, key not already used. The same statement bumps the revision, creates the receipt and the membership edge. The graph serializes writes, so concurrent requests cannot both pass the guards; no row returned means nothing changed.
+Tenant comes from the server's session, never the request. The request names an allowlisted idea id only: no text, path, tenant or actor. The function loads and verifies the manifest and the file, then issues **one write statement** whose guards are: tenant on both endpoints, `workspace.revision = expectedRevision`, every stored field the overview checks (hash, filename, byte count, `submittedAt`, `touchedAt`) equals the verified manifest, idea not already a member, key not already used. The same statement bumps the revision, creates the receipt and the membership edge. The graph serializes writes, so concurrent requests cannot both pass the guards; no row returned means nothing changed.
 
 | Result | Meaning |
 | --- | --- |
@@ -29,15 +29,17 @@ Tenant comes from the server's session, never the request. The request names an 
 | `CONFLICT KEY_REUSED` | Same key with a different idea or expected revision |
 | `CONFLICT STALE_REVISION` (+`currentRevision`) | The workspace moved; refresh and retry with a new key |
 | `CONFLICT ALREADY_IMPORTED` (+ receipt) | The idea is already a member under another key |
-| `REJECTED` | `INVALID_REQUEST`, `UNKNOWN_IDEA`, `SOURCE_MISMATCH` (graph hash differs from manifest), `NOT_SEEDED` |
+| `REJECTED` | `INVALID_REQUEST`, `UNKNOWN_IDEA`, `SOURCE_MISMATCH` (any stored field differs from the manifest), `NOT_SEEDED` |
 | `UNAVAILABLE` | `CONNECTION_FAILED`, `QUERY_FAILED` or `MANIFEST_INVALID`; never a success |
 
 An ambiguous attempt (timeout, dropped connection) is reconciled with `importStatus(tenantId, key)` (the persisted receipt, or `NOT_FOUND`) and a fresh `ideaverseOverview`; a retry with the same key replays. `ideaverseOverview` reads metadata, membership and workspace revision in one query, re-verified against the manifest: a stored hash or metadata that differs withholds that idea with an integrity item. The comet pool must exclude `imported` ideas.
+
+**When an idea counts as `imported`.** Only when it has exactly one `IMPORTED_INTO` edge with the id the import writes and exactly one `ImportReceipt` for the idea; the edge's `receiptId` is that receipt and the receipt names the same membership, workspace and idea; the receipt's hash equals the **current** verified manifest hash; and its `importedAt` and `workspaceRevision` are well formed. A membership without a receipt, a receipt without a membership, duplicate edges or receipts, mismatched ids and a receipt for different content are each withheld with a specific integrity reason and never counted. `seedIdeaverse` refuses (throws, naming the ids) when a manifest hash differs from an existing receipt for that idea; changed content needs a new idea id.
 
 ## Boundaries and limits
 
 - **Not the licensing witness.** The workspace revision is separate from the release revision; imports leave the evidence witness state hash, signed bindings and every licensing answer unchanged (tested). Nothing here bypasses or resets the witness.
 - **Authorization is the caller's.** The graph operation assumes an authenticated owner. Reader and agent denial, and any "browser role" field, are API behavior and must be tested there.
 - **Receipts are not MAC'd.** A party with graph write credentials could forge a membership or receipt. That matches the existing trust model for studio data (server-only graph credentials); it is not protected by the ledger. Signing receipts with the evidence key is possible later and is not claimed here.
-- **Seed serialized.** There is no database uniqueness constraint; seed one tenant at a time.
-- **Not proven here:** restart persistence and real mid-write failure against a restarted server (independent proof step), API wiring, UI.
+- **Seeding.** There is no database uniqueness constraint; prefer one seeder per tenant. An independent probe saw no duplicates under concurrent seeds, which is evidence, not a guarantee.
+- **Independently verified so far (Boons, `f750ae0`):** guarded-write behavior, graceful restart persistence and three hard-kill trials with no torn state; residual UNKNOWN is the sub-second acknowledged-write window of the engine's AOF default. The follow-up fixes (v023.09-.12) need their own independent review. Not proven here: API wiring, UI.

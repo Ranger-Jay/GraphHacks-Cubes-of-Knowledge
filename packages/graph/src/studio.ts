@@ -97,8 +97,8 @@ export interface StudioSeedResult { seedVersion: string; tenantId: string; sourc
 
 /**
  * Deterministic, idempotent MERGE on (id, tenantId) for a fixed manifest. Not part of the licensing
- * seed or its witness. Run serialized: there is no database-level uniqueness constraint, so two
- * concurrent first-time seeds of one tenant could create duplicates.
+ * seed or its witness. There is no database-level uniqueness constraint, so prefer one seeder per
+ * tenant at a time; concurrent seeds produced no duplicates in an independent probe, which is not a guarantee.
  */
 export async function seedStudio(client: GraphClient, repoRoot: string, options: { tenantId?: string } = {}): Promise<StudioSeedResult> {
   const tenantId = options.tenantId ?? DEFAULT_TENANT;

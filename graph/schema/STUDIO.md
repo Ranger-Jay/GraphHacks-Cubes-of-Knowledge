@@ -26,7 +26,7 @@ Anything else is **withheld** and listed under `integrity`; it is never served a
 
 ## Operations
 
-`cli.ts seed-studio [tenantId]` (deterministic MERGE on `(id, tenantId)`; a repeat adds nothing) and `cli.ts studio-overview [tenantId]`. Run seeding serialized: there is no database uniqueness constraint, so two concurrent first-time seeds of one tenant could duplicate. Use a disposable local graph for proof; nothing here seeds a shared or hosted graph.
+`cli.ts seed-studio [tenantId]` (deterministic MERGE on `(id, tenantId)`; a repeat adds nothing) and `cli.ts studio-overview [tenantId]`. There is no database uniqueness constraint, so prefer to seed one tenant at a time; an independent probe (Boons, 4 concurrent studio seeds x 4 trials) saw no duplicates on this engine, which is evidence, not a guarantee. Use a disposable local graph for proof; nothing here seeds a shared or hosted graph.
 
 ## Proposed transport (for the integration owner to agree before any consumer uses it)
 
@@ -35,4 +35,4 @@ Anything else is **withheld** and listed under `integrity`; it is never served a
 
 ## Not in this slice yet
 
-IdeaFile metadata (waits for the #39 manifest: ids, hashes, submittedAt, touchedAt), the workspace/cube node and the persisted import operation (#40). Studio facts have no approval, clearance or revision semantics.
+Studio facts have no approval, clearance or revision semantics. IdeaFile metadata, the workspace node and the persisted import live in `IDEAVERSE_IMPORT.md` (v023.06 onward). The IdeaVerse manifest `StudioSource` belongs to that slice: `studioOverview` skips it, and `ideaverseOverview` verifies it, so a graph holding both slices shows no studio integrity item for it.
