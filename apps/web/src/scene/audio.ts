@@ -151,7 +151,9 @@ export function speakRecoveryClip(
   const role: AudioClipRole = agentId === 'ava' ? 'reconnect_check' : agentId === 'roy' ? 'ready' : 'ready';
   // Guz has no recovery master in the accepted 29; refuse rather than invent.
   if (agentId === 'guz') return () => {};
-  return speakAuthorizedClip(agentId, role, phase, { recoveryAuthorized: true, onEnd });
+  const options: SpeakOptions = { recoveryAuthorized: true };
+  if (onEnd) options.onEnd = onEnd;
+  return speakAuthorizedClip(agentId, role, phase, options);
 }
 
 export function isApprovedOutageTranscript(agentId: AgentId, phrase: string): boolean {
