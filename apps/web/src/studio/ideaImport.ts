@@ -16,17 +16,69 @@ export interface IdeaSummary {
   submittedAt: string;
   touchedAt: string;
   text: string;
+  /** Manifest SHA-256 of the idea file, when the card source knows it (checked against the read-back when present). */
+  sha256?: string;
 }
 
-/** Persisted receipt, as proposed in #40. Present only when the server confirmed a stored membership. */
+/**
+ * Persisted receipt. Field names mirror `ImportReceipt` in packages/graph/src/ideaverse.ts at claude/studio-data-v023-followup
+ * 366eb56c59da7c084d540cee00b86ba041e15600 EXACTLY. Integration ruling (issue #40, comment 6206859588): the canonical
+ * receipt hash field is `sha256`. No `fileHash`, `fileSha256`, `witnessHash` or other alias exists, and none is accepted.
+ */
 export interface ImportReceipt {
   ideaId: string;
-  fileHash: string;
+  sha256: string;
   workspaceId: string;
   importedAt: string;
   workspaceRevision: number;
   membershipId: string;
 }
+
+const RECEIPT_KEYS = ['ideaId', 'sha256', 'workspaceId', 'importedAt', 'workspaceRevision', 'membershipId'] as const;
+const SHA256 = /^[0-9a-f]{64}$/;
+
+/**
+ * Runtime guard for a receipt that crosses the adapter boundary (types alone cannot stop an adapter that returns an
+ * incompatible shape). Returns the receipt, or null if any canonical field is missing or malformed, or if the object
+ * carries a non-canonical key (so a `fileSha256` or other alias is rejected, never silently mapped).
+ */
+export function parseImportReceipt(raw: unknown): ImportReceipt | null {
+  if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) return null;
+  const o = raw as Record<string, unknown>;
+  if (Object.keys(o).some(k => !(RECEIPT_KEYS as readonly string[]).includes(k))) return null;
+  const { ideaId, sha256, workspaceId, importedAt, workspaceRevision, membershipId } = o;
+  if (typeof ideaId !== 'string' || !ideaId || typeof workspaceId !== 'string' || !workspaceId || typeof membershipId !== 'string' || !membershipId) return null;
+  if (typeof sha256 !== 'string' || !SHA256.test(sha256)) return null;
+  if (typeof importedAt !== 'string' || !Number.isFinite(Date.parse(importedAt))) return null;
+  if (typeof workspaceRevision !== 'number' || !Number.isInteger(workspaceRevision) || workspaceRevision < 1) return null;
+  return { ideaId, sha256, workspaceId, importedAt, workspaceRevision, membershipId };
+}
+
+/**
+ * Read-back shapes. Mirror `IdeaverseIdea` / `IdeaverseOverview` in packages/graph/src/ideaverse.ts at 366eb56 (the
+ * overview already withholds any idea whose import state is not exactly one consistent receipt + membership + current
+ * manifest hash, and lists it under `integrity`). UNPROVEN until a server adapter returns this over a reviewed route.
+ */
+export interface IdeaverseIdeaView {
+  id: string;
+  filename: string;
+  sha256: string;
+  byteCount: number;
+  submittedAt: string;
+  touchedAt: string;
+  synthetic: true;
+  classification: 'proposal';
+  imported: boolean;
+  importedAt?: string;
+  membershipId?: string;
+}
+export type IdeaverseOverviewView =
+  | { status: 'AVAILABLE'; tenantId: string; domain: 'studio'; workspace: { id: string; revision: number }; ideas: IdeaverseIdeaView[]; counts: { ideas: number; imported: number }; integrity: { id: string; reason: string }[] }
+  | { status: 'EMPTY'; tenantId: string; domain: 'studio' }
+  | { status: 'UNAVAILABLE'; reason: 'CONNECTION_FAILED' | 'QUERY_FAILED' | 'MANIFEST_INVALID' };
+
+/** Fresh read of the studio overview (a NEW read, never a cached one). Injected like `ImportIdea`; the shell binds none. */
+export type ReadOverview = () => Promise<IdeaverseOverviewView>;
 
 /** Everything an import attempt can end as. Only `persisted` may ever play a success transition. */
 export type ImportOutcome =

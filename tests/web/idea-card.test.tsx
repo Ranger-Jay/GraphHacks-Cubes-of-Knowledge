@@ -12,7 +12,7 @@ const idea: IdeaSummary = {
   id: 'idea-fixture-001', filename: 'fixture-idea.txt', submittedAt: '2026-10-14T03:30:00Z', touchedAt: '2026-10-15T22:05:00Z',
   text: 'A fictional fixture idea used only by the unit tests.',
 };
-const receipt: ImportReceipt = { ideaId: idea.id, fileHash: 'f'.repeat(64), workspaceId: 'ws', importedAt: '2026-10-15T23:00:00Z', workspaceRevision: 2, membershipId: 'm1' };
+const receipt: ImportReceipt = { ideaId: idea.id, sha256: 'f'.repeat(64), workspaceId: 'ws', importedAt: '2026-10-15T23:00:00Z', workspaceRevision: 2, membershipId: 'm1' };
 const view = (state: ImportState, bound = true) =>
   renderToStaticMarkup(<IdeaCardView idea={idea} state={state} bound={bound} onAdd={() => {}} onClose={() => {}} titleId="t" bodyId="b" />);
 const FAILURES: Array<Exclude<ImportOutcome['kind'], 'persisted'>> = ['denied', 'unavailable', 'conflict', 'ambiguous', 'failed'];
