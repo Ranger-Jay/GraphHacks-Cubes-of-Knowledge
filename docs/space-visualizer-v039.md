@@ -14,6 +14,8 @@
   - `v039.09` (Item 3 Extension: 10-Document Narrative Ledger Expansion)
   - `v039.10` (Item 3 Extension: Dynamic Ingested Node Synthesis in Lattice & Repository ideaverse/ Folder)
   - `v039.11` (Item 3 Polish: Outage Zero-Write Ingestion Defense & Alert Dialog)
+  - `v039.12` (Item 4: Fiery Sun Core, Dynamic Plasma Mantle, Prominences & 3-Axis Cypher Mandala)
+  - `v039.13` (Item 4: Solar Architecture Documentation & Tags)
 - **Primary Source**: `apps/web/public/art/cubes_of_knowledge_3d.html`
 - **Studio Mirrors**: `Gem's Art Studio/cubes_of_knowledge_3d.html`
 
@@ -212,16 +214,96 @@ Demonstrating genuine production engineering compliance with `DECISIONS_WARNINGS
 
 ---
 
-## 7. Preservation of Foundation Features
+## 7. Item 4: The Fiery Sun Core (v039.12 / v039.13)
+
+### 7.1 Multi-Layer Incandescent Plasma Mantle Architecture
+To transform the static central sun into a living, breathing astrophysical engine:
+1. **Dynamic Turbulent Plasma Mantle Wireframe (`sunSphere`)**:
+   - Geometry: `THREE.SphereGeometry(0.96, 36, 36)`.
+   - Base vertex coordinates cached in `sunMantleBaseVertices` (`Float32Array`).
+   - In each frame of the render loop, every vertex is dynamically displaced along its normal vector using multi-frequency sinusoidal wave turbulence:
+     $$r(t) = 0.96 + 0.048 \sin(3.5t + 4n_x + 3n_y) + 0.038 \cos(2.8t + 4n_z + 2.5n_x) + 0.022 \sin(5.2t + 6n_y)$$
+   - Material: Radiant gold (`0xffb300`), wireframe, additive blending, opacity `0.85`.
+2. **Secondary Inner Plasma Shroud (`sunPlasmaShroud`)**:
+   - Geometry: `THREE.IcosahedronGeometry(0.84, 2)`.
+   - Material: Incandescent orange (`0xff6d00`), wireframe, additive blending, opacity `0.62`.
+   - Counter-rotates at $Y = -0.32t, Z = 0.20t$, creating an intricate multi-faceted combustion cage between mantle and core.
+3. **Inner Radiant Fusion Core (`innerSun`)**:
+   - Geometry: `THREE.SphereGeometry(0.68, 32, 32)`.
+   - Material: Deep amber (`0xffd54f`), additive blending, opacity `0.94`.
+   - Thermal breathing: Scales smoothly with sinusoidal expansion $1.0 + 0.045 \sin(2.4t)$.
+
+### 7.2 Six 3D Magnetic Prominence Arcs (Solar Flare Loops)
+Real-time coronal loops erupting from the solar chromosphere:
+1. **Procedural 3D Arches**:
+   - 6 distinct magnetic prominence loops positioned across diverse solar latitudes and longitudes.
+   - Built with 5-point 3D spline curves (`THREE.CatmullRomCurve3`), launching from the surface ($r_0 = 0.90$), reaching high apices ($r \approx 1.44 \sim 1.62$), and anchoring back to the surface with lateral tilt.
+2. **Dual-Layer Volumetric Tube Geometries**:
+   - **Outer Plasma Sheath**: `THREE.TubeGeometry(curve, 28, 0.024, 8)`, colored fiery orange (`0xff6d00`), solar crimson (`0xff3d00`), or amber (`0xff9100`), with additive blending and opacity `0.78`.
+   - **Inner White-Hot Core Filament**: `THREE.TubeGeometry(curve, 28, 0.009, 6)`, colored incandescent gold/white (`0xffd54f`, `0xffecb3`), opacity `0.95`.
+3. **Magnetic Precession & Opacity Flicker**:
+   - Each prominence precesses around the solar magnetic axis with alternating rotational directions.
+   - Scale breathes with magnetic flux expansion: $\text{scale} = 1.0 + 0.09 \sin(3.0t + \phi_i)$.
+   - Plasma opacity dynamically flickers with high-frequency solar combustion: $\text{opacity} = 0.65 + 0.25 \sin(f_i t + \phi_i)$.
+
+### 7.3 Multi-Layer Coronal Glow & Coronal Mass Ejections (CME)
+1. **Dual Inclined Coronal Rings**:
+   - **Primary Golden Corona (`sunCoronaRing`)**: `RingGeometry(1.08, 1.58, 64)`, tilted at $X = \pi / 3$, color `0xffb300`, opacity `0.45`.
+   - **Secondary Fiery Corona (`sunCoronaRing2`)**: `RingGeometry(1.15, 1.72, 64)`, tilted orthogonally at $X = -\pi / 3, Y = \pi / 6$, color `0xff6d00`, opacity `0.35`, counter-rotating at $-0.28t$.
+   - **Torus Magnetic Prominence Loop (`sunTorusLoop`)**: `TorusGeometry(1.22, 0.035, 16, 64)`, color `0xffe082`, opacity `0.65`.
+2. **Coronal Mass Ejection Shockwaves (`triggerCoronalMassEjection`)**:
+   - Expanding plasma rings (`RingGeometry(0.96, 1.12 \sim 1.25, 48)`) that erupt from the sun at randomized 3D orientations.
+   - Expand outward through the cube lattice ($\text{scale} \to 3.8$) while fading exponentially ($\text{opacity} \times 0.95$).
+   - Autonomous eruptions occur every $10 \sim 18$ seconds.
+   - High-energy CME bursts are triggered instantly upon Idea Ingestion and database connection restoration.
+
+### 7.4 Concentric High-Definition 3-Axis Gyroscopic Cypher Mandala
+1. **1024x1024 Procedural Runic Texture**:
+   - **Outer Cypher Dial (Radius 460px)**: 72 radial calibration ticks and primary query:
+     `MATCH (a:Agent)-[w:WITNESSED]->(d:Decision) WHERE w.valid=true RETURN a, d ⟐ FALKOR_CORE_STABLE ⟐`
+   - **Middle Relational Schema Track (Radius 330px)**:
+     `(:Cut)-[:REQUIRES_CLEARANCE]->(:License) ⟐ (:Track)-[:SYNCED_WITH]->(:Scene) ⟐ (:Block)-[:VERIFIED]->(:Lattice) ⟐`
+   - **Sacred Geometry**: 8-point diamond star nodes at radius 235px.
+   - **Inner Cryptographic Verification Ring (Radius 220px)**:
+     `FALKOR_SHARD_01 ⟐ ZERO_WRITE_AUDIT_LOCKED ⟐ 100% IMMUTABLE ⟐`
+   - **Central Core**: Dual nested crimson and golden diamond runes.
+2. **3-Axis Gyroscopic Gimbal**:
+   - Three orthogonal plane meshes (`PlaneGeometry(2.15, 2.15)`):
+     - `eldritchCypherDisc`: XY plane, rotating at $Z = 0.12t$.
+     - `eldritchCypherDisc2`: YZ plane, counter-rotating at $Z = -0.15t$.
+     - `eldritchCypherDisc3`: XZ tilted plane, rotating at $Y = 0.10t$.
+   - Discs surge in rotation speed and scale during Cypher query dispatches.
+
+### 7.5 Outage Simulation Collapse & Ignition Recovery
+1. **Top-Right HUD Telemetry Badge**:
+   - Active: `SOLAR CORE: FUSION ACTIVE` with pulsating amber beacon (`bg-amber-400 shadow-[0_0_10px_#ffb300]`).
+   - Outage: `SOLAR CORE: COLD DWARF` with dark red/slate badge.
+2. **Astrophysical Collapse**:
+   - Plasma mantle collapses to dark charcoal ash (`0x1e2029`).
+   - Combustion shroud dims to obsidian slate (`0x12141a`).
+   - Fusion core extinguishes to deep cold void (`0x0a0c12`).
+   - Prominence arcs collapse to dim cold embers (`0x1a1c22`, opacity `0.08`).
+   - Coronal rings and Cypher discs fade to phantom baseline opacity (`0.06 \sim 0.12`).
+3. **Reconnection Ignition**:
+   - Restores all elements to full fiery saturation and triggers a celebratory high-energy CME solar flare burst!
+
+### 7.6 Reduced Motion Compliance
+- When `MOTION: REDUCED` is enabled, all vertex turbulence is immediately disabled and `sunSphere` vertices snap back to `sunMantleBaseVertices` with zero visual distortion.
+
+---
+
+## 8. Preservation of Foundation Features
 
 All interactive systems remain fully functional:
 1. **Synaptic Query Terminal**: NLP cypher queries, quick chips, and live logs.
 2. **2D Canvas Face Rig**: Real-time pupil tracking, natural blinking, jaw drop articulation, and proximity smiles.
 3. **Procedural Web Audio**: Continuous sub-bass drone, shockwave boom, and pointer-velocity stardust chimes.
 4. **Deep-Space 3-Layer Parallax**: Opposing cursor parallax across near, mid, and far starfields.
+5. **Red Graph Counter-Rotation**: Organic 28-node constellation counter-rotating at 50% speed.
+6. **IdeaVerse Comets & Near-Miss Flybys**: Deep space comets, hypersonic Doppler flybys, 10-document narrative ledger, and zero-write outage rejection.
 
 ---
 
-## 8. Next Step on the Roadmap
+## 9. Next Step on the Roadmap
 
-- **Item 4: The Fiery Sun Core** (`v039.12` / `v039.13`): Dynamic plasma mantle wireframe, pulsating solar flares, prominences, and rotating concentric cypher mandala dials.
+- **Item 5: Three Orbiting Protector Pyramids** (`v039.14` / `v039.15`): Clean internal cube orbits, tilted electrical orbit paths, multi-stage viseme lip sync, and real-time facial articulation synchronization.
