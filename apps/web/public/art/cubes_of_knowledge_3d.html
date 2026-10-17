@@ -295,11 +295,11 @@
 
     <!-- Top Right: Audio, Mode, and Outage Controls -->
     <div class="hud-overlay top-4 right-6 flex items-center space-x-2.5">
-        <!-- 200% Lattice Wireframe Glow Badge -->
-        <div class="flex items-center space-x-2 text-xs font-mono px-3 py-1.5 rounded-xl hud-glass border border-cyan-400/50 shadow-[0_0_15px_rgba(0,229,255,0.35)]">
-            <span class="w-2.5 h-2.5 rounded-full bg-cyan-400 animate-pulse shadow-[0_0_10px_#00e5ff]"></span>
-            <span class="text-cyan-300 font-bold uppercase tracking-wider">LATTICE GLOW:</span>
-            <span class="px-2 py-0.5 rounded bg-cyan-950/90 text-cyan-200 border border-cyan-500 font-mono font-bold text-[10px] shadow-[0_0_12px_#00e5ff]">200% LOCKED</span>
+        <!-- Lattice Integrity Badge (Item 2) -->
+        <div id="lattice-integrity-badge" class="flex items-center space-x-2 text-xs font-mono px-3 py-1.5 rounded-xl hud-glass border border-cyan-400/50 shadow-[0_0_15px_rgba(0,229,255,0.35)]">
+            <span id="lattice-integrity-dot" class="w-2.5 h-2.5 rounded-full bg-cyan-400 animate-pulse shadow-[0_0_10px_#00e5ff]"></span>
+            <span id="lattice-integrity-title" class="text-cyan-300 font-bold uppercase tracking-wider">LATTICE INTEGRITY:</span>
+            <span id="lattice-integrity-box" class="px-2 py-0.5 rounded bg-cyan-950/90 text-cyan-200 border border-cyan-500 font-mono font-bold text-[10px] shadow-[0_0_12px_#00e5ff]">Protected</span>
         </div>
 
         <!-- Solar Core Fusion Status Badge (Item 4) -->
@@ -394,14 +394,18 @@
                 <span>2. Runtime State Simulator</span>
                 <span id="drawer-status-pill" class="text-[9px] px-1.5 py-0.5 rounded bg-emerald-950 text-emerald-300 border border-emerald-500/50">CONNECTED</span>
             </div>
-            <div class="grid grid-cols-2 gap-2 text-[11px]">
-                <button id="btn-drawer-ready" class="p-2 rounded-xl bg-cyan-950/80 border border-cyan-500/70 text-cyan-200 font-bold hover:bg-cyan-900 transition flex items-center justify-center gap-1.5">
-                    <span>🟢</span>
-                    <span>READY (Nominal)</span>
+            <div class="grid grid-cols-3 gap-1.5 text-[10px]">
+                <button id="btn-drawer-ready" class="p-1.5 rounded-xl bg-cyan-950/80 border border-cyan-500/70 text-cyan-200 font-bold hover:bg-cyan-900 transition flex flex-col items-center justify-center gap-0.5">
+                    <span>🟢 READY</span>
+                    <span class="text-[9px] text-cyan-400">Protected</span>
                 </button>
-                <button id="btn-drawer-outage" class="p-2 rounded-xl bg-slate-900 border border-slate-700 text-slate-400 font-bold hover:bg-rose-950 hover:text-rose-200 hover:border-rose-600 transition flex items-center justify-center gap-1.5">
-                    <span>🔴</span>
-                    <span>OUTAGE (Dying)</span>
+                <button id="btn-drawer-simulate" class="p-1.5 rounded-xl bg-slate-900 border border-slate-700 text-slate-400 font-bold hover:bg-amber-950 hover:text-amber-200 hover:border-amber-500 transition flex flex-col items-center justify-center gap-0.5">
+                    <span>🟡 SIMULATE</span>
+                    <span class="text-[9px] text-amber-400">Vulnerable</span>
+                </button>
+                <button id="btn-drawer-outage" class="p-1.5 rounded-xl bg-slate-900 border border-slate-700 text-slate-400 font-bold hover:bg-rose-950 hover:text-rose-200 hover:border-rose-600 transition flex flex-col items-center justify-center gap-0.5">
+                    <span>🔴 OUTAGE</span>
+                    <span class="text-[9px] text-rose-400">Failing</span>
                 </button>
             </div>
             <p class="text-[10px] text-slate-400 leading-relaxed">
@@ -5555,6 +5559,38 @@ REV: rel-wad@r2
             if (outageRejection) outageRejection.classList.add('hidden');
         }
 
+        function setLatticeIntegrityState(state) {
+            const badge = document.getElementById('lattice-integrity-badge');
+            const dot = document.getElementById('lattice-integrity-dot');
+            const title = document.getElementById('lattice-integrity-title');
+            const box = document.getElementById('lattice-integrity-box');
+            if (!badge || !dot || !title || !box) return;
+
+            if (state === 'vulnerable') {
+                badge.className = 'flex items-center space-x-2 text-xs font-mono px-3 py-1.5 rounded-xl hud-glass border border-amber-500/70 shadow-[0_0_20px_rgba(245,158,11,0.55)] transition-all';
+                dot.className = 'w-2.5 h-2.5 rounded-full bg-amber-400 animate-pulse shadow-[0_0_10px_#f59e0b]';
+                title.className = 'text-amber-300 font-bold uppercase tracking-wider';
+                title.textContent = 'LATTICE INTEGRITY:';
+                box.className = 'px-2 py-0.5 rounded bg-amber-950/90 text-amber-200 border border-amber-500 font-mono font-bold text-[10px] shadow-[0_0_15px_rgba(245,158,11,0.65)]';
+                box.textContent = 'Vulnerable';
+            } else if (state === 'failing') {
+                badge.className = 'flex items-center space-x-2 text-xs font-mono px-3 py-1.5 rounded-xl bg-red-950/90 border border-red-500 shadow-[0_0_25px_rgba(255,23,68,0.7)] transition-all';
+                dot.className = 'w-2.5 h-2.5 rounded-full bg-red-500 animate-ping shadow-[0_0_12px_#ff1744]';
+                title.className = 'text-red-300 font-bold uppercase tracking-wider';
+                title.textContent = 'LATTICE INTEGRITY:';
+                box.className = 'px-2 py-0.5 rounded bg-red-600 text-white border border-red-400 font-mono font-bold text-[10px] shadow-[0_0_18px_#ff1744]';
+                box.textContent = 'Failing';
+            } else {
+                badge.className = 'flex items-center space-x-2 text-xs font-mono px-3 py-1.5 rounded-xl hud-glass border border-cyan-400/50 shadow-[0_0_15px_rgba(0,229,255,0.35)] transition-all';
+                dot.className = 'w-2.5 h-2.5 rounded-full bg-cyan-400 animate-pulse shadow-[0_0_10px_#00e5ff]';
+                title.className = 'text-cyan-300 font-bold uppercase tracking-wider';
+                title.textContent = 'LATTICE INTEGRITY:';
+                box.className = 'px-2 py-0.5 rounded bg-cyan-950/90 text-cyan-200 border border-cyan-500 font-mono font-bold text-[10px] shadow-[0_0_12px_#00e5ff]';
+                box.textContent = 'Protected';
+            }
+        }
+        window.setLatticeIntegrityState = setLatticeIntegrityState;
+
         function setupUI() {
             document.getElementById('close-chamber-btn').addEventListener('click', closeAgentChamber);
             document.getElementById('close-evidence-btn').addEventListener('click', closeModals);
@@ -5614,6 +5650,7 @@ REV: rel-wad@r2
                     dot.className = 'w-2.5 h-2.5 rounded-full bg-red-500 animate-ping';
                     label.innerHTML = 'FALKORDB v6.8.0 CORE // STATUS: <span class="text-red-400 font-bold">UNAVAILABLE (OUTAGE)</span>';
                     banner.classList.remove('hidden');
+                    setLatticeIntegrityState('vulnerable');
 
                     // Update Row 10 Telemetry Drawer Readouts (Outage active)
                     const drawerPill = document.getElementById('drawer-status-pill');
@@ -5771,6 +5808,7 @@ REV: rel-wad@r2
                     dot.className = 'w-2.5 h-2.5 rounded-full bg-cyan-400 animate-pulse';
                     label.innerHTML = 'FALKORDB v6.8.0 CORE // STATUS: <span class="text-cyan-400 font-semibold">AVAILABLE</span>';
                     banner.classList.add('hidden');
+                    setLatticeIntegrityState('protected');
 
                     // Update Row 10 Telemetry Drawer Readouts
                     const drawerPill = document.getElementById('drawer-status-pill');
@@ -6028,6 +6066,7 @@ REV: rel-wad@r2
 
             // Drawer Runtime Simulator Buttons
             const btnDrawerReady = document.getElementById('btn-drawer-ready');
+            const btnDrawerSimulate = document.getElementById('btn-drawer-simulate');
             const btnDrawerOutage = document.getElementById('btn-drawer-outage');
             if (btnDrawerReady) {
                 btnDrawerReady.addEventListener('click', () => {
@@ -6035,6 +6074,16 @@ REV: rel-wad@r2
                         const outBtn = document.getElementById('outage-toggle-btn');
                         if (outBtn) outBtn.click();
                     }
+                    setLatticeIntegrityState('protected');
+                });
+            }
+            if (btnDrawerSimulate) {
+                btnDrawerSimulate.addEventListener('click', () => {
+                    if (!isDatabaseOutage) {
+                        const outBtn = document.getElementById('outage-toggle-btn');
+                        if (outBtn) outBtn.click();
+                    }
+                    setLatticeIntegrityState('vulnerable');
                 });
             }
             if (btnDrawerOutage) {
@@ -6043,6 +6092,7 @@ REV: rel-wad@r2
                         const outBtn = document.getElementById('outage-toggle-btn');
                         if (outBtn) outBtn.click();
                     }
+                    setLatticeIntegrityState('failing');
                 });
             }
 
