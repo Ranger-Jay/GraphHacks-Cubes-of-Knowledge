@@ -931,6 +931,15 @@ All 10 milestone rows across the 3D Space Visualizer roadmap are now **100% COMP
 - **Row 9**: Sound Architecture (Unified procedural audio + authentic embedded base64 voice greetings for Roy, Ava, Guz + replay button)
 - **Row 10**: UI & Outage Simulation Suite (Collapsible Telemetry Matrix drawer, fluid sliders, unified bottom dock, full outage simulator)
 
-All mirrors (`apps/web/public/art/cubes_of_knowledge_3d.html`, `Gem's Art Studio/cubes_of_knowledge_3d.html`, and the Brain Artifact) are locked with identical SHA-256 hashes on branch `gem/space-visualizer-v039`.
+### 18.1 Final Element-by-Element Sanity Sweep & Polish (`v039.34`)
+- **Universal Escape & Close Handler**: `Escape` key now universally closes all open modals and drawers, including `#side-matrix-drawer`, `#outage-rejection-modal`, `#node-info-modal`, `#comet-info-modal`, `#evidence-modal`, `#human-modal`, `#guide-modal`, and `#idea-modal`.
+- **Bidirectional Telemetry Matrix Synchronization**: Toggling outage (via either the HUD button or the drawer buttons) actively updates drawer badges:
+  - `CONNECTED` (`#10b981`) $\leftrightarrow$ `DISCONNECTED` (`#f43f5e`)
+  - `100% Locked` $\leftrightarrow$ `0% Collapsed`
+  - `Zero-G Levitation` $\leftrightarrow$ `Newtonian Gravity (-18 m/s²)`
+  - Active button highlights for `READY (Nominal)` vs `OUTAGE (Dying)`.
+- **Zero DOM ID Mismatches**: 115/115 `getElementById` lookups verified with exact matches in the DOM.
+- **Three-Mirror Synchronization**: All 3 visualizer mirrors (`apps/web/public/art/cubes_of_knowledge_3d.html`, `Gem's Art Studio/cubes_of_knowledge_3d.html`, and `cubes_of_knowledge_3d.html` artifact) are byte-for-byte locked with SHA-256 `3700C40C49BC3D535923460BF5F69683E811D59D22DB3AB28B17F7571A373A21`.
+
 
 

@@ -5501,6 +5501,10 @@ REV: rel-wad@r2
             if (e.key === 'Escape') {
                 closeAgentChamber();
                 closeModals();
+                closeNodeModal();
+                closeCometModal();
+                const matrixDrawer = document.getElementById('side-matrix-drawer');
+                if (matrixDrawer) matrixDrawer.classList.add('translate-x-[420px]');
             } else if (e.key === '1') {
                 openAgentChamber('roy');
             } else if (e.key === '2') {
@@ -5545,6 +5549,10 @@ REV: rel-wad@r2
             document.getElementById('guide-modal').classList.add('opacity-0', 'pointer-events-none');
             const ideaModal = document.getElementById('idea-modal');
             if (ideaModal) ideaModal.classList.add('opacity-0', 'pointer-events-none');
+            closeNodeModal();
+            closeCometModal();
+            const outageRejection = document.getElementById('outage-rejection-modal');
+            if (outageRejection) outageRejection.classList.add('hidden');
         }
 
         function setupUI() {
@@ -5606,6 +5614,31 @@ REV: rel-wad@r2
                     dot.className = 'w-2.5 h-2.5 rounded-full bg-red-500 animate-ping';
                     label.innerHTML = 'FALKORDB CORE // STATUS: <span class="text-red-400 font-bold">UNAVAILABLE (OUTAGE)</span>';
                     banner.classList.remove('hidden');
+
+                    // Update Row 10 Telemetry Drawer Readouts (Outage active)
+                    const drawerPill = document.getElementById('drawer-status-pill');
+                    const telIntegrity = document.getElementById('telemetry-integrity');
+                    const telGravity = document.getElementById('telemetry-gravity');
+                    const btnDrawerReady = document.getElementById('btn-drawer-ready');
+                    const btnDrawerOutage = document.getElementById('btn-drawer-outage');
+                    if (drawerPill) {
+                        drawerPill.className = 'text-[9px] px-1.5 py-0.5 rounded bg-rose-950 text-rose-300 border border-rose-500/50';
+                        drawerPill.textContent = 'DISCONNECTED';
+                    }
+                    if (telIntegrity) {
+                        telIntegrity.className = 'text-rose-400 font-bold';
+                        telIntegrity.textContent = '0% Collapsed';
+                    }
+                    if (telGravity) {
+                        telGravity.className = 'text-amber-300 font-bold';
+                        telGravity.textContent = 'Newtonian Gravity (-18 m/s²)';
+                    }
+                    if (btnDrawerReady) {
+                        btnDrawerReady.className = 'p-2 rounded-xl bg-slate-900 border border-slate-700 text-slate-400 font-bold hover:bg-cyan-950 hover:text-cyan-200 transition flex items-center justify-center gap-1.5';
+                    }
+                    if (btnDrawerOutage) {
+                        btnDrawerOutage.className = 'p-2 rounded-xl bg-rose-950 border border-rose-500 text-rose-200 font-bold shadow-[0_0_15px_rgba(244,63,94,0.3)] transition flex items-center justify-center gap-1.5';
+                    }
                     
                     // Damaged / broken cube appearance
                     if (wireframeCube) wireframeCube.material.color.setHex(0x8a1020);
@@ -5743,6 +5776,8 @@ REV: rel-wad@r2
                     const drawerPill = document.getElementById('drawer-status-pill');
                     const telIntegrity = document.getElementById('telemetry-integrity');
                     const telGravity = document.getElementById('telemetry-gravity');
+                    const btnDrawerReady = document.getElementById('btn-drawer-ready');
+                    const btnDrawerOutage = document.getElementById('btn-drawer-outage');
                     if (drawerPill) {
                         drawerPill.className = 'text-[9px] px-1.5 py-0.5 rounded bg-emerald-950 text-emerald-300 border border-emerald-500/50';
                         drawerPill.textContent = 'CONNECTED';
@@ -5754,6 +5789,12 @@ REV: rel-wad@r2
                     if (telGravity) {
                         telGravity.className = 'text-cyan-300 font-bold';
                         telGravity.textContent = 'Zero-G Levitation';
+                    }
+                    if (btnDrawerReady) {
+                        btnDrawerReady.className = 'p-2 rounded-xl bg-cyan-950/80 border border-cyan-500/70 text-cyan-200 font-bold hover:bg-cyan-900 transition flex items-center justify-center gap-1.5';
+                    }
+                    if (btnDrawerOutage) {
+                        btnDrawerOutage.className = 'p-2 rounded-xl bg-slate-900 border border-slate-700 text-slate-400 font-bold hover:bg-rose-950 hover:text-rose-200 hover:border-rose-600 transition flex items-center justify-center gap-1.5';
                     }
                     
                     // Restored intact cube appearance
@@ -6060,26 +6101,6 @@ REV: rel-wad@r2
                 toggleCometsCheckbox.checked = showComets;
                 toggleCometsCheckbox.addEventListener('change', (e) => {
                     showComets = e.target.checked;
-                });
-            }
-
-            // Node Names Toggle Button (Item 2)
-            const toggleNodeNamesBtn = document.getElementById('toggle-node-names-btn');
-            if (toggleNodeNamesBtn) {
-                toggleNodeNamesBtn.addEventListener('click', () => {
-                    showNodeNames = !showNodeNames;
-                    nodeLabels.forEach(l => l.visible = showNodeNames);
-                    const dot = document.getElementById('node-names-dot');
-                    const label = document.getElementById('node-names-label');
-                    if (showNodeNames) {
-                        toggleNodeNamesBtn.className = 'interactive px-3 py-1.5 rounded-xl bg-red-950/80 text-red-200 border border-red-500/80 transition-all flex items-center gap-1.5 shadow-[0_0_12px_rgba(255,23,68,0.35)]';
-                        if (dot) dot.className = 'w-2 h-2 rounded-full bg-red-400 animate-pulse';
-                        if (label) label.textContent = 'NODE NAMES: ON';
-                    } else {
-                        toggleNodeNamesBtn.className = 'interactive px-3 py-1.5 rounded-xl bg-slate-900/80 hover:bg-red-950/60 text-slate-300 hover:text-red-300 border border-slate-700/60 hover:border-red-500/50 transition-all flex items-center gap-1.5';
-                        if (dot) dot.className = 'w-2 h-2 rounded-full bg-slate-500';
-                        if (label) label.textContent = 'NODE NAMES: OFF';
-                    }
                 });
             }
 
