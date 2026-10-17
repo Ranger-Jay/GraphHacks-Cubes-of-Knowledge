@@ -838,7 +838,64 @@ Following Jay's architectural specification ("number 9 is up... we can leave the
 
 ---
 
-## 16. Preservation of Foundation Features
+## 16. UI & Outage Simulation Suite (Row 10 / v039.32 - v039.33)
+
+Following the master visualizer comparison specification ("Clean Bottom Dock + Collapsible Telemetry Drawer + Full Outage Simulator & Evidence Modals"), the visualizer finalizes its environmental matrix controls, unified HUD architecture, and comprehensive outage simulation suite.
+
+### 16.1 Collapsible Telemetry & Environmental Matrix Drawer (`#side-matrix-drawer`)
+- **HUD Trigger**: Added a dedicated top-right control button:
+  `<button id="btn-toggle-matrix"> 📊 TELEMETRY MATRIX </button>`
+  toggling a slide-out glass drawer (`#side-matrix-drawer`, `w-88`, backdrop blur, cyber cyan border) from the right margin.
+- **Section 1: Zero-G Fluid Dynamics**:
+  - **Flow Rate Slider (`#slider-speed`, $0.2\times \to 3.0\times$)**: Directly modulates particle flow velocity $M_{\text{flow}}$ in real time with live numeric readout (`#speed-val`).
+  - **Viscosity Damping Slider (`#slider-visc`, $0.5\times \to 2.5\times$)**: Controls viscous deceleration and Brownian swirl resistance (`#visc-val`).
+  - **Fluid Caustics Membrane (`#check-caustics`)**: Toggles sparkling gem starlight particle scales ($1.2 \leftrightarrow 2.5$).
+- **Section 2: Runtime State Simulator**:
+  - Interactive dual switches: `READY (Nominal)` and `OUTAGE (Dying)`.
+  - Live status indicator badge: `CONNECTED` (emerald `#10b981`) vs. `DISCONNECTED` (crimson `#f43f5e`).
+- **Section 3: Spatial Vantage Presets**:
+  - `🌌 Orbit 360°`: Restores standard outer celestial orbit ($R_{\text{cam}} = 14.0$).
+  - `🔬 Core Sanctuary`: Zooms into the inner sanctuary ($R_{\text{cam}} = 3.6$), automatically sliding aperture panels open.
+  - `🔄 Reset Camera Angle`: Re-centers target rotation and celestial orbit angles to default $(0.2, 0.4)$.
+- **Section 4: Live Environmental Telemetry**:
+  - Live count: $750$ Corridor Starlight Particles, $28$ Shard Evidence Nodes, dynamic ingested idea comets counter.
+  - Containment Field Integrity: $100\%$ Locked vs. $0\%$ Collapsed.
+  - Gravitational Mode: Zero-G Levitation vs. Newtonian Gravity ($-18.0\,\text{m/s}^2$).
+
+### 16.2 Unified Refined Bottom Control Dock
+Consolidates all HUD controls into an elegant, dual-wing floating glass dock (`bottom-6 left-6 right-6`):
+- **Left Wing (HUD Toggles & Hyper Flyby)**:
+  - **Node Labels Checkbox (`#toggle-node-names`)**: Toggles 3D billboard sprite labels above all 28 red shard nodes and ingested blue comets.
+  - **Protector Pyramids Checkbox (`#toggle-pyramids`)**: Toggles visibility of all 3 electron protector pyramid groups.
+  - **Idea Comets Checkbox (`#toggle-comets`)**: Toggles spawning and rendering of deep-space idea-verse comets.
+  - **Flyby Comet Trigger (`#trigger-flyby-btn`)**: Instantly launches the near-miss hypersonic flyby comet with Doppler roar and screen flare.
+  - **200% Glow Lock Badge**: Permanent visual indicator verifying cybernetic lattice illumination standard.
+- **Right Wing (Agent Quick Selector & View Controls)**:
+  - **Roy (Gold) [1]**: Instant approach and gem-unfold chamber opening for Roy.
+  - **Ava (Violet) [2]**: Instant approach and gem-unfold chamber opening for Ava.
+  - **Guz (Green) [3]**: Instant approach and gem-unfold chamber opening for Guz.
+  - **Zoom [C]**: Toggles core sanctuary camera zoom and aperture sliding.
+  - **Reset [R]**: Restores default celestial vantage.
+
+### 16.3 Full Outage & Recovery Simulation Suite
+- **Severing Database Cluster (`SIMULATE OUTAGE`)**:
+  1. Sun collapses from incandescent gold fusion into a cold, dark dying ember cinder.
+  2. Outer lattice wireframes and purple containment struts turn dark corrupted crimson/shadow violet.
+  3. Cypher mandala discs slow to an $8\%$ stasis crawl with dimmed phantom opacity.
+  4. Internal artificial zero-g containment collapses: all 28 red shard nodes and blue ingested comet nodes lose anti-gravity lock and fall into cardboard box marble physics, settling on the lowest physical wall of the purple containment frame.
+  5. Tilting the cube via mouse drag dynamically rolls marbles across the floor with centrifugal wall-drag, mutual pairwise collisions, and tactile ASMR clicks (`CosmicAudio.playMarbleClick`).
+  6. Starlight fluid particles enter high-speed agitated Brownian jitter with flickering crimson embers.
+  7. Terminal queries return `503 Service Unavailable: FalkorDB cluster disconnected` with fail-closed cryptographic immutability.
+- **Restoring Database Cluster (`RESTORE DATABASE`)**:
+  1. Internal shard and idea nodes harmonically levitate back to their celestial constellation positions (`node.position.lerp(basePos, 0.045)`).
+  2. Red graph quaternion smoothly slerps back to $50\%$ counter-rotation.
+  3. Sun reignites with an explosive celebratory Coronal Mass Ejection flare burst.
+  4. Starlight fluid returns to peaceful laminar drift ($28\%$ speed).
+  5. Telemetry drawer and HUD badges instantly update to `CONNECTED` and `100% Locked`.
+
+---
+
+## 17. Preservation of Foundation Features
 
 All interactive systems remain fully functional:
 1. **Synaptic Query Terminal**: NLP cypher queries, quick chips, and live logs.
@@ -856,10 +913,24 @@ All interactive systems remain fully functional:
 13. **The Eldritch Cypher Shader Mandala**: 2048px super-sampled runic canvas, 3-axis gyroscopic momentum, concentric harmonic resonance rings, and chromatic flare pulses.
 14. **Dual-Rotation & 360° Celestial Cosmos**: Independent Company Cube spin with generous $5.2$ radius spatial bounding hit volume, 360° spherical camera orbit, Euclidean aperture sliding, opposing starfield anti-parallax, and invariant 3D comet trajectories.
 15. **Unified Sound Architecture**: Ambient procedural audio + authentic embedded base64 voice greetings for Ava, Roy, and Guz + replay voice button + gem-unfolding chamber opening UI.
+16. **UI & Outage Simulation Suite**: Collapsible Telemetry Matrix drawer, fluid flow/viscosity sliders, runtime state switches, unified bottom control dock, and complete outage/recovery suite.
 
 ---
 
-## 17. Roadmap Completion Summary
+## 18. Roadmap Completion Summary: 100% COMPLETE!
 
-With the successful landing of **Row 9: Sound Architecture & Gem-Unfolding Chamber Opening UI** (`v039.30` / `v039.31`), the audio engine and agent chamber interaction have achieved complete parity with the master visualizer. All objectives are verified, documented, and synchronized across all three visualizer mirrors. The final milestone proceeds to **Row 10: UI & Outage Simulation Suite** (`v039.32` / `v039.33`).
+All 10 milestone rows across the 3D Space Visualizer roadmap are now **100% COMPLETE, VERIFIED, DOCUMENTED, AND SYNCHRONIZED**:
+- **Row 1**: The Cube & Aperture (200% Lattice Glow + 3D sliding aperture panels)
+- **Row 2**: Internal Red Graph & Rotation (50% counter-rotation, interactive node evidence, ledger modal)
+- **Row 3**: Zero-G Fluid & Data Articles (750 jewel starlight particles, Option A containment corridor, eddy wakes)
+- **Row 4**: The Sun (Source of Truth) (Multi-layer plasma mantle, 6 prominence loops, CME flares)
+- **Row 5**: Orbiting Pyramids & Agents (Inside-cube calibrated orbits, synaptic lightning, gem-unfold chamber opening)
+- **Row 6**: Synaptic Query Terminal (Interactive NLP Cypher terminal, 3D electric lightning arcs, logs)
+- **Row 7**: Idea-Verse Comets (Deep space comets, hypersonic Doppler flybys, 10-document narrative ledger, zero-write outage rejection)
+- **Row 8**: Background Starfield (3-Layer starfield, opposing parallax & anti-parallax, dual-rotation 360° celestial cosmos)
+- **Row 9**: Sound Architecture (Unified procedural audio + authentic embedded base64 voice greetings for Roy, Ava, Guz + replay button)
+- **Row 10**: UI & Outage Simulation Suite (Collapsible Telemetry Matrix drawer, fluid sliders, unified bottom dock, full outage simulator)
+
+All mirrors (`apps/web/public/art/cubes_of_knowledge_3d.html`, `Gem's Art Studio/cubes_of_knowledge_3d.html`, and the Brain Artifact) are locked with identical SHA-256 hashes on branch `gem/space-visualizer-v039`.
+
 
