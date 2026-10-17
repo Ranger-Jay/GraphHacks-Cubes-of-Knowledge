@@ -995,6 +995,17 @@ All 10 milestone rows across the 3D Space Visualizer roadmap are now **100% COMP
 - **Modular Toggle Architecture**: Unified drawer state handling under `openMatrixDrawer()`, `closeMatrixDrawer()`, and `toggleMatrixDrawer()`, fully integrated with keyboard <kbd>ESC</kbd> dismiss, close button `✕`, and modal exclusivity guards.
 - **Three-Mirror Synchronization**: All 3 visualizer mirrors locked with SHA-256 `2B84FD10F24638D6F17605B53F8ABD5A995D540222335C6DFC6F693CB7EABC48`.
 
+### 18.10 Controls & Mouse Interactive Inspection Guide Modal (`v041.000` / `v041.01`)
+- **Prominent Top HUD Button**: Added a dedicated `🎮 CONTROLS [?]` button to the primary top-right HUD navigation cluster (`#btn-controls-guide`), accompanied by the quick shortcut `?` button.
+- **High-Z Dialog Barrier (`z-[60]`)**: Built `#guide-modal` with glassmorphic backing (`hud-glass`), cyan glow borders, and full backdrop interaction absorption, isolating background canvas clicks while active.
+- **Three Core Guide Sections**:
+  1. **Mouse & Touch Flight Controls**: Clear operational breakdown for Cube drag-spinning (4px drag thresholding), 360° celestial orbital camera rotation, scroll/double-click aperture zoom, and fluid cursor micro-eddies.
+  2. **Interactive Element Inspection Guide for Jay**: Structured cards outlining inspection procedures for Red Shard Evidence Nodes (28), Orbiting Protector Pyramids (3), Idea-Verse Comets, Solar Core & Mandala, Human Executive Governance, and Collapsible Telemetry Matrix.
+  3. **Keyboard Shortcuts Matrix**: Full cheat sheet covering <kbd>1</kbd> / <kbd>2</kbd> / <kbd>3</kbd> (Agents), <kbd>H</kbd> (Human Gov), <kbd>C</kbd> (Zoom Apertures), <kbd>R</kbd> (Reset Orbit), <kbd>?</kbd> (Controls Guide), and <kbd>ESC</kbd> (Universal Dismiss).
+- **Universal Dismissal**: Includes styled `✕ CLOSE or ESC` button, direct backdrop click dismissal, and keyboard <kbd>ESC</kbd> support.
+- **Three-Mirror Synchronization**: All 3 visualizer mirrors locked with SHA-256 `3D6D8FD25936671E7843F40459E20794CE0B2CC5BD0AF92B0590A4E73812613D`.
+
+
 
 
 
