@@ -20,6 +20,12 @@
   - `v039.15` (Item 5: Pyramid Architecture Documentation & Tags)
   - `v039.16` (Item 6: Internal Antigravity Liquid Starlight, Cursor Eddies, Pyramid Bow Waves & Outage Decay)
   - `v039.17` (Item 6: Liquid Starlight Architecture Documentation & Tags)
+  - `v039.18` (Item 6b: Thickened Purple Containment Frame & Orocue Travelling Light-Balls)
+  - `v039.19` (Item 6b: Purple Frame & Light-Ball Architecture Documentation & Tags)
+  - `v039.20` (Item 6c: Option A Containment Corridor Fluid Physics & Outage Agitation)
+  - `v039.21` (Item 6c: Option A Corridor Fluid Architecture Documentation & Tags)
+  - `v039.22` (Item 6d: Cardboard Box Marble Physics for Shard Nodes & Ingested Ideas)
+  - `v039.23` (Item 6d: Marble Box Physics Architecture Documentation & Tags)
 - **Primary Source**: `apps/web/public/art/cubes_of_knowledge_3d.html`
 - **Studio Mirrors**: `Gem's Art Studio/cubes_of_knowledge_3d.html`
 
@@ -566,12 +572,79 @@ When the FalkorDB server connection is severed (**SIMULATE OUTAGE**):
 
 ---
 
-## 12. Preservation of Foundation Features
+## 12. Cardboard Box Marble Physics & Dynamic Graph Network (v039.22 / v039.23)
+
+### 12.1 Antigravity Field Collapse & Instantaneous Frame Mapping
+When the FalkorDB cluster connection is severed (**SIMULATE OUTAGE**), the artificial zero-g containment field inside the purple chamber collapses, subjecting internal graph nodes to Newtonian gravity:
+1. **Instantaneous Frame Transformation**:
+   - At the exact millisecond of outage trigger, each node's world coordinate is captured and mapped into `cubeGroup`'s local coordinate frame via `cubeGroup.worldToLocal(worldPos)`.
+   - The node is clamped within the purple containment chamber ($|P| \le 2.65$).
+   - `redGraphGroup.quaternion.copy(cubeGroup.quaternion)` runs every frame during outage, guaranteeing that the local axes of `redGraphGroup` are identical to the physical walls of the purple containment box without any visible jump or matrix stutter.
+2. **Initial Tumble Scatter**:
+   - Nodes receive a realistic initial downward drop impulse ($v_y \approx -0.06 \sim -0.12$) and stochastic lateral jitter ($\Delta v_{x, z} \approx \pm 0.04$), breaking their orbital lock and sending them tumbling toward the floor of the purple chamber.
+
+### 12.2 Real-Time Tilting Gravity Vector & Cardboard Box Dynamics
+Just like marbles rolling inside a handheld cardboard box:
+1. **Local Gravity Vector Transformation**:
+   - In world space, gravity pulls straight down toward $-Y$: $\vec{G}_{\text{world}} = (0, -18.0, 0)$.
+   - Transforming into the local frame of `cubeGroup`:
+     $$\vec{g}_{\text{local}} = R^{-1}_{\text{cube}} \cdot \vec{G}_{\text{world}} = \vec{G}_{\text{world}} \cdot Q_{\text{cube}}^{-1}$$
+   - When the user rotates or tilts the cube via mouse/touch drag:
+     - Tilting the box rightward rolls the marbles onto the $+X$ purple wall.
+     - Tilting forward rolls them onto the $-Z$ purple wall.
+     - Inverting the box rolls them onto the ceiling ($+Y$ panel).
+     - Tilting into a vertex causes all marbles to slide down and gather naturally in that corner!
+2. **Centrifugal Acceleration & Wall Contact Drag**:
+   - The engine measures the cube's 3D angular velocity $\vec{\omega} = \Delta \vec{\theta} / \Delta t$.
+   - When the box is spun rapidly:
+     - **Centrifugal Acceleration**: $\vec{a}_{\text{cent}} = -\vec{\omega} \times (\vec{\omega} \times \vec{p})$ flings marbles radially outward toward the containment perimeter.
+     - **Inertial Wall Drag**: Marbles in proximity to any purple wall ($d < r + 0.22$) experience viscous contact drag $\Delta \vec{v} += (\vec{\omega} \times \vec{p}) \cdot \Delta t \cdot 0.58$, briefly following the spin of the box before settling back toward the lowest surface!
+
+### 12.3 Dual Boundary Collisions & Multi-Pass Marble-to-Marble Physics
+1. **Six Containment Chamber Walls ($L = 2.80 - r$)**:
+   - Elastic restitution ($e = 0.36$) yields satisfying, non-hyperactive bounces.
+   - Tangential rolling friction ($0.94$) damps velocity along contact planes, ensuring marbles roll and settle smoothly.
+2. **Central Cold Dwarf Core Collision ($R_{\text{core}} = 0.72$)**:
+   - Marbles bouncing against the collapsed central ash core deflect outward along the surface normal $\hat{n} = \vec{p} / \|\vec{p}\|$, rolling smoothly around the spherical obstacle.
+3. **2-Pass Pairwise Rigid Sphere Collision**:
+   - Evaluates all pairs $(i, j)$ across the 28 red shard nodes and all ingested blue idea nodes.
+   - Mass-weighted positional separation resolves overlaps without penetration:
+     $$\Delta \vec{p}_i = \hat{n} \cdot \delta \cdot \frac{m_j}{m_i + m_j}, \quad \Delta \vec{p}_j = -\hat{n} \cdot \delta \cdot \frac{m_i}{m_i + m_j}$$
+   - Elastic collision impulse ($e = 0.35$) transfers momentum between colliding marbles, producing realistic clustering, stacking, and rolling piles.
+
+### 12.4 Preserved Node Identity & Ingested Comet Blue Nodes
+1. **Ingested Idea Nodes Retain Radiant Cyan Blue (`0x00e5ff`)**:
+   - Ingested idea nodes synthesized from captured comets retain their signature electric cyan blue color and opacity ($0.98$), clearly distinguishing them among the ruby red shards.
+   - Ingested idea nodes possess slightly higher mass ($1.5$) and radius ($0.17$), lending them distinctive metallic weight.
+2. **Red Shard Nodes Retain Radiant Ruby Red (`0xff1744`)**:
+   - Standard shard nodes maintain full vibrant crimson luminosity, ensuring high-contrast visibility against the dark chamber floor.
+3. **Dynamic Network Edge Tangle**:
+   - Graph relationships (`relationshipLines`) and ingested synaptic edges (`ingestedEdgeObjects`) update their vertex buffer arrays in real time every frame.
+   - The network lines follow the falling marbles, tangling and draping naturally across the floor.
+
+### 12.5 Interactive Pointer Stirring & Acoustic Impulse Feedback
+1. **Interactive Pointer Swat / Poke**:
+   - The cursor's 3D position is projected into local box space (`cubeGroup.worldToLocal(mouse3D)`).
+   - Moving the pointer within $1.35$ units of resting marbles imparts an elastic radial push and tangential velocity wake, allowing the user to poke, stir, and scatter the marbles across the floor.
+2. **Acoustic Marble Impact Feedback (`CosmicAudio.playMarbleClick`)**:
+   - High-impulse collisions ($J > 0.18$) trigger a synthesized micro-acoustic click ($1450 \sim 2300\,\text{Hz}$ triangle wave with exponential decay over $38\,\text{ms}$), providing tactile ASMR audio satisfaction.
+
+### 12.6 Antigravity Restoration & Smooth Constellation Levitation
+When database connectivity is re-established (**RESTORE DATABASE**):
+1. **Smooth Quaternion Slerp**:
+   - `redGraphGroup.quaternion` smoothly slerps back to the 50% counter-rotating Euler orientation over $1.2\,\text{s}$ ($\text{step} = 0.055$).
+2. **Harmonic Levitation to Home Positions**:
+   - Each node smoothly interpolates from the floor back to its celestial graph constellation coordinate (`node.position.lerp(node.userData.basePos, 0.045)`).
+   - The tangled network lines smoothly untangle and contract, returning to pristine crystalline geometry!
+
+---
+
+## 13. Preservation of Foundation Features
 
 All interactive systems remain fully functional:
 1. **Synaptic Query Terminal**: NLP cypher queries, quick chips, and live logs.
 2. **2D Canvas Face Rig**: Real-time pupil tracking, natural blinking, jaw drop articulation, and proximity smiles.
-3. **Procedural Web Audio**: Continuous sub-bass drone, shockwave boom, pointer-velocity stardust chimes, and spark pop pings.
+3. **Procedural Web Audio**: Continuous sub-bass drone, shockwave boom, pointer-velocity stardust chimes, spark pop pings, and tactile marble clicks.
 4. **Deep-Space 3-Layer Parallax**: Opposing cursor parallax across near, mid, and far starfields.
 5. **Red Graph Counter-Rotation**: Organic 28-node constellation counter-rotating at 50% speed.
 6. **IdeaVerse Comets & Near-Miss Flybys**: Deep space comets, hypersonic Doppler flybys, 10-document narrative ledger, and zero-write outage rejection.
@@ -580,9 +653,10 @@ All interactive systems remain fully functional:
 9. **Option A Interstitial Containment Corridor**: 750 starlight particles circulating strictly within $[2.82, 3.32]$.
 10. **Calm vs. Chaotic Velocity Modulation**: $28\%$ calm synchronized laminar drift when online vs. $100\%$ agitated turbulent Brownian jitter during outage.
 11. **Purple Containment Frame & Travelling Light-Balls**: 12 neon struts, 8 corner beacons, 6 forcefield panels, Orocue perimeter race, and $0.62\,\text{s}$ spark explosions.
+12. **Cardboard Box Marble Physics**: Outage antigravity failure, tilting gravity, centrifugal spin drag, 2-pass marble collisions, and smooth reconnection levitation.
 
 ---
 
-## 13. Next Step on the Roadmap
+## 14. Next Step on the Roadmap
 
-- **Item 7: The Eldritch Cypher Shader Mandala** (`v039.22` / `v039.23`): Triple orthogonal 1024x1024 procedural canvas shader rings, dynamic glyph scrolling, harmonic resonance rings, and chromatic flare pulses.
+- **Item 7: The Eldritch Cypher Shader Mandala** (`v039.24` / `v039.25`): Triple orthogonal 1024x1024 procedural canvas shader rings, dynamic glyph scrolling, harmonic resonance rings, and chromatic flare pulses.
