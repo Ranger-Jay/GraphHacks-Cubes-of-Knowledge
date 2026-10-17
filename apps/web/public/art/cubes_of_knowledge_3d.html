@@ -396,6 +396,37 @@
         </div>
     </div>
 
+    <!-- Outage Ingestion Rejection Modal (Fail-Closed Zero-Write Defense) -->
+    <div id="outage-rejection-modal" class="hud-overlay inset-0 flex items-center justify-center p-4 bg-black/75 backdrop-blur-md hidden z-50">
+        <div class="relative w-full max-w-md bg-slate-950/95 p-6 rounded-3xl border border-red-500 shadow-[0_0_50px_rgba(255,23,68,0.5)] space-y-4 interactive font-mono">
+            <div class="flex items-center justify-between border-b border-red-950/80 pb-3">
+                <div class="flex items-center space-x-2.5">
+                    <span class="w-3.5 h-3.5 rounded-full bg-red-500 animate-ping"></span>
+                    <h2 class="text-sm font-bold text-red-300 tracking-wide uppercase">FALKORDB UNAVAILABLE // INGESTION LOCKED</h2>
+                </div>
+                <button onclick="closeOutageRejectionModal()" class="text-slate-400 hover:text-white text-xs font-bold p-1">✕</button>
+            </div>
+            <div class="space-y-3 text-xs text-slate-300">
+                <div class="bg-red-950/40 border border-red-900/60 p-3 rounded-xl text-red-200 leading-relaxed">
+                    <span class="text-red-400 font-bold block mb-1">⚠️ ZERO-WRITE AUDIT LOCK ENFORCED</span>
+                    Cannot ingest Idea-Verse document while FalkorDB is in a simulated disconnected outage state. All graph write mutations are locked to prevent unverified ledger corruption.
+                </div>
+                <div class="text-[11px] text-slate-400 space-y-1">
+                    <p>• <strong>Policy</strong>: Mandatory Zero-Write Compliance (DECISIONS_WARNINGS_AFTER_DARK.md)</p>
+                    <p>• <strong>Remediation</strong>: Click <strong>"RESTORE DATABASE"</strong> in the top-right HUD to restore the live cluster and re-enable live lattice node synthesis.</p>
+                </div>
+            </div>
+            <div class="pt-2 flex gap-2">
+                <button onclick="closeOutageRejectionModal()" class="flex-1 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-300 font-semibold text-xs border border-slate-700 transition">
+                    Acknowledge
+                </button>
+                <button onclick="restoreDatabaseFromModal()" class="flex-1 py-2 rounded-xl bg-red-900 hover:bg-red-800 text-white font-bold text-xs border border-red-500 shadow-lg transition">
+                    Restore Connection
+                </button>
+            </div>
+        </div>
+    </div>
+
     <!-- ========================================================================= -->
     <!-- INTERACTIVE AGENT CHAMBER MODAL (APERTURE UNFOLDING)                     -->
     <!-- ========================================================================= -->
@@ -944,6 +975,33 @@ REV: rel-wad@r2
                 gain.connect(this.masterGain);
                 osc.start(now);
                 osc.stop(now + 0.7);
+            },
+
+            playAuditAlert() {
+                if (!this.isInit || audioMuted || !this.ctx) return;
+                const now = this.ctx.currentTime;
+                [180, 120].forEach(freq => {
+                    const osc = this.ctx.createOscillator();
+                    const gain = this.ctx.createGain();
+                    osc.type = 'sawtooth';
+                    osc.frequency.setValueAtTime(freq, now);
+                    osc.frequency.exponentialRampToValueAtTime(freq * 0.7, now + 0.25);
+
+                    const filter = this.ctx.createBiquadFilter();
+                    filter.type = 'bandpass';
+                    filter.frequency.setValueAtTime(340, now);
+                    filter.Q.setValueAtTime(3.0, now);
+
+                    gain.gain.setValueAtTime(0.25, now);
+                    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.28);
+
+                    osc.connect(filter);
+                    filter.connect(gain);
+                    gain.connect(this.masterGain);
+
+                    osc.start(now);
+                    osc.stop(now + 0.3);
+                });
             },
 
             // Procedural Roaring Rocket Doppler Flyby Sound (Item 3b / v039.06)
@@ -2515,6 +2573,11 @@ REV: rel-wad@r2
 
         function importCometToCube() {
             if (!activeComet) return;
+            if (isDatabaseOutage) {
+                if (CosmicAudio && CosmicAudio.playAuditAlert) CosmicAudio.playAuditAlert();
+                openOutageRejectionModal();
+                return;
+            }
             const targetFile = (activeComet.userData && activeComet.userData.file) ? activeComet.userData.file : "GRAPH_SKETCH.md";
             const meta = IDEA_VERSE_METADATA[targetFile];
             const start = activeComet.position.clone();
@@ -2558,6 +2621,11 @@ REV: rel-wad@r2
         }
 
         function importCurrentIdeaFileToCube() {
+            if (isDatabaseOutage) {
+                if (CosmicAudio && CosmicAudio.playAuditAlert) CosmicAudio.playAuditAlert();
+                openOutageRejectionModal();
+                return;
+            }
             const file = activeCometTargetFile || IdeaVerseCometState.currentFile || "GRAPH_SKETCH.md";
             const meta = IDEA_VERSE_METADATA[file];
             let startPos = (IdeaVerseCometState && IdeaVerseCometState.headPos) ? IdeaVerseCometState.headPos.clone() : new THREE.Vector3(0, 2.5, 6);
@@ -2725,6 +2793,27 @@ REV: rel-wad@r2
             redEvidenceNodes.push(node);
         }
         window.spawnIngestedIdeaNode = spawnIngestedIdeaNode;
+
+        function openOutageRejectionModal() {
+            const m = document.getElementById('outage-rejection-modal');
+            if (m) m.classList.remove('hidden');
+        }
+
+        function closeOutageRejectionModal() {
+            const m = document.getElementById('outage-rejection-modal');
+            if (m) m.classList.add('hidden');
+        }
+
+        function restoreDatabaseFromModal() {
+            closeOutageRejectionModal();
+            if (isDatabaseOutage) {
+                const btn = document.getElementById('outage-toggle-btn');
+                if (btn) btn.click();
+            }
+        }
+        window.openOutageRejectionModal = openOutageRejectionModal;
+        window.closeOutageRejectionModal = closeOutageRejectionModal;
+        window.restoreDatabaseFromModal = restoreDatabaseFromModal;
 
         function toggleCometsHud() {
             showComets = !showComets;
@@ -4017,6 +4106,17 @@ REV: rel-wad@r2
                     }
                     if (eldritchCypherDisc) eldritchCypherDisc.material.opacity = 0.12;
                     if (eldritchCypherDisc2) eldritchCypherDisc2.material.opacity = 0.12;
+
+                    const btn1 = document.getElementById('btn-import-idea');
+                    if (btn1) {
+                        btn1.innerHTML = '<span>⚠️ Ingestion Locked (Database Offline)</span>';
+                        btn1.className = 'interactive flex-1 py-2.5 rounded-xl bg-red-950/80 hover:bg-red-900 text-red-200 font-bold text-xs shadow-lg transition flex items-center justify-center gap-1.5 border border-red-500/60';
+                    }
+                    const btn2 = document.getElementById('btn-import-idea-modal');
+                    if (btn2) {
+                        btn2.innerHTML = '<span>⚠️ Ingestion Locked (Database Offline)</span>';
+                        btn2.className = 'interactive flex-1 py-2.5 rounded-xl bg-red-950/80 hover:bg-red-900 text-red-200 font-bold text-xs shadow-lg transition flex items-center justify-center gap-1.5 border border-red-500/60';
+                    }
                 } else {
                     btn.textContent = 'SIMULATE OUTAGE';
                     btn.className = 'interactive hud-glass hover:bg-cyan-900/60 text-cyan-300 border border-cyan-500/40 px-3 py-2 rounded-xl text-xs font-mono';
@@ -4048,6 +4148,17 @@ REV: rel-wad@r2
                     }
                     if (eldritchCypherDisc) eldritchCypherDisc.material.opacity = 0.65;
                     if (eldritchCypherDisc2) eldritchCypherDisc2.material.opacity = 0.65;
+
+                    const btn1 = document.getElementById('btn-import-idea');
+                    if (btn1) {
+                        btn1.innerHTML = '<span>✨ Ingest into Company Cube</span>';
+                        btn1.className = 'interactive flex-1 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs shadow-lg transition flex items-center justify-center gap-1.5';
+                    }
+                    const btn2 = document.getElementById('btn-import-idea-modal');
+                    if (btn2) {
+                        btn2.innerHTML = '<span>✨ Ingest into Company Cube</span>';
+                        btn2.className = 'interactive flex-1 py-2.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-bold text-xs shadow-lg transition flex items-center justify-center gap-1.5 shadow-[0_0_20px_rgba(0,229,255,0.35)]';
+                    }
                 }
             });
 

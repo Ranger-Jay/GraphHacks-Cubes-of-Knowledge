@@ -13,6 +13,7 @@
   - `v039.08` (Item 3 Polish: Dual-Modal Cube Ingestion & Top-Right HUD Controls)
   - `v039.09` (Item 3 Extension: 10-Document Narrative Ledger Expansion)
   - `v039.10` (Item 3 Extension: Dynamic Ingested Node Synthesis in Lattice & Repository ideaverse/ Folder)
+  - `v039.11` (Item 3 Polish: Outage Zero-Write Ingestion Defense & Alert Dialog)
 - **Primary Source**: `apps/web/public/art/cubes_of_knowledge_3d.html`
 - **Studio Mirrors**: `Gem's Art Studio/cubes_of_knowledge_3d.html`
 
@@ -197,6 +198,18 @@ When an IdeaVerse document is ingested into the Company Cube (via either modal):
 3. **Dedicated Repository `ideaverse/` Directory**:
    - All 10 documents are stored as genuine `.md` files in the repository root (`ideaverse/`), establishing an authentic 1-to-1 digital twin between the filesystem and the 3D visualizer.
 
+### 6.5 Fail-Closed Zero-Write Defense During Outage (v039.11)
+Demonstrating genuine production engineering compliance with `DECISIONS_WARNINGS_AFTER_DARK.md`:
+1. **Interactive Ingestion Lock**:
+   - If the user toggles **"SIMULATE OUTAGE"** (FalkorDB cluster disconnected), both modal ingestion buttons immediately shift to crimson warning badges: `⚠️ Ingestion Locked (Database Offline)`.
+2. **Deterministic Rejection & Klaxon Audio**:
+   - Clicking ingest while offline rejects the operation immediately. No energy pulses are launched and zero graph mutations occur.
+   - Triggers `CosmicAudio.playAuditAlert()`: an authentic dual-tone sawtooth down-sweep rejection alert buzz (180 Hz & 120 Hz).
+3. **Dedicated Outage Alert Dialog (`#outage-rejection-modal`)**:
+   - Pops up an authoritative zero-write compliance warning:
+     *"⚠️ ZERO-WRITE AUDIT LOCK ENFORCED: Cannot ingest Idea-Verse document while FalkorDB is in a simulated disconnected outage state. All graph write mutations are locked to prevent unverified ledger corruption."*
+   - Includes **"Acknowledge"** (dismiss) and **"Restore Connection"** (instantly clears the outage and re-enables graph assimilation).
+
 ---
 
 ## 7. Preservation of Foundation Features
@@ -211,4 +224,4 @@ All interactive systems remain fully functional:
 
 ## 8. Next Step on the Roadmap
 
-- **Item 4: The Fiery Sun Core** (`v039.11` / `v039.12`): Dynamic plasma mantle wireframe, pulsating solar flares, prominences, and rotating concentric cypher mandala dials.
+- **Item 4: The Fiery Sun Core** (`v039.12` / `v039.13`): Dynamic plasma mantle wireframe, pulsating solar flares, prominences, and rotating concentric cypher mandala dials.
