@@ -2069,16 +2069,16 @@ REV: rel-wad@r2
         }
         window.triggerCoronalMassEjection = triggerCoronalMassEjection;
 
-        // --- 4. Three Orbiting Protector Pyramids INSIDE the Cube (Electrons & Light-Blue Lightning Orbits) ---
+        // --- 4. Three Orbiting Protector Pyramids INSIDE the Cube (Item 5: Electron Shells & Cyber Patrol) ---
         function createOrbitingPyramids() {
             Object.keys(AGENTS).forEach(key => {
                 const agent = AGENTS[key];
                 const orbitGroup = new THREE.Group();
                 cubeGroup.add(orbitGroup);
 
-                // Tilted magical light-blue electrical orbit path inside the cube
+                // 1. Tilted magical light-blue electrical orbit path inside the cube
                 const curvePts = [];
-                const segments = 72;
+                const segments = 96;
                 for (let i = 0; i <= segments; i++) {
                     const theta = (i / segments) * Math.PI * 2;
                     const p = new THREE.Vector3(
@@ -2093,13 +2093,33 @@ REV: rel-wad@r2
                 const orbitMat = new THREE.LineBasicMaterial({
                     color: 0x40c4ff,
                     transparent: true,
-                    opacity: 0.52,
+                    opacity: 0.65,
                     blending: THREE.AdditiveBlending
                 });
                 const orbitLine = new THREE.Line(orbitGeo, orbitMat);
                 orbitGroup.add(orbitLine);
 
-                // The Pyramid Rig itself (scaled to orbit cleanly inside the Company Cube)
+                // 2. Traveling Electron Energy Beads (Luminous Data Packets)
+                const electronBeads = [];
+                const beadOffsets = [0, (2 * Math.PI) / 3, (4 * Math.PI) / 3];
+                beadOffsets.forEach((offset, bIdx) => {
+                    const beadGeo = new THREE.SphereGeometry(0.068, 12, 12);
+                    const beadMat = new THREE.MeshBasicMaterial({
+                        color: 0xe0f7ff,
+                        transparent: true,
+                        opacity: 0.95,
+                        blending: THREE.AdditiveBlending
+                    });
+                    const beadMesh = new THREE.Mesh(beadGeo, beadMat);
+                    orbitGroup.add(beadMesh);
+                    electronBeads.push({
+                        mesh: beadMesh,
+                        mat: beadMat,
+                        offset: offset
+                    });
+                });
+
+                // 3. The Pyramid Rig itself (scaled to orbit cleanly inside the Company Cube)
                 const pyrRig = new THREE.Group();
                 const pyrGeo = new THREE.ConeGeometry(0.46, 0.78, 4);
                 const wireGeo = new THREE.WireframeGeometry(pyrGeo);
@@ -2149,15 +2169,62 @@ REV: rel-wad@r2
                 crystal.position.y = 0.43;
                 pyrRig.add(crystal);
 
+                // 4. Invisible Bounding Hit Sphere for Instant Responsive Raycasting
+                const hitGeo = new THREE.SphereGeometry(0.68, 16, 16);
+                const hitMat = new THREE.MeshBasicMaterial({ visible: false });
+                const hitMesh = new THREE.Mesh(hitGeo, hitMat);
+                hitMesh.userData = { isPyramid: true, agentKey: key, parentRig: pyrRig };
+                pyrRig.add(hitMesh);
+
+                // 5. Floating Holographic Agent Badge Sprite
+                const badgeCanvas = document.createElement('canvas');
+                badgeCanvas.width = 256;
+                badgeCanvas.height = 64;
+                const bctx = badgeCanvas.getContext('2d');
+                bctx.fillStyle = 'rgba(5, 10, 20, 0.85)';
+                bctx.strokeStyle = agent.accent;
+                bctx.lineWidth = 3;
+                bctx.beginPath();
+                bctx.roundRect(6, 6, 244, 52, 14);
+                bctx.fill();
+                bctx.stroke();
+
+                bctx.font = 'bold 20px monospace';
+                bctx.fillStyle = agent.accent;
+                bctx.textAlign = 'center';
+                bctx.textBaseline = 'middle';
+                const shortRole = agent.role.split(' ')[0].toUpperCase();
+                bctx.fillText(`${agent.name.toUpperCase()} // ${shortRole}`, 128, 32);
+
+                const badgeTex = new THREE.CanvasTexture(badgeCanvas);
+                const badgeMat = new THREE.SpriteMaterial({
+                    map: badgeTex,
+                    transparent: true,
+                    opacity: 0.90,
+                    blending: THREE.AdditiveBlending
+                });
+                const badgeSprite = new THREE.Sprite(badgeMat);
+                badgeSprite.position.set(0, 0.72, 0);
+                badgeSprite.scale.set(1.15, 0.29, 1.0);
+                pyrRig.add(badgeSprite);
+
                 orbitGroup.add(pyrRig);
                 pyramidGroups[key] = {
                     group: pyrRig,
                     orbitGroup: orbitGroup,
+                    orbitLine: orbitLine,
                     wireMat: wireMat,
                     faceMat: faceMat,
                     glyphCore: glyphCore,
+                    glyphCoreMat: glyphCoreMat,
+                    crystal: crystal,
+                    crystalMat: crystalMat,
+                    badgeSprite: badgeSprite,
+                    electronBeads: electronBeads,
                     data: agent,
-                    angle: Math.random() * Math.PI * 2
+                    angle: Math.random() * Math.PI * 2,
+                    scaleImpulse: 1.0,
+                    hoverAmount: 0.0
                 };
             });
         }
@@ -4109,6 +4176,28 @@ REV: rel-wad@r2
                     }
                 }
             }
+
+            // 3D Hover Detection for Cursor Feedback & Pyramid Highlighting
+            if (camera && !isDragging) {
+                const hoverHits = raycaster.intersectObjects(scene.children, true);
+                let hitInteractive = false;
+                let hoveredKey = null;
+                for (let h of hoverHits) {
+                    const u = h.object.userData;
+                    if (u && (u.isPyramid || u.isRedNode || u.isEvidenceNode || u.isComet)) {
+                        hitInteractive = true;
+                        if (u.isPyramid && u.agentKey) hoveredKey = u.agentKey;
+                        break;
+                    }
+                }
+                document.body.style.cursor = hitInteractive ? 'pointer' : 'default';
+
+                Object.keys(pyramidGroups).forEach(k => {
+                    const pyr = pyramidGroups[k];
+                    const targetHover = (k === hoveredKey) ? 1.0 : 0.0;
+                    pyr.hoverAmount += (targetHover - pyr.hoverAmount) * 0.25;
+                });
+            }
         }
 
         function onMouseDown(event) {
@@ -4137,7 +4226,12 @@ REV: rel-wad@r2
                         return;
                     }
                     if (obj.userData && obj.userData.isPyramid) {
-                        openAgentChamber(obj.userData.agentKey);
+                        const key = obj.userData.agentKey;
+                        if (key && pyramidGroups[key]) {
+                            pyramidGroups[key].scaleImpulse = 1.35;
+                            spawnSynapticLightning(key, isDatabaseOutage);
+                        }
+                        openAgentChamber(key);
                         return;
                     }
                 }
@@ -4343,6 +4437,27 @@ REV: rel-wad@r2
                     if (eldritchCypherDisc2) eldritchCypherDisc2.material.opacity = 0.12;
                     if (eldritchCypherDisc3) eldritchCypherDisc3.material.opacity = 0.12;
 
+                    // Orbiting Pyramids warning state during outage
+                    Object.keys(pyramidGroups).forEach(k => {
+                        const pyr = pyramidGroups[k];
+                        if (pyr.wireMat) pyr.wireMat.color.setHex(0xaa2030);
+                        if (pyr.faceMat) {
+                            pyr.faceMat.color.setHex(0x441518);
+                            pyr.faceMat.opacity = 0.18;
+                        }
+                        if (pyr.glyphCoreMat) pyr.glyphCoreMat.color.setHex(0xff1744);
+                        if (pyr.orbitLine) {
+                            pyr.orbitLine.material.color.setHex(0x551015);
+                            pyr.orbitLine.material.opacity = 0.20;
+                        }
+                        if (pyr.electronBeads) {
+                            pyr.electronBeads.forEach(b => {
+                                b.mesh.material.color.setHex(0x880010);
+                                b.mesh.material.opacity = 0.25;
+                            });
+                        }
+                    });
+
                     const btn1 = document.getElementById('btn-import-idea');
                     if (btn1) {
                         btn1.innerHTML = '<span>⚠️ Ingestion Locked (Database Offline)</span>';
@@ -4409,6 +4524,28 @@ REV: rel-wad@r2
                     if (eldritchCypherDisc) eldritchCypherDisc.material.opacity = 0.72;
                     if (eldritchCypherDisc2) eldritchCypherDisc2.material.opacity = 0.72;
                     if (eldritchCypherDisc3) eldritchCypherDisc3.material.opacity = 0.72;
+
+                    // Orbiting Pyramids restored active neon state
+                    Object.keys(pyramidGroups).forEach(k => {
+                        const pyr = pyramidGroups[k];
+                        const colorHex = parseInt(pyr.data.accent.replace('#', '0x'));
+                        if (pyr.wireMat) pyr.wireMat.color.setHex(colorHex);
+                        if (pyr.faceMat) {
+                            pyr.faceMat.color.setHex(colorHex);
+                            pyr.faceMat.opacity = 0.34;
+                        }
+                        if (pyr.glyphCoreMat) pyr.glyphCoreMat.color.setHex(0x40c4ff);
+                        if (pyr.orbitLine) {
+                            pyr.orbitLine.material.color.setHex(0x40c4ff);
+                            pyr.orbitLine.material.opacity = 0.65;
+                        }
+                        if (pyr.electronBeads) {
+                            pyr.electronBeads.forEach(b => {
+                                b.mesh.material.color.setHex(0xe0f7ff);
+                                b.mesh.material.opacity = 0.95;
+                            });
+                        }
+                    });
 
                     // Trigger celebratory CME solar flare ignition burst!
                     triggerCoronalMassEjection(true);
@@ -4749,28 +4886,75 @@ REV: rel-wad@r2
                 }
             }
 
-            // Orbiting Pyramids INSIDE Cube (Electrons & Pulsing Glyph Cores)
+            // Orbiting Pyramids INSIDE Cube (Item 5: Dynamic Tangent Flight & Electron Shells)
             Object.keys(pyramidGroups).forEach(key => {
                 const item = pyramidGroups[key];
                 if (!reducedMotion) {
                     item.angle += item.data.orbitSpeed * 0.02;
                     const r = item.data.orbitRadius;
+                    const tilt = item.data.orbitTilt;
+                    const euler = new THREE.Euler(tilt.x, tilt.y, tilt.z);
+
+                    // Compute current orbital position P(theta)
                     const p = new THREE.Vector3(
                         Math.cos(item.angle) * r,
                         0,
                         Math.sin(item.angle) * r
-                    );
-                    p.applyEuler(new THREE.Euler(item.data.orbitTilt.x, item.data.orbitTilt.y, item.data.orbitTilt.z));
+                    ).applyEuler(euler);
                     item.group.position.copy(p);
 
-                    // Self-rotation of pyramid & internal glyph core pulse
-                    item.group.rotation.y += 0.025;
-                    item.group.rotation.x = Math.sin(time + item.angle) * 0.15;
+                    // Forward Tangent Flight Heading Vector
+                    const pNext = new THREE.Vector3(
+                        Math.cos(item.angle + 0.04) * r,
+                        0,
+                        Math.sin(item.angle + 0.04) * r
+                    ).applyEuler(euler);
+                    const tangent = pNext.clone().sub(p).normalize();
+                    const normal = p.clone().normalize();
+                    const flightQuat = new THREE.Quaternion().setFromUnitVectors(
+                        new THREE.Vector3(0, 1, 0),
+                        normal.clone().add(tangent.clone().multiplyScalar(0.42)).normalize()
+                    );
+                    item.group.quaternion.copy(flightQuat);
+                    item.group.rotateY(time * 1.8);
+
+                    // Scale impulse & hover scaling
+                    item.scaleImpulse += (1.0 - item.scaleImpulse) * 0.10;
+                    const hoverScale = 1.0 + (item.hoverAmount || 0) * 0.18;
+                    const currentScale = item.scaleImpulse * hoverScale;
+                    item.group.scale.set(currentScale, currentScale, currentScale);
+
+                    // Hover wireframe brightness
+                    if (item.wireMat) {
+                        item.wireMat.opacity = 0.92 + (item.hoverAmount || 0) * 0.08;
+                    }
+
+                    // Glyph Core internal spin & pulse
                     if (item.glyphCore) {
                         item.glyphCore.rotation.y -= 0.045;
                         item.glyphCore.rotation.z += 0.03;
                         const glyphPulse = 0.88 + Math.sin(time * 4.2 + item.angle * 2.5) * 0.24;
                         item.glyphCore.scale.set(glyphPulse, glyphPulse, glyphPulse);
+                    }
+
+                    // Apex Sensor Crystal strobe
+                    if (item.crystalMat && !isDatabaseOutage) {
+                        item.crystalMat.opacity = 0.82 + Math.sin(time * 6.5 + item.angle) * 0.18;
+                    }
+
+                    // Traveling Electron Energy Beads along the tilted orbit
+                    if (item.electronBeads) {
+                        item.electronBeads.forEach((beadItem, bIdx) => {
+                            const beadAngle = item.angle + beadItem.offset;
+                            const beadPos = new THREE.Vector3(
+                                Math.cos(beadAngle) * r,
+                                0,
+                                Math.sin(beadAngle) * r
+                            ).applyEuler(euler);
+                            beadItem.mesh.position.copy(beadPos);
+                            const beadSparkle = 0.85 + Math.sin(time * 8.0 + bIdx * 2.0) * 0.35;
+                            beadItem.mesh.scale.setScalar(beadSparkle);
+                        });
                     }
                 }
             });
