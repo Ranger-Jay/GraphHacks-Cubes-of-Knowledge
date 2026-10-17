@@ -954,6 +954,13 @@ All 10 milestone rows across the 3D Space Visualizer roadmap are now **100% COMP
 - **Telemetry Drawer Runtime Switches**: Enhanced Section 2 with 3-way toggle buttons: `🟢 READY (Protected)`, `🟡 SIMULATE (Vulnerable)`, and `🔴 OUTAGE (Failing)`.
 - **Three-Mirror Synchronization**: All 3 visualizer mirrors locked with SHA-256 `93708F96F2993442D87795DA14A58C829FA211773C7BF91FA696FAAB615B363A`.
 
+### 18.4 Drag Thresholding & Generous Cube Grab Interaction (`v039.39` / `v039.40`)
+- **Drag Distance Thresholding**: Implemented professional 4px movement threshold (`hasMovedDuringDrag`) that cleanly distinguishes intentional cube drags from object clicks. Clicking and dragging anywhere inside the cube now immediately and reliably spins the Company Cube without accidental node selection or modal interruption.
+- **Generous 6.2 Spatial Radius**: Expanded cube interaction radius to $6.2$ (covering all 8 outer corners and purple containment frame), eliminating missed click slips.
+- **Click-through Guard**: Clicking on the 3D canvas is disabled while the agent chamber is open, preventing accidental field manipulation.
+- **Three-Mirror Synchronization**: All 3 visualizer mirrors locked with SHA-256 `8F28A3CC32ECA0B412FBED6657E186AB5828C2F0A0AB64D1B7486847F0650B31`.
+
+
 
 
 
