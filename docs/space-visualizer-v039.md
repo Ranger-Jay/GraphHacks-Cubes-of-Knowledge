@@ -424,20 +424,94 @@ Real-time coronal loops erupting from the solar chromosphere:
 
 ---
 
-## 10. Preservation of Foundation Features
+## 10. Purple Containment Frame & Travelling Light-Balls (v039.18 / v039.19)
+
+### 10.1 Thick Volumetric Neon Amethyst Struts & Corner Beacons
+To elevate the inner tesseract into an authoritative, radiant containment architecture:
+1. **12 Volumetric Neon Cylindrical Struts (`purpleStruts`)**:
+   - Replaced faint hairline wireframe lines with 12 authentic 3D cylindrical struts:
+     $$\text{Geometry: } \text{CylinderGeometry}(0.045, 0.045, 5.60, 12)$$
+   - Grouped orthogonally: 4 parallel to X, 4 parallel to Y, and 4 parallel to Z, meeting at vertices $( \pm 2.80, \pm 2.80, \pm 2.80 )$.
+   - Material: Luminous cyber amethyst (`#c084fc`), additive blending, opacity `0.92`.
+2. **8 Glowing Corner Junction Beacons (`purpleCornerBeacons`)**:
+   - Located at all 8 cube vertices $( \pm 2.80, \pm 2.80, \pm 2.80 )$.
+   - Geometry: `SphereGeometry(0.13, 16, 16)`, soft lavender diamond glow (`#dda0dd`), additive blending, opacity `0.96`.
+   - Flawlessly caps the intersection of the 3 orthogonal cylindrical struts at each corner.
+3. **Dual-Pass Radiant Aura (`purpleWireAura`)**:
+   - Outlined with an expanded wireframe lattice at scale `1.012` (`#9333ea`, opacity `0.45`), producing a radiant 200% volumetric aura surrounding the inner chamber.
+
+### 10.2 Six Translucent Forcefield Containment Panels (`purplePanels`)
+- 6 planar forcefield walls (`PlaneGeometry(5.60, 5.60)`) sealing the 6 faces of the purple containment frame at $\pm 2.80$ on X, Y, and Z.
+- Material: Cyber violet (`#8b5cf6`), double-sided, additive blending, opacity `0.055`, `depthWrite: false`.
+- Visually establishes the inner containment boundary separating the core solar/pyramid sanctuary ($r \le 2.80$) from the outer fluid starlight corridor ($[2.80, 3.35]$).
+
+### 10.3 Orocue Travelling Light-Balls Kinematics (v039.18)
+Adapted directly from Orocue v10 (`commit 4566342e584b`):
+1. **Asymmetric Perimeter Race**:
+   - For any given face with ordered corners $[C_0, C_1, C_2, C_3]$:
+     - **Slow Orb**: Departs $C_0$ and travels along the single edge directly to $C_3$:
+       $$\vec{P}_{\text{slow}}(u) = (1 - u) C_0 + u C_3, \quad u \in [0, 1]$$
+     - **Fast Orb**: Departs $C_0$ at the exact same instant, lapping the other three edges at **3x speed**:
+       - Segment 1 ($u \in [0, 1/3)$): $\vec{P}_{\text{fast}} = \text{lerp}(C_0, C_1, 3u)$
+       - Segment 2 ($u \in [1/3, 2/3)$): $\vec{P}_{\text{fast}} = \text{lerp}(C_1, C_2, 3(u - 1/3))$
+       - Segment 3 ($u \in [2/3, 1]$): $\vec{P}_{\text{fast}} = \text{lerp}(C_2, C_3, 3(u - 2/3))$
+2. **Synchronized Simultaneous Arrival**:
+   - Total duration: $T = 2.6\,\text{s}$ (exact match to Orocue `animation-duration: 2.6s`).
+   - Because all 4 edges of the square face have equal length $L = 5.60$, the slow orb covers distance $L$ at velocity $v = L / T$, while the fast orb covers distance $3L$ at velocity $3v$.
+   - Both orbs arrive at destination corner $C_3$ at the exact same split-second ($u = 1.0$)!
+3. **Orb Aesthetics**:
+   - **Slow Orb**: Gold/Amber core (`#ffe082`, radius `0.08`) with a vibrant violet halo (`#e040fb`, radius `0.18`).
+   - **Fast Orb**: Brilliant diamond white core (`#ffffff`, radius `0.08`) with an electric cyber amethyst halo (`#7c4dff`, radius `0.18`).
+   - Opacity matches Orocue CSS keyframes: fade-in over first 8% of the run ($u < 0.08$), steady brilliance with micro-twinkle across $u \in [0.08, 0.96]$, and collision detonation at $u = 1.0$.
+
+### 10.4 Corner Collision Spark Pop Explosion
+When both orbs collide simultaneously at corner $C_3$:
+1. **Orocue Keyframe Replication (`sparkPop .62s`)**:
+   - Total duration: $620\,\text{ms}$ ($0.62\,\text{s}$).
+   - Scale interpolation:
+     - $0\% \to 35\%$: expands from $0.30 \to 1.25$
+     - $35\% \to 100\%$: expands from $1.25 \to 1.90$
+   - Rotation interpolation:
+     - $0\% \to 35\%$: rolls from $0^\circ \to 35^\circ$ ($0.61\,\text{rad}$)
+     - $35\% \to 100\%$: rolls from $35^\circ \to 80^\circ$ ($1.40\,\text{rad}$)
+   - Opacity interpolation:
+     - Ramps from $0.0 \to 1.0$ at $35\%$, then smoothly dissolves to $0.0$ at $100\%$.
+2. **Dual-Bladed Anamorphic Diamond Spark Texture**:
+   - 128x128 procedural canvas texture featuring a central radial gradient, horizontal blade ($116 \times 4\,\text{px}$), vertical blade ($4 \times 116\,\text{px}$), and $45^\circ$ diagonal glints.
+3. **Eight Radial Micro-Sparks**:
+   - 8 micro-particles burst outward in an orthogonal spray from the corner with outward normal velocity, decelerating with viscous damping ($0.92$ per frame).
+4. **Glassy Audio Chime Pop**:
+   - Each collision fires `CosmicAudio.playStardustChime(0, 1.85)`: a high-frequency crystal chime micro-pop.
+
+### 10.5 Outage Corrupted State & Restored Neon Resonance
+- **Active Outage**:
+  - Purple struts darken to deep corrupted shadow violet (`#3a123f`).
+  - Corner beacons shift to bruised crimson (`#551144`).
+  - Translucent panels drop opacity to `0.02`.
+- **Restored Reconnection**:
+  - Struts snap back to vibrant neon amethyst (`#c084fc`, opacity `0.92`).
+  - Corner beacons flare to radiant lavender diamond (`#dda0dd`).
+  - Translucent panels restore to glowing violet field (`#8b5cf6`, opacity `0.055`).
+
+---
+
+## 11. Preservation of Foundation Features
 
 All interactive systems remain fully functional:
 1. **Synaptic Query Terminal**: NLP cypher queries, quick chips, and live logs.
 2. **2D Canvas Face Rig**: Real-time pupil tracking, natural blinking, jaw drop articulation, and proximity smiles.
-3. **Procedural Web Audio**: Continuous sub-bass drone, shockwave boom, and pointer-velocity stardust chimes.
+3. **Procedural Web Audio**: Continuous sub-bass drone, shockwave boom, pointer-velocity stardust chimes, and spark pop pings.
 4. **Deep-Space 3-Layer Parallax**: Opposing cursor parallax across near, mid, and far starfields.
 5. **Red Graph Counter-Rotation**: Organic 28-node constellation counter-rotating at 50% speed.
 6. **IdeaVerse Comets & Near-Miss Flybys**: Deep space comets, hypersonic Doppler flybys, 10-document narrative ledger, and zero-write outage rejection.
-7. **The Fiery Sun Core**: Turbulent plasma mantle wireframe, 6 magnetic prominence loops, CME flare pulses, and 3-axis Cypher mandala.
-8. **Three Orbiting Protector Pyramids**: Traveling electron shells, aerospace velocity heading, holographic badges, and synaptic lightning trigger.
+7. **The Fiery Sun Core**: Dynamic turbulent plasma mantle, 6 magnetic prominence loops, CME flare pulses, and 3-axis Cypher mandala.
+8. **Three Orbiting Protector Pyramids**: Traveling electron shells, calibrated orbital clearance ($2.05, 2.35, 2.65$), and synaptic lightning trigger.
+9. **Internal Liquid Starlight Fluid**: Laminar curl noise, ship bow waves, cursor micro-eddy stirring, and outage ember decay.
+10. **Purple Containment Frame & Travelling Light-Balls**: 12 neon struts, 8 corner beacons, 6 forcefield panels, Orocue perimeter race, and $0.62\,\text{s}$ spark explosions.
 
 ---
 
-## 11. Next Step on the Roadmap
+## 12. Next Step on the Roadmap
 
-- **Item 7: The Eldritch Cypher Shader Mandala** (`v039.18` / `v039.19`): Triple orthogonal 1024x1024 procedural canvas shader rings, dynamic glyph scrolling, harmonic resonance rings, and chromatic flare pulses.
+- **Fluid Containment Interstitial Corridor** (`v039.20` / `v039.21`): Option A strict boundary enforcement where particles float exclusively in the corridor between outer blue box ($[-3.40, 3.40]$) and inner purple box ($[-2.80, 2.80]$), with calm synchronized laminar flow when connected and fast chaotic turbulence during outage.
+- **Item 7: The Eldritch Cypher Shader Mandala** (`v039.22` / `v039.23`): Triple orthogonal 1024x1024 procedural canvas shader rings, dynamic glyph scrolling, harmonic resonance rings, and chromatic flare pulses.
