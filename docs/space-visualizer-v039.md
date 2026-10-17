@@ -964,6 +964,16 @@ All 10 milestone rows across the 3D Space Visualizer roadmap are now **100% COMP
 - **Dock Streamlining**: Removed redundant 200% glow indicator badge from the left wing of the unified bottom control dock, leaving primary integrity and status readouts consolidated in the top HUD status ribbon.
 - **Three-Mirror Synchronization**: All 3 visualizer mirrors locked with SHA-256 `D56778F7E72AEB9ED43F18F090404958A001B08160FA5A673E9DE521C7DD3539`.
 
+### 18.6 Bidirectional IdeaVerse Comets Indicator Synchronization (`v039.43` / `v039.44`)
+- **Bidirectional State Synchronization**: Unified `setCometsEnabled(enabled)` so that toggling either the top HUD button (`#comets-toggle-btn`) or the bottom dock checkbox (`#toggle-comets`) instantaneously synchronizes both elements:
+  - Top HUD button text (`COMETS: ON` vs `COMETS: OFF`)
+  - Top HUD beacon dot (`bg-cyan-400 animate-pulse` vs `bg-slate-500`)
+  - Top HUD container style (active cyber-cyan glass vs inactive muted slate glass)
+  - Bottom dock checkbox state (`toggle-comets.checked = showComets`)
+- **Active Lifecycle Management**: Disabling comets cleanly sweeps all active deep-space comets, cancels near-miss flyby sounds, resets screen flashes, and hides ribbon trails. Enabling comets immediately seeds the next cosmic trajectory.
+- **Three-Mirror Synchronization**: All 3 visualizer mirrors locked with SHA-256 `81A8D3FAF5B2C66F9154FDD2DFB3F4FF967C751E591F6F8CAECA394E6241FACD`.
+
+
 
 
 
