@@ -750,17 +750,24 @@ Following Jay's architectural specification ("how the entire space field moves w
      \end{aligned}$$
    - Camera smoothly glides with spherical lerp: `camera.position.lerp(targetCamPos, 0.08); camera.lookAt(cameraTarget);`.
 
-### 14.2 Seamless Drag Classification & Cursor UX
+### 14.2 Seamless Drag Classification & Cursor UX (v039.28)
+- **Immediate Mouse Coordinate Normalization**:
+  - `onMouseDown` and `onTouchStart` immediately compute normalized device coordinates (`mouse.x = (clientX / innerWidth) * 2 - 1`, `mouse.y = -(clientY / innerHeight) * 2 + 1`) prior to raycasting, eliminating stale coordinate desynchronization on initial click.
+- **Generous Spatial Bounding Hit Volume ($R_{\text{bound}} \le 5.2$)**:
+  - Rather than relying solely on ray intersections against thin, semi-transparent face planes (`opacity: 0.035`) which could pass between wireframe struts or miss rotated angles, the engine evaluates the perpendicular distance from the camera sightline ray to the cube origin $(0, 0, 0)$:
+    $$d_{\text{ray}} = \text{raycaster.ray.distanceToPoint}((0, 0, 0))$$
+  - If $d_{\text{ray}} \le 5.2$ (or intersects any child mesh of `cubeGroup` / `cubePlanes`), the interaction is authoritatively classified as **Company Cube Spin** (`dragMode = 'cube'`), giving the user immediate, buttery-smooth grab-and-spin control identical to Buddy Town!
+  - If $d_{\text{ray}} > 5.2$, the interaction is classified as **Celestial Cosmos Orbit** (`dragMode = 'orbit'`).
 - **Hover Detection (`!isDragging`)**:
   - Over interactive objects (Idea comets, red/blue evidence nodes, protector pyramids): `cursor = 'pointer'`.
-  - Over Company Cube bounding surfaces: `cursor = 'grab'`.
-  - Over open celestial space / starfield: `cursor = 'default'`.
+  - Over Company Cube bounding volume ($d_{\text{ray}} \le 5.2$ or `cubeGroup` hierarchy): `cursor = 'grab'`.
+  - Over open celestial space / starfield ($d_{\text{ray}} > 5.2$): `cursor = 'default'`.
 - **Active Drag Feedback (`isDragging`)**:
   - Dragging Company Cube: `cursor = 'grabbing'`.
   - Dragging 360° Celestial Orbit: `cursor = 'move'`.
 - **Universal Right-Click & Touch Navigation**:
-  - Right-click drag always orbits the 360° celestial cosmos regardless of where the cursor starts, allowing instant cosmos repositioning without de-selecting the cube.
-  - Multi-touch: 1-finger drag on cube spins cube, 1-finger drag in open space orbits cosmos, 2-finger pinch smoothly zooms distance $R_{\text{cam}} \in [2.8, 26.0]$.
+  - Right-click drag (or Shift-click drag) always orbits the 360° celestial cosmos regardless of where the cursor starts, allowing instant cosmos repositioning without de-selecting the cube.
+  - Multi-touch: 1-finger drag on cube ($d_{\text{ray}} \le 5.2$) spins cube, 1-finger drag in open space orbits cosmos, 2-finger pinch smoothly zooms distance $R_{\text{cam}} \in [2.8, 26.0]$.
 
 ### 14.3 Distance-Driven 3D Aperture Opening
 - Rather than relying on a 1D Z-axis coordinate, aperture panel sliding is governed by Euclidean 3D distance from the cube origin:
