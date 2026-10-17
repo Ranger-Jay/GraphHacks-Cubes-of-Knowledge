@@ -960,6 +960,11 @@ All 10 milestone rows across the 3D Space Visualizer roadmap are now **100% COMP
 - **Click-through Guard**: Clicking on the 3D canvas is disabled while the agent chamber is open, preventing accidental field manipulation.
 - **Three-Mirror Synchronization**: All 3 visualizer mirrors locked with SHA-256 `8F28A3CC32ECA0B412FBED6657E186AB5828C2F0A0AB64D1B7486847F0650B31`.
 
+### 18.5 Bottom Dock Redundancy Cleanup (`v039.41` / `v039.42`)
+- **Dock Streamlining**: Removed redundant 200% glow indicator badge from the left wing of the unified bottom control dock, leaving primary integrity and status readouts consolidated in the top HUD status ribbon.
+- **Three-Mirror Synchronization**: All 3 visualizer mirrors locked with SHA-256 `D56778F7E72AEB9ED43F18F090404958A001B08160FA5A673E9DE521C7DD3539`.
+
+
 
 
 
