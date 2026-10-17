@@ -763,6 +763,9 @@ REV: rel-wad@r2
         let nextTravellingOrbLaunchTime = performance.now() + 1500;
         let purpleFaceConfigs = [];
         let redGraphGroup = null, redNodes = [], relationshipLines = null, showNodeNames = false, nodeLabels = [];
+        let graphEdgePairs = [], ingestedEdgeObjects = [];
+        let prevCubeRotation = new THREE.Vector3(0, 0, 0);
+        let lastMarbleSoundTime = 0;
         let sunGroup, sunSphere, innerSun, sunCoronaRing, sunCoronaRing2, sunTorusLoop, eldritchCypherDisc, eldritchCypherDisc2, eldritchCypherDisc3;
         let sunPlasmaShroud = null, sunProminences = [], sunFlareEjections = [], sunMantleBaseVertices = null;
         let nextAutonomousCME = performance.now() + 10000;
@@ -1149,6 +1152,25 @@ REV: rel-wad@r2
                     } catch(e) {}
                 }
                 this.flybyAudioNodes = null;
+            },
+
+            // Physical Marble Impact Click (Subtle ASMR Glass/Ceramic Impulse)
+            playMarbleClick(intensity = 1.0) {
+                if (!this.isInit || audioMuted || !this.ctx) return;
+                const now = this.ctx.currentTime;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = 'triangle';
+                const freq = 1450 + Math.random() * 850;
+                osc.frequency.setValueAtTime(freq, now);
+                osc.frequency.exponentialRampToValueAtTime(freq * 0.45, now + 0.035);
+                const vol = Math.min(0.22, 0.06 * intensity);
+                gain.gain.setValueAtTime(vol, now);
+                gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.038);
+                osc.connect(gain);
+                gain.connect(this.masterGain);
+                osc.start(now);
+                osc.stop(now + 0.04);
             }
         };
 
@@ -2141,7 +2163,10 @@ REV: rel-wad@r2
                     hash: hashStr,
                     data: evData,
                     neighbors: [],
-                    basePos: new THREE.Vector3(x, y, z)
+                    basePos: new THREE.Vector3(x, y, z),
+                    velocity: new THREE.Vector3(0, 0, 0),
+                    radius: 0.12,
+                    mass: 1.0
                 };
 
                 redGraphGroup.add(node);
@@ -2182,12 +2207,14 @@ REV: rel-wad@r2
             }
 
             // Build relationship edges between nearby nodes
+            graphEdgePairs = [];
             for (let i = 0; i < nodeCount; i++) {
                 for (let j = i + 1; j < nodeCount; j++) {
                     const dist = nodePositions[i].distanceTo(nodePositions[j]);
                     if (dist < 1.35) {
                         edgePoints.push(nodePositions[i]);
                         edgePoints.push(nodePositions[j]);
+                        graphEdgePairs.push([i, j]);
                         redNodes[i].userData.neighbors.push(j);
                         redNodes[j].userData.neighbors.push(i);
                     }
@@ -2255,7 +2282,7 @@ REV: rel-wad@r2
                     if (n.userData && n.userData.isIngestedIdeaNode) {
                         n.material.color.setHex(0x00e5ff);
                     } else {
-                        n.material.color.setHex(isDatabaseOutage ? 0x550011 : 0xff1744);
+                        n.material.color.setHex(0xff1744);
                     }
                     n.scale.set(1.0, 1.0, 1.0);
                 }
@@ -2270,11 +2297,11 @@ REV: rel-wad@r2
                 if (n.userData && n.userData.isIngestedIdeaNode) {
                     n.material.color.setHex(0x00e5ff);
                 } else {
-                    n.material.color.setHex(isDatabaseOutage ? 0x550011 : 0xff1744);
+                    n.material.color.setHex(0xff1744);
                 }
                 n.scale.set(1.0, 1.0, 1.0);
             });
-            if (relationshipLines) relationshipLines.material.opacity = isDatabaseOutage ? 0.15 : 0.45;
+            if (relationshipLines) relationshipLines.material.opacity = isDatabaseOutage ? 0.35 : 0.45;
         }
 
         window.selectRedNode = selectRedNode;
@@ -3522,7 +3549,13 @@ REV: rel-wad@r2
                 rev: fileMeta ? fileMeta.rev : "v1.0",
                 hash: hashStr,
                 file: fileName,
-                neighbors: []
+                neighbors: [],
+                basePos: new THREE.Vector3(x, y, z),
+                velocity: new THREE.Vector3(0, 0, 0),
+                radius: 0.17,
+                mass: 1.5,
+                edgeLinesMesh: null,
+                edgeNeighborNodes: []
             };
 
             // Animate scale birth bloom
@@ -3566,6 +3599,13 @@ REV: rel-wad@r2
                     });
                     const edgeLines = new THREE.LineSegments(edgeGeo, edgeMat);
                     redGraphGroup.add(edgeLines);
+                    node.userData.edgeLinesMesh = edgeLines;
+                    node.userData.edgeNeighborNodes = closest.map(c => redNodes[c.idx]);
+                    ingestedEdgeObjects.push({
+                        nodeA: node,
+                        edgeLinesMesh: edgeLines,
+                        neighborNodes: closest.map(c => redNodes[c.idx])
+                    });
                 }
             }
 
@@ -4935,10 +4975,43 @@ REV: rel-wad@r2
                     if (purpleStruts) purpleStruts.forEach(s => s.material.color.setHex(0x3a123f));
                     if (purpleCornerBeacons) purpleCornerBeacons.forEach(b => b.material.color.setHex(0x551144));
                     if (purplePanels) purplePanels.forEach(p => p.material.opacity = 0.02);
-                    if (redNodes) redNodes.forEach(n => n.material.color.setHex(0x550011));
+                    // Transition red nodes and ingested blue nodes into Cardboard Box Marble Physics
+                    if (redGraphGroup && cubeGroup) {
+                        redNodes.forEach(node => {
+                            const worldPos = new THREE.Vector3();
+                            node.getWorldPosition(worldPos);
+                            cubeGroup.worldToLocal(worldPos);
+                            const pLim = 2.65;
+                            worldPos.x = Math.max(-pLim, Math.min(pLim, worldPos.x));
+                            worldPos.y = Math.max(-pLim, Math.min(pLim, worldPos.y));
+                            worldPos.z = Math.max(-pLim, Math.min(pLim, worldPos.z));
+                            node.position.copy(worldPos);
+                            if (!node.userData.velocity) node.userData.velocity = new THREE.Vector3();
+                            node.userData.velocity.set(
+                                (Math.random() - 0.5) * 0.04,
+                                -0.06 - Math.random() * 0.06,
+                                (Math.random() - 0.5) * 0.04
+                            );
+                        });
+                        redGraphGroup.quaternion.copy(cubeGroup.quaternion);
+                        redGraphGroup.updateMatrixWorld(true);
+                    }
+
+                    // Preserve radiant glowing marble colors: blue for ingested ideas, crimson red for graph nodes!
+                    if (redNodes) {
+                        redNodes.forEach(n => {
+                            if (n.userData && n.userData.isIngestedIdeaNode) {
+                                n.material.color.setHex(0x00e5ff); // Cyan blue preserved!
+                                n.material.opacity = 0.98;
+                            } else {
+                                n.material.color.setHex(0xff1744); // Radiant red marble preserved!
+                                n.material.opacity = 0.98;
+                            }
+                        });
+                    }
                     if (relationshipLines) {
-                        relationshipLines.material.color.setHex(0x330008);
-                        relationshipLines.material.opacity = 0.15;
+                        relationshipLines.material.color.setHex(0xaa1133);
+                        relationshipLines.material.opacity = 0.35;
                     }
                     
                     // Update Solar Core Badge to Cold Dwarf
@@ -5031,7 +5104,16 @@ REV: rel-wad@r2
                     if (purpleStruts) purpleStruts.forEach(s => s.material.color.setHex(0xc084fc));
                     if (purpleCornerBeacons) purpleCornerBeacons.forEach(b => b.material.color.setHex(0xdda0dd));
                     if (purplePanels) purplePanels.forEach(p => p.material.opacity = 0.055);
-                    if (redNodes) redNodes.forEach(n => n.material.color.setHex(0xff1744));
+                    if (redNodes) {
+                        redNodes.forEach(n => {
+                            if (n.userData && n.userData.isIngestedIdeaNode) {
+                                n.material.color.setHex(0x00e5ff);
+                            } else {
+                                n.material.color.setHex(0xff1744);
+                            }
+                            n.material.opacity = 0.92;
+                        });
+                    }
                     if (relationshipLines) {
                         relationshipLines.material.color.setHex(0xff2244);
                         relationshipLines.material.opacity = 0.45;
@@ -5256,11 +5338,304 @@ REV: rel-wad@r2
             }
         }
 
+        // --- Cardboard Box Marble Physics & Dynamic Graph Lines (v039.22) ---
+        function updateGraphLinesAndEdges() {
+            if (relationshipLines && relationshipLines.geometry && graphEdgePairs.length > 0) {
+                const arr = relationshipLines.geometry.attributes.position.array;
+                let pIdx = 0;
+                for (let k = 0; k < graphEdgePairs.length; k++) {
+                    const iA = graphEdgePairs[k][0];
+                    const iB = graphEdgePairs[k][1];
+                    const nA = redNodes[iA];
+                    const nB = redNodes[iB];
+                    if (nA && nB) {
+                        arr[pIdx++] = nA.position.x;
+                        arr[pIdx++] = nA.position.y;
+                        arr[pIdx++] = nA.position.z;
+                        arr[pIdx++] = nB.position.x;
+                        arr[pIdx++] = nB.position.y;
+                        arr[pIdx++] = nB.position.z;
+                    }
+                }
+                relationshipLines.geometry.attributes.position.needsUpdate = true;
+            }
+
+            if (ingestedEdgeObjects.length > 0) {
+                ingestedEdgeObjects.forEach(edgeObj => {
+                    if (edgeObj.edgeLinesMesh && edgeObj.edgeLinesMesh.geometry && edgeObj.nodeA && edgeObj.neighborNodes) {
+                        const arr = edgeObj.edgeLinesMesh.geometry.attributes.position.array;
+                        let ptr = 0;
+                        edgeObj.neighborNodes.forEach(neighbor => {
+                            arr[ptr++] = edgeObj.nodeA.position.x;
+                            arr[ptr++] = edgeObj.nodeA.position.y;
+                            arr[ptr++] = edgeObj.nodeA.position.z;
+                            arr[ptr++] = neighbor.position.x;
+                            arr[ptr++] = neighbor.position.y;
+                            arr[ptr++] = neighbor.position.z;
+                        });
+                        edgeObj.edgeLinesMesh.geometry.attributes.position.needsUpdate = true;
+                    }
+                });
+            }
+        }
+
+        function updateMarbleBoxPhysics(delta) {
+            const dt = Math.max(0.008, Math.min(delta, 0.033));
+
+            // 1. Angular Velocity of Cube for Centrifugal & Inertial Wall Drag
+            const curRotX = cubeGroup.rotation.x;
+            const curRotY = cubeGroup.rotation.y;
+            const curRotZ = cubeGroup.rotation.z;
+            const dRotX = curRotX - prevCubeRotation.x;
+            const dRotY = curRotY - prevCubeRotation.y;
+            const dRotZ = curRotZ - prevCubeRotation.z;
+            prevCubeRotation.set(curRotX, curRotY, curRotZ);
+
+            const angVel = new THREE.Vector3(dRotX / dt, dRotY / dt, dRotZ / dt);
+            const angSpeed = angVel.length();
+
+            // 2. Realistic Gravity in Local Box Coordinate System (World Down -Y transformed by inverse cube orientation)
+            const worldGravity = new THREE.Vector3(0, -18.0, 0);
+            const invQuat = cubeGroup.quaternion.clone().invert();
+            const localGravity = worldGravity.clone().applyQuaternion(invQuat);
+
+            // 3. Pointer Raycast Projection into Local Box Space for Interactive Stirring / Swatting
+            let cursorLocal = null;
+            let cursorLocalVel = null;
+            if (mouse3D && cubeGroup) {
+                const cPos = mouse3D.clone();
+                cubeGroup.worldToLocal(cPos);
+                if (Math.abs(cPos.x) < 3.2 && Math.abs(cPos.y) < 3.2 && Math.abs(cPos.z) < 3.2) {
+                    cursorLocal = cPos;
+                    if (mouseVelocity3D) {
+                        cursorLocalVel = mouseVelocity3D.clone().applyQuaternion(invQuat);
+                    }
+                }
+            }
+
+            const pLimit = 2.80; // Half-size of purple containment frame (5.60 / 2)
+            const restitution = 0.36; // Marble bounce coefficient
+            const wallFriction = 0.94; // Tangential rolling friction against purple/cardboard walls
+            const sunCoreRadius = 0.72; // Central cold dwarf core radius
+            let maxCollisionImpulse = 0;
+
+            // 4. Force Accumulation & Single-Particle Integration
+            redNodes.forEach((node, i) => {
+                const u = node.userData;
+                if (!u.velocity) u.velocity = new THREE.Vector3();
+                const pos = node.position;
+                const vel = u.velocity;
+                const r = u.radius || (u.isIngestedIdeaNode ? 0.17 : 0.12);
+                const mass = u.mass || (u.isIngestedIdeaNode ? 1.5 : 1.0);
+
+                // a. Gravity
+                vel.addScaledVector(localGravity, dt);
+
+                // b. Centrifugal Acceleration when box is spun fast
+                if (angSpeed > 0.05) {
+                    const omegaCrossR = angVel.clone().cross(pos);
+                    const centAccel = angVel.clone().cross(omegaCrossR).negate();
+                    vel.addScaledVector(centAccel, dt * 0.42);
+
+                    // c. Wall Tangential Drag: when marbles are close to a wall, the box's spin drags them along
+                    const distToWall = Math.min(
+                        pLimit - Math.abs(pos.x),
+                        pLimit - Math.abs(pos.y),
+                        pLimit - Math.abs(pos.z)
+                    );
+                    if (distToWall < r + 0.22) {
+                        const wallVel = angVel.clone().cross(pos);
+                        vel.addScaledVector(wallVel, dt * 0.58);
+                    }
+                }
+
+                // d. Interactive Pointer Stirring & Swatting
+                if (cursorLocal) {
+                    const cdx = pos.x - cursorLocal.x;
+                    const cdy = pos.y - cursorLocal.y;
+                    const cdz = pos.z - cursorLocal.z;
+                    const cDist = Math.sqrt(cdx * cdx + cdy * cdy + cdz * cdz);
+                    const pokeR = 1.35;
+                    if (cDist < pokeR && cDist > 0.001) {
+                        const factor = (pokeR - cDist) / pokeR;
+                        const pushMag = factor * 0.14;
+                        vel.x += (cdx / cDist) * pushMag;
+                        vel.y += (cdy / cDist) * pushMag;
+                        vel.z += (cdz / cDist) * pushMag;
+                        if (cursorLocalVel && cursorLocalVel.length() > 0.01) {
+                            vel.x += cursorLocalVel.x * factor * 0.35;
+                            vel.y += cursorLocalVel.y * factor * 0.35;
+                            vel.z += cursorLocalVel.z * factor * 0.35;
+                        }
+                    }
+                }
+
+                // e. Air & Rolling Damping
+                vel.multiplyScalar(0.985);
+
+                // f. Velocity Integration
+                pos.addScaledVector(vel, dt * 60.0);
+
+                // g. Containment Box Boundary Collisions (6 Faces of Purple Chamber)
+                const limit = pLimit - r;
+
+                // X boundaries
+                if (pos.x < -limit) {
+                    pos.x = -limit;
+                    if (vel.x < 0) {
+                        maxCollisionImpulse = Math.max(maxCollisionImpulse, Math.abs(vel.x));
+                        vel.x *= -restitution;
+                    }
+                    vel.y *= wallFriction; vel.z *= wallFriction;
+                } else if (pos.x > limit) {
+                    pos.x = limit;
+                    if (vel.x > 0) {
+                        maxCollisionImpulse = Math.max(maxCollisionImpulse, Math.abs(vel.x));
+                        vel.x *= -restitution;
+                    }
+                    vel.y *= wallFriction; vel.z *= wallFriction;
+                }
+
+                // Y boundaries
+                if (pos.y < -limit) {
+                    pos.y = -limit;
+                    if (vel.y < 0) {
+                        maxCollisionImpulse = Math.max(maxCollisionImpulse, Math.abs(vel.y));
+                        vel.y *= -restitution;
+                    }
+                    vel.x *= wallFriction; vel.z *= wallFriction;
+                } else if (pos.y > limit) {
+                    pos.y = limit;
+                    if (vel.y > 0) {
+                        maxCollisionImpulse = Math.max(maxCollisionImpulse, Math.abs(vel.y));
+                        vel.y *= -restitution;
+                    }
+                    vel.x *= wallFriction; vel.z *= wallFriction;
+                }
+
+                // Z boundaries
+                if (pos.z < -limit) {
+                    pos.z = -limit;
+                    if (vel.z < 0) {
+                        maxCollisionImpulse = Math.max(maxCollisionImpulse, Math.abs(vel.z));
+                        vel.z *= -restitution;
+                    }
+                    vel.x *= wallFriction; vel.y *= wallFriction;
+                } else if (pos.z > limit) {
+                    pos.z = limit;
+                    if (vel.z > 0) {
+                        maxCollisionImpulse = Math.max(maxCollisionImpulse, Math.abs(vel.z));
+                        vel.z *= -restitution;
+                    }
+                    vel.x *= wallFriction; vel.y *= wallFriction;
+                }
+
+                // h. Central Cold Dwarf Core Collision
+                const distCore = pos.length();
+                if (distCore < sunCoreRadius + r && distCore > 0.001) {
+                    const norm = pos.clone().normalize();
+                    pos.copy(norm.clone().multiplyScalar(sunCoreRadius + r));
+                    const vNorm = vel.dot(norm);
+                    if (vNorm < 0) {
+                        maxCollisionImpulse = Math.max(maxCollisionImpulse, Math.abs(vNorm));
+                        vel.addScaledVector(norm, -(1 + restitution) * vNorm);
+                    }
+                    vel.multiplyScalar(0.96);
+                }
+
+                // Billboard Label follow
+                if (nodeLabels[i]) {
+                    nodeLabels[i].position.copy(pos).add(new THREE.Vector3(0, 0.24, 0));
+                }
+            });
+
+            // 5. Inter-Marble Pairwise Collisions (2-pass relaxation for realistic marble stacking)
+            const nMarbles = redNodes.length;
+            for (let pass = 0; pass < 2; pass++) {
+                for (let i = 0; i < nMarbles; i++) {
+                    const nA = redNodes[i];
+                    const posA = nA.position;
+                    const velA = nA.userData.velocity;
+                    const rA = nA.userData.radius || (nA.userData.isIngestedIdeaNode ? 0.17 : 0.12);
+                    const mA = nA.userData.mass || (nA.userData.isIngestedIdeaNode ? 1.5 : 1.0);
+
+                    for (let j = i + 1; j < nMarbles; j++) {
+                        const nB = redNodes[j];
+                        const posB = nB.position;
+                        const velB = nB.userData.velocity;
+                        const rB = nB.userData.radius || (nB.userData.isIngestedIdeaNode ? 0.17 : 0.12);
+                        const mB = nB.userData.mass || (nB.userData.isIngestedIdeaNode ? 1.5 : 1.0);
+
+                        const dx = posA.x - posB.x;
+                        const dy = posA.y - posB.y;
+                        const dz = posA.z - posB.z;
+                        const dSq = dx * dx + dy * dy + dz * dz;
+                        const minDist = rA + rB;
+
+                        if (dSq < minDist * minDist && dSq > 0.00001) {
+                            const dist = Math.sqrt(dSq);
+                            const overlap = minDist - dist;
+                            const nx = dx / dist;
+                            const ny = dy / dist;
+                            const nz = dz / dist;
+
+                            const invMA = 1.0 / mA;
+                            const invMB = 1.0 / mB;
+                            const totalInv = invMA + invMB;
+
+                            // Positional separation
+                            posA.x += nx * (overlap * (invMA / totalInv));
+                            posA.y += ny * (overlap * (invMA / totalInv));
+                            posA.z += nz * (overlap * (invMA / totalInv));
+                            posB.x -= nx * (overlap * (invMB / totalInv));
+                            posB.y -= ny * (overlap * (invMB / totalInv));
+                            posB.z -= nz * (overlap * (invMB / totalInv));
+
+                            // Velocity impulse
+                            const rvx = velA.x - velB.x;
+                            const rvy = velA.y - velB.y;
+                            const rvz = velA.z - velB.z;
+                            const vn = rvx * nx + rvy * ny + rvz * nz;
+
+                            if (vn < 0) {
+                                const impulse = -(1 + 0.35) * vn / totalInv;
+                                velA.x += impulse * invMA * nx;
+                                velA.y += impulse * invMA * ny;
+                                velA.z += impulse * invMA * nz;
+                                velB.x -= impulse * invMB * nx;
+                                velB.y -= impulse * invMB * ny;
+                                velB.z -= impulse * invMB * nz;
+                                maxCollisionImpulse = Math.max(maxCollisionImpulse, Math.abs(vn));
+                            }
+                        }
+                    }
+                }
+            }
+
+            // 6. Subtle Acoustic Marble Click on High-Energy Collisions
+            if (maxCollisionImpulse > 0.18 && CosmicAudio && CosmicAudio.playMarbleClick) {
+                const nowMs = performance.now();
+                if (nowMs - lastMarbleSoundTime > 75) {
+                    CosmicAudio.playMarbleClick(Math.min(1.0, maxCollisionImpulse * 3.5));
+                    lastMarbleSoundTime = nowMs;
+                }
+            }
+
+            // 7. Update Dynamic Graph Network Lines
+            updateGraphLinesAndEdges();
+
+            // 8. Update World Matrices for Real-Time Raycasting
+            redGraphGroup.updateMatrixWorld(true);
+        }
+
         // --- 11. Animation Loop & Physics ---
         function animate() {
             requestAnimationFrame(animate);
 
-            const time = performance.now() * 0.001;
+            const nowMs = performance.now();
+            const delta = Math.min((nowMs - lastFrameTime) * 0.001, 0.04);
+            lastFrameTime = nowMs;
+            const time = nowMs * 0.001;
 
             // Opposing Starfield Parallax Damping & Inertial Momentum (BRL Style)
             if (!reducedMotion) {
@@ -5309,11 +5684,43 @@ REV: rel-wad@r2
                 cubeGroup.rotation.x += (targetRotation.x - cubeGroup.rotation.x) * 0.08;
             }
 
-            // Red Dot Graph ALWAYS rotates in OPPOSITE direction to cube at 50% speed!
+            // Red Dot Graph & Physical Marble Box Simulation inside Purple Containment Chamber
             if (redGraphGroup && cubeGroup && !reducedMotion) {
-                redGraphGroup.rotation.y = -0.5 * cubeGroup.rotation.y;
-                redGraphGroup.rotation.x = -0.5 * cubeGroup.rotation.x;
-                redGraphGroup.rotation.z = -0.5 * cubeGroup.rotation.z;
+                if (isDatabaseOutage) {
+                    // IN OUTAGE: Antigravity fails! The nodes tumble and roll like physical marbles
+                    // inside the cardboard box of the purple containment frame!
+                    redGraphGroup.quaternion.copy(cubeGroup.quaternion);
+                    updateMarbleBoxPhysics(delta);
+                } else {
+                    // ONLINE: Antigravity restored! Red dot graph counter-rotates at 50% speed
+                    const targetRotX = -0.5 * cubeGroup.rotation.x;
+                    const targetRotY = -0.5 * cubeGroup.rotation.y;
+                    const targetRotZ = -0.5 * cubeGroup.rotation.z;
+                    const targetEuler = new THREE.Euler(targetRotX, targetRotY, targetRotZ);
+                    const targetQuat = new THREE.Quaternion().setFromEuler(targetEuler);
+                    redGraphGroup.quaternion.slerp(targetQuat, 0.055);
+
+                    // Nodes levitate back to their sacred graph constellation coordinates
+                    let edgesNeedUpdate = false;
+                    redNodes.forEach((node, i) => {
+                        if (node.userData && node.userData.basePos) {
+                            if (node.position.distanceTo(node.userData.basePos) > 0.005) {
+                                node.position.lerp(node.userData.basePos, 0.045);
+                                edgesNeedUpdate = true;
+                            } else {
+                                node.position.copy(node.userData.basePos);
+                            }
+                            if (node.userData.velocity) node.userData.velocity.set(0, 0, 0);
+                        }
+                        if (nodeLabels[i]) {
+                            nodeLabels[i].position.copy(node.position).add(new THREE.Vector3(0, 0.24, 0));
+                        }
+                    });
+
+                    if (edgesNeedUpdate) {
+                        updateGraphLinesAndEdges();
+                    }
+                }
             }
 
             // Corner Beacon Pulsing (200% Lattice Glow Accents)
