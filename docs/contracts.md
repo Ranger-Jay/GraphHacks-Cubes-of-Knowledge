@@ -31,6 +31,15 @@ Available analysis returns actual graph node/edge IDs, typed relationships and s
 
 The scene lane exports a component from apps/web/src/scene/index.tsx named CompanyCubeScene. Props: `{ data: SceneData; onSelectNode: (id: string) => void; reducedMotion: boolean }`. The UI lane owns fetch/session/error panels and passes sanitized current data. Scene owns 3D/render interaction only; it does not query FalkorDB, issue privileged mutations or invent evidence. Types are in @cubes/contracts. Decorative particles may remain on outage; graph proof edges may not.
 
+## Space-scene integration boundary
+
+The v045 space-scene integration slice adds an **unmounted in-process** snapshot/event boundary:
+`SpaceSceneSnapshot`, `SpaceSceneEvent` and `SpaceSceneHandlers` from `@cubes/contracts`, with
+projection and dispatch in `apps/web/src/spaceSceneBridge.ts`. It does not replace the existing
+`CompanyCubeScene` entrypoint yet. See [space-scene boundary](space-scene-boundary-v045.md).
+Its generation and membership guards are presentation defenses, not server authorization or
+an authenticated cross-window transport. No import or successful-write event is accepted.
+
 ## Graph boundary
 
 packages/graph belongs to the graph lane. Implement named parameterized read operations (health and release analysis first); privileged mutations use explicit narrow graph operations, never arbitrary model-produced Cypher. Use the installed official client and verify its actual API against its version; the existing Python embedded demonstration is a separate runtime, not proof of TypeScript/Docker parity. Document clean runtime errors and close behavior.
