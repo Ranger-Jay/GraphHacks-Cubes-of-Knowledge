@@ -4091,11 +4091,16 @@ REV: rel-wad@r2
         window.closeOutageRejectionModal = closeOutageRejectionModal;
         window.restoreDatabaseFromModal = restoreDatabaseFromModal;
 
-        function toggleCometsHud() {
-            showComets = !showComets;
+        function setCometsEnabled(enabled) {
+            showComets = !!enabled;
             const btn = document.getElementById('comets-toggle-btn');
             const dot = document.getElementById('comets-hud-dot');
             const label = document.getElementById('comets-hud-label');
+            const checkbox = document.getElementById('toggle-comets');
+
+            if (checkbox && checkbox.checked !== showComets) {
+                checkbox.checked = showComets;
+            }
 
             if (showComets) {
                 if (btn) btn.className = 'interactive hud-glass px-3 py-2 rounded-xl text-xs font-mono transition-all flex items-center space-x-1.5 shadow-lg bg-cyan-950/80 text-cyan-300 border-cyan-500/60 font-bold';
@@ -4135,6 +4140,12 @@ REV: rel-wad@r2
                 closeModals();
             }
         }
+
+        function toggleCometsHud() {
+            setCometsEnabled(!showComets);
+        }
+        window.setCometsEnabled = setCometsEnabled;
+        window.toggleCometsHud = toggleCometsHud;
 
         // --- 6c. Near-Miss Hyper Flyby Comet & Half-Life Ice Particles (Item 3b & Row 8: 360° Frustum Invariant) ---
         function spawnCosmicIceParticles(originPos, count = 65) {
@@ -6157,7 +6168,7 @@ REV: rel-wad@r2
             if (toggleCometsCheckbox) {
                 toggleCometsCheckbox.checked = showComets;
                 toggleCometsCheckbox.addEventListener('change', (e) => {
-                    showComets = e.target.checked;
+                    setCometsEnabled(e.target.checked);
                 });
             }
 
