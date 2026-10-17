@@ -8,6 +8,8 @@
   - `v039.03` (Item 2: Red Graph Architecture Documentation & Tags)
   - `v039.04` (Item 3: Deep-Space Comets, Intercept Modal & Cube Ingestion)
   - `v039.05` (Item 3: Comet Architecture Documentation & Tags)
+  - `v039.06` (Item 3b: Near-Miss Hyper Flyby Comet, Doppler Rocket Roar & Half-Life Ice Particles)
+  - `v039.07` (Item 3b: Hyper Flyby Architecture Documentation & Tags)
 - **Primary Source**: `apps/web/public/art/cubes_of_knowledge_3d.html`
 - **Studio Mirrors**: `Gem's Art Studio/cubes_of_knowledge_3d.html`
 
@@ -106,7 +108,49 @@ Ideaverse comets exist independently from the internal orbiting agent pyramids:
 
 ---
 
-## 5. Preservation of Foundation Features
+## 5. Item 3b: The Near-Miss Hyper Flyby Comet (v039.06 / v039.07)
+
+### 5.1 Trajectory & Cinematic Close-Pass Geometry
+In addition to multi-origin comets passing away from the cube, a dedicated hypersonic camera flyby comet occasionally hurtles directly down the user's line of sight:
+1. **Deep-Space Origin**: Spawns directly in front of the camera axis in the outer void ($Z = -140$ to $-160$, $X \in [-3, 3]$, $Y \in [-2, 2]$).
+2. **Near-Miss Closest Point of Approach (CPA)**: Heads on a near-collision vector targeting the camera plane ($Z \approx 14.0$), missing the lens at the very last second by a grazing distance of only $1.2$ to $1.8$ units ($X \approx \pm 1.4$, $Y \approx \pm 0.8$).
+3. **Looming Scale & Luminosity Surge**:
+   - As distance to camera decreases from $60 \to 1.5$ units, volumetric scaling dynamically expands the comet nucleus and corona by up to **$4.8\times$** baseline size:
+     $$\text{scale}(Z) = 1.0 + 3.8 \times \left(\frac{Z + 60}{Z_{\text{cam}} + 60}\right)^{2.4}$$
+   - Visually fills a substantial portion of the viewport right before whizzing past the screen edge, delivering a thrilling near-miss experience.
+
+### 5.2 Multi-Tier Hypersonic Visual Composition
+- **Core Diamond**: Inner radiant pure white core (`0xffffff`, radius 0.35).
+- **Primary Ice Cyan Corona**: Additive glowing sphere (`0x00f5ff`, radius 0.85, opacity 0.90).
+- **Cosmic Violet Ion Aura**: Translucent outer corona (`0xaa33ff`, radius 1.65, opacity 0.55).
+- **Diamond Frost Spikes**: Rotating 4-axis cone star cross (`0xe0f7ff`) glittering with crystalline reflections.
+- **Volumetric Stardust Ice Tail**: 64-point tapering vertex-colored trail grading from brilliant diamond white to electric ice cyan, cosmic azure blue, and deep nebula purple.
+
+### 5.3 Procedural Roaring Rocket Doppler Audio Synthesis
+Created dynamically via `CosmicAudio` using Web Audio API nodes:
+1. **Pink Noise Thrust Engine**: Continuous pink noise buffer connected to a resonant `BiquadFilterNode` ($Q = 3.8$).
+2. **Doppler Sweep**: Resonant filter frequency begins at a low rumble ($90 \text{ Hz}$) in deep space, swells into a visceral roaring rocket howl ($680 \text{ Hz}$) at closest approach, and drops sharply to $50 \text{ Hz}$ as it recedes into the rear void.
+3. **Sub-Bass Thrust Harmonics**: Dual detuned sawtooth oscillators ($46 \text{ Hz}$ and $69 \text{ Hz}$) add rumbling jet thrust texture.
+4. **Spatial Stereo Panning**: `StereoPannerNode` begins center and sweeps hard to the passing side (left ear $-0.85$ or right ear $+0.85$), perfectly synchronizing with visual motion.
+
+### 5.4 Dynamic Screen Glare & Recovery
+- `#flyby-screen-flash` overlay dynamically aligns a radial exposure flare to the 2D projected screen coordinate of the comet nucleus.
+- Flares up to $0.65$ screen opacity as the comet reaches peak proximity, then smoothly decays back to normal baseline darkness over $0.8$ seconds as the comet passes behind the viewer.
+
+### 5.5 Near-Field Cosmic Ice Particles with Half-Life Decay
+At the instant of closest passage ($Z \ge Z_{\text{cam}} - 1.5$), the comet leaves behind a wake of **65 crystalline diamond ice octahedrons** floating directly in front of the camera lens ($Z \in [Z_{\text{cam}} - 2.8, Z_{\text{cam}} - 0.8]$):
+1. **Dwell Duration**: Particles float with zero-g micro-turbulence, twinkling intensely with sinusoidal phase offsets for a random duration between **$5.0$ and $8.0$ seconds**.
+2. **Half-Life Decay Law**: Once the dwell duration concludes, particles reduce in size following an exact $1.5$-second half-life:
+   $$\text{scale}(t) = \text{initialScale} \times 0.5^{\frac{t - t_{\text{dwell}}}{1.5}}$$
+3. **Twinkling Departure**: Every 1.5 seconds, the ice crystals halve in size ($100\% \to 50\% \to 25\% \to 12.5\% \to 6.25\%$) while continuously twinkling, until gracefully vanishing from existence.
+
+### 5.6 HUD Controls & Interactivity
+- Added `☄️ FLYBY COMET` trigger button to the bottom controls bar for instant on-demand launch.
+- Autonomous periodic spawn timer triggers an organic flyby every 28 to 50 seconds when comets are enabled.
+
+---
+
+## 6. Preservation of Foundation Features
 
 All interactive systems remain fully functional:
 1. **Synaptic Query Terminal**: NLP cypher queries, quick chips, and live logs.
@@ -116,6 +160,6 @@ All interactive systems remain fully functional:
 
 ---
 
-## 6. Next Step on the Roadmap
+## 7. Next Step on the Roadmap
 
-- **Item 4: The Fiery Sun Core**: Dynamic plasma mantle wireframe, pulsating solar flares, prominences, and rotating concentric cypher mandala dials.
+- **Item 4: The Fiery Sun Core** (`v039.08` / `v039.09`): Dynamic plasma mantle wireframe, pulsating solar flares, prominences, and rotating concentric cypher mandala dials.
