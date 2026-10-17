@@ -982,6 +982,14 @@ All 10 milestone rows across the 3D Space Visualizer roadmap are now **100% COMP
 - **Enhanced Modal Dismissal**: Styled `✕ CLOSE or ESC` dismiss button with amber glow borders, direct backdrop dismissal click listener, and keyboard <kbd>ESC</kbd> handling.
 - **Three-Mirror Synchronization**: All 3 visualizer mirrors locked with SHA-256 `578AC27A756E7ACEA90BD66F431390F90753355417959BAD12BE15639D462510`.
 
+### 18.8 Agent Chamber Modal Isolation, Backdrop Field Blocking, and Close Target Repair (`v039.47` / `v039.48`)
+- **Absolute 3D Field Interaction Isolation**: Converted `#agent-chamber` from a transparent pointer-events-none overlay into a true modal barrier (`fixed inset-0 z-50 pointer-events-auto bg-black/75 backdrop-blur-md`). When an agent chamber unfolds, clicks on the darkened celestial backdrop are completely absorbed, making the 3D space field, shard nodes, and orbiting pyramids 100% untoucheable.
+- **Persistent Header & Dock Access**: Promoted the top HUD status ribbon and bottom control dock to `z-[55]`, preserving full accessibility to essential system indicators while keeping the background field insulated.
+- **Operable Close Hit Target with 'CLOSE or ESC'**: Repaired `#close-chamber-btn` by providing an explicit high-stacking z-index (`z-50`), full `interactive` click pass-through, inline `onclick="closeAgentChamber()"`, and updated typography: `✕ CLOSE or ESC`.
+- **Drawer Stowing Guard**: Opening the agent chamber automatically stows the Telemetry Matrix drawer to prevent top-right button occlusion.
+- **Three-Mirror Synchronization**: All 3 visualizer mirrors locked with SHA-256 `FEAEC99E28267F239B8F0C85F3C3F891DC29F7A2BB5B1DA9A5EAF04846DB65FD`.
+
+
 
 
 
