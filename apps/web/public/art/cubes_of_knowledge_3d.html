@@ -706,7 +706,7 @@ REV: rel-wad@r2
         let synapticTendrils = [];
         let pyramidGroups = {};
         let comets = [], activeComet = null, showComets = true;
-        let activeFlybyComet = null, cosmicIceParticles = [];
+        let activeFlybyComet = null, cosmicIceParticles = [], sharedIceGeo = null;
         let nextFlybyAutoTime = performance.now() + 24000 + Math.random() * 16000;
         let liquidParticlesInside = null, liquidPositions = null, liquidVels = null, liquidColors = null;
         let currentActiveAgentKey = 'ava';
@@ -2469,7 +2469,9 @@ REV: rel-wad@r2
         // --- 6c. Near-Miss Hyper Flyby Comet & Half-Life Ice Particles (Item 3b / v039.06) ---
         function spawnCosmicIceParticles(originPos, count = 65) {
             const now = performance.now();
-            const iceGeo = new THREE.OctahedronGeometry(0.065, 0);
+            if (!sharedIceGeo) {
+                sharedIceGeo = new THREE.OctahedronGeometry(0.065, 0);
+            }
 
             for (let i = 0; i < count; i++) {
                 const color = Math.random() < 0.65 ? 0xa0f5ff : (Math.random() < 0.85 ? 0xffffff : 0x70d8ff);
@@ -2480,7 +2482,7 @@ REV: rel-wad@r2
                     blending: THREE.AdditiveBlending,
                     wireframe: Math.random() < 0.25
                 });
-                const mesh = new THREE.Mesh(iceGeo, mat);
+                const mesh = new THREE.Mesh(sharedIceGeo, mat);
 
                 // Cluster near the camera frustum where the comet swept past
                 const camZ = camera ? camera.position.z : 14.0;
@@ -2631,19 +2633,11 @@ REV: rel-wad@r2
             const tailLine = new THREE.Line(tailGeo, tailMat);
             cometGroup.add(tailLine);
 
-            // 6. Hit sphere for clicking / interception
-            const hitSphere = new THREE.Mesh(
-                new THREE.SphereGeometry(2.5, 12, 12),
-                new THREE.MeshBasicMaterial({ visible: false })
-            );
-            hitSphere.userData = { isComet: true, isFlyby: true, parentGroup: cometGroup };
-            cometGroup.add(hitSphere);
-
             cometGroup.position.copy(startVec);
             cometGroup.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), flightDir);
 
+            // Separate cinematic object: NOT part of the IdeaVerse comets array and NOT clickable!
             cometGroup.userData = {
-                isComet: true,
                 isFlyby: true,
                 parentGroup: cometGroup,
                 startVec: startVec,
@@ -2654,18 +2648,11 @@ REV: rel-wad@r2
                 paused: false,
                 iceSpawned: false,
                 sideSignX: sideSignX,
-                crossGroup: crossGroup,
-                ideaId: "HYPER-COMET",
-                title: "Deep-Space Hyper Flyby Ingestion Vector",
-                category: "Cinematic Near-Miss Cosmic Transit",
-                origin: `(${Math.round(startX)}, ${Math.round(startY)}, ${Math.round(startZ)})`,
-                file: "CUBE_VISUAL_CONCEPT.md",
-                hash: "a4f8" + Math.random().toString(16).substring(2, 18)
+                crossGroup: crossGroup
             };
 
             scene.add(cometGroup);
             activeFlybyComet = cometGroup;
-            comets.push(cometGroup);
 
             // Start the procedural roaring rocket sound!
             if (CosmicAudio && CosmicAudio.startRocketRoar) {
@@ -4193,7 +4180,7 @@ REV: rel-wad@r2
                 // Update Dynamic Screen Flare Glare ("and the brightness goes back to normal")
                 const flashEl = document.getElementById('flyby-screen-flash');
                 if (flashEl) {
-                    if (zProgress < 1.0 && c.position.z > -35) {
+                    if (zProgress < 1.0 && c.position.z > -35 && c.position.z < (camZ - 0.5)) {
                         const proj = c.position.clone().project(camera);
                         const sx = (proj.x * 0.5 + 0.5) * 100;
                         const sy = (-proj.y * 0.5 + 0.5) * 100;
@@ -4201,8 +4188,8 @@ REV: rel-wad@r2
                         const flashOpacity = Math.pow(proximity, 2.6) * 0.65;
                         flashEl.style.background = `radial-gradient(circle at ${sx.toFixed(1)}% ${sy.toFixed(1)}%, rgba(255,255,255,0.88) 0%, rgba(0,229,255,0.48) 35%, rgba(170,51,255,0.18) 65%, transparent 80%)`;
                         flashEl.style.opacity = flashOpacity.toFixed(2);
-                    } else if (zProgress >= 1.0) {
-                        const fadeOut = Math.max(0, 1.0 - (c.position.z - camZ) / 8.0);
+                    } else if (c.position.z >= (camZ - 0.5)) {
+                        const fadeOut = Math.max(0, 1.0 - (c.position.z - (camZ - 0.5)) / 8.0);
                         flashEl.style.opacity = (fadeOut * 0.45).toFixed(2);
                     }
                 }
@@ -4216,8 +4203,6 @@ REV: rel-wad@r2
                 // Exited beyond camera view
                 if (c.position.z > (camZ + 16.0)) {
                     scene.remove(c);
-                    const idx = comets.indexOf(c);
-                    if (idx !== -1) comets.splice(idx, 1);
                     if (flashEl) flashEl.style.opacity = '0';
                     if (CosmicAudio && CosmicAudio.stopRocketRoar) CosmicAudio.stopRocketRoar();
                     activeFlybyComet = null;
@@ -4252,7 +4237,6 @@ REV: rel-wad@r2
 
                         if (scaleMultiplier < 0.02 || curScale < 0.01 || decayElapsed > 6.0) {
                             scene.remove(p.mesh);
-                            if (p.mesh.geometry) p.mesh.geometry.dispose();
                             if (p.mat) p.mat.dispose();
                             cosmicIceParticles.splice(i, 1);
                         }
