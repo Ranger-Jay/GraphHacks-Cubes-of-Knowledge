@@ -728,7 +728,70 @@ Three luminous neon acoustic shockwave shells anchored to `sunGroup`:
 
 ---
 
-## 14. Preservation of Foundation Features
+## 14. Background Starfield & Dual-Rotation 360° Celestial Cosmos (Row 8 / v039.26 - v039.27)
+
+Following Jay's architectural specification ("how the entire space field moves when the mouse is moved... but the cube can independently be moved and spun separate from the star field. 2 different rotations... the 360 degree 3D starfield would impact the direction of the comets and perhaps slightly effect the flyby comets"), the visualizer implements a dual-rotation interaction engine where the Company Cube and the surrounding celestial cosmos operate on independent kinematic coordinate spaces.
+
+### 14.1 Dual-Rotation Physical Separation
+1. **Rotation 1: Independent Company Cube Spin (`dragMode = 'cube'`)**:
+   - Left-clicking and dragging on the Company Cube (`cubePlanes` or descendants of `cubeGroup`) updates `targetRotation.x` and `targetRotation.y`.
+   - The cube rotates on its local axes:
+     $$\theta_{y,\text{cube}} \mathrel{+}= \Delta x \cdot 0.007, \quad \theta_{x,\text{cube}} \mathrel{+}= \Delta y \cdot 0.007$$
+   - In database outage mode, tumbling the cube directly drives the **Cardboard Box Marble Physics**: marbles roll to the lowest physical wall of the purple containment frame, with centrifugal wall-drag and realistic momentum transfer.
+2. **Rotation 2: 360° Celestial Cosmos Camera Orbit (`dragMode = 'orbit'`)**:
+   - Left-clicking and dragging in open space outside the cube, **OR** Right-Click dragging anywhere on the canvas (with browser context menu disabled), **OR** Shift-Click dragging orbits the camera around origin $(0, 0, 0)$ in spherical coordinates:
+     $$\theta_{\text{orbit}} \mathrel{-}= \Delta x \cdot 0.005, \quad \phi_{\text{orbit}} \mathrel{+}= \Delta y \cdot 0.005$$
+     where $\phi$ is clamped to $[-1.35, +1.35]$ radians ($\pm 77^\circ$) to eliminate gimbal flips.
+   - Target camera world position:
+     $$\begin{aligned}
+     x &= R_{\text{cam}} \cdot \cos(\phi) \cdot \sin(\theta) \\
+     y &= R_{\text{cam}} \cdot \sin(\phi) \\
+     z &= R_{\text{cam}} \cdot \cos(\phi) \cdot \cos(\theta)
+     \end{aligned}$$
+   - Camera smoothly glides with spherical lerp: `camera.position.lerp(targetCamPos, 0.08); camera.lookAt(cameraTarget);`.
+
+### 14.2 Seamless Drag Classification & Cursor UX
+- **Hover Detection (`!isDragging`)**:
+  - Over interactive objects (Idea comets, red/blue evidence nodes, protector pyramids): `cursor = 'pointer'`.
+  - Over Company Cube bounding surfaces: `cursor = 'grab'`.
+  - Over open celestial space / starfield: `cursor = 'default'`.
+- **Active Drag Feedback (`isDragging`)**:
+  - Dragging Company Cube: `cursor = 'grabbing'`.
+  - Dragging 360° Celestial Orbit: `cursor = 'move'`.
+- **Universal Right-Click & Touch Navigation**:
+  - Right-click drag always orbits the 360° celestial cosmos regardless of where the cursor starts, allowing instant cosmos repositioning without de-selecting the cube.
+  - Multi-touch: 1-finger drag on cube spins cube, 1-finger drag in open space orbits cosmos, 2-finger pinch smoothly zooms distance $R_{\text{cam}} \in [2.8, 26.0]$.
+
+### 14.3 Distance-Driven 3D Aperture Opening
+- Rather than relying on a 1D Z-axis coordinate, aperture panel sliding is governed by Euclidean 3D distance from the cube origin:
+  $$d_{\text{cam}} = \|\mathbf{P}_{\text{camera}}\|, \quad \text{openAmount} = \text{clamp}\left(\frac{10.0 - d_{\text{cam}}}{6.0}, 0.0, 1.0\right)$$
+- Double-clicking the cube or pressing `C` zooms into the Core Sanctuary ($R_{\text{cam}} = 3.6$), smoothly sliding the outer panels outward along their face normal vectors from whichever 360° angle the user is viewing.
+- Pressing `R` or clicking `RESET [R]` restores both `targetRotation = (0.2, 0.4)` and `cameraOrbit = (0.0, 0.08)` to the default outer-space vantage point.
+
+### 14.4 Opposing Inertial Parallax & Anti-Parallax Starfield
+Anchoring the depth engine to the zero-g studio standard:
+1. **Near Starfield (`starFieldNear`)**:
+   - Translates smoothly toward the cursor ($+2.2 \times \text{mouse}$) with high foreground depth.
+2. **Far Starfield (`starFieldFar`)**:
+   - Moves in opposing anti-parallax ($-2.0 \times \text{mouse}$) creating a deep spatial sensation of cosmic infinity.
+3. **Mid Starfield (`starFieldMid`)**:
+   - Rotates gently with momentum-integrated velocity.
+
+### 14.5 360° Celestial Invariant Comets & Flybys
+1. **Deep-Space Idea-Verse Comets (`spawnComet`)**:
+   - Spawn coordinates are constructed relative to the camera's active view frustum ($\mathbf{P}_{\text{cam}}, \mathbf{f}_{\text{cam}}, \mathbf{r}_{\text{cam}}, \mathbf{u}_{\text{cam}}$).
+   - Comets emerge from the distant background starfield along the sightline ($d \approx 110-150$) and stream past the Company Cube across the user's field of view.
+   - Lifecycle is distance-based ($\|\mathbf{P} - \mathbf{P}_{\text{start}}\| > d_{\text{max}}$) rather than fixed-Z, preventing orphaned meshes at any viewing angle.
+2. **Near-Miss Hypersonic Flyby Comet (`triggerCameraFlybyComet`)**:
+   - The hypersonic flight vector dynamically sweeps from deep background space directly past the camera's active 3D coordinates.
+   - **Gravitational Slingshot Deflection**: As the flyby passes within 14 units of the Company Cube, it experiences a subtle gravitational deflection pulling toward the cube center before rocketing past the camera.
+   - **Progress & Near-Miss Climax**: Flight progress $p = \frac{\|\mathbf{P} - \mathbf{P}_{\text{start}}\|}{\|\mathbf{P}_{\text{miss}} - \mathbf{P}_{\text{start}}\|}$ drives scale looming ($1.0 \to 4.8$), Doppler rocket roar sweep, screen flash gradient, and near-field cosmic ice particle generation ($p \ge 0.95$) directly in front of the camera lens.
+3. **Idea-Verse Ribbon Comet (`launchIdeaVerseComet`)**:
+   - Projects across the camera-relative viewplane at distance $d = 18.8$, ensuring the file badge and ribbon head glide seamlessly across the upper sky at any 360° celestial vantage.
+
+---
+
+## 15. Preservation of Foundation Features
 
 All interactive systems remain fully functional:
 1. **Synaptic Query Terminal**: NLP cypher queries, quick chips, and live logs.
@@ -744,9 +807,10 @@ All interactive systems remain fully functional:
 11. **Purple Containment Frame & Travelling Light-Balls**: 12 neon struts, 8 corner beacons, 6 forcefield panels, Orocue perimeter race, and $0.62\,\text{s}$ spark explosions.
 12. **Cardboard Box Marble Physics**: Outage antigravity failure, tilting gravity, centrifugal spin drag, 2-pass marble collisions, and smooth reconnection levitation.
 13. **The Eldritch Cypher Shader Mandala**: 2048px super-sampled runic canvas, 3-axis gyroscopic momentum, concentric harmonic resonance rings, and chromatic flare pulses.
+14. **Dual-Rotation & 360° Celestial Cosmos**: Independent Company Cube spin, 360° spherical camera orbit, Euclidean aperture sliding, opposing starfield anti-parallax, and invariant 3D comet trajectories.
 
 ---
 
-## 15. Roadmap Completion Summary
+## 16. Roadmap Completion Summary
 
-With the successful landing of **Item 7 (The Eldritch Cypher Shader Mandala)**, all primary objectives across the unified 3D Space Visualizer roadmap (`v039.00` through `v039.25`) are now fully implemented, verified, and synchronized across all three visualizer mirrors!
+With the successful landing of **Row 8: Background Starfield & Dual-Rotation 360° Celestial Cosmos** (`v039.26` / `v039.27`), all objectives across the dual-rotation engine are verified, documented, and synchronized across all three visualizer mirrors. Next milestones proceed to **Row 9: Sound Architecture** (`v039.28` / `v039.29`) and **Row 10: UI & Outage Simulation Suite** (`v039.30` / `v039.31`).
