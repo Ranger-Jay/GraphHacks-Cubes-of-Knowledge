@@ -639,6 +639,50 @@ REV: rel-wad@r2
         </div>
     </div>
 
+    <!-- IdeaVerse Intercepted Comet Modal (Item 3) -->
+    <div id="comet-info-modal" class="hud-overlay fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-40 hidden w-96 max-w-[90vw] bg-slate-950/95 backdrop-blur-2xl border border-purple-500/80 rounded-3xl p-6 shadow-[0_0_60px_rgba(179,136,255,0.45)] flex flex-col gap-4 interactive">
+        <div class="flex justify-between items-center border-b border-purple-950/80 pb-3">
+            <div class="flex items-center gap-3">
+                <div class="w-4 h-4 rounded-full bg-purple-400 animate-pulse shadow-[0_0_15px_#b388ff]"></div>
+                <div>
+                    <span class="text-[10px] font-mono font-bold text-purple-300 uppercase tracking-wider">IDEAVERSE COMET INTERCEPTED</span>
+                    <h2 id="comet-title" class="text-sm font-black text-white">IDEA-042: Autonomous Verification Engine</h2>
+                </div>
+            </div>
+            <button id="close-comet-modal-btn" onclick="closeCometModal()" class="text-slate-400 hover:text-white text-xs font-bold p-1">✕</button>
+        </div>
+        <div class="flex flex-col gap-2 text-xs text-slate-300 font-mono">
+            <div class="flex justify-between">
+                <span class="text-slate-400">Source Track:</span>
+                <span id="comet-category" class="text-cyan-300 font-semibold">FalkorDB Graph Pipeline</span>
+            </div>
+            <div class="flex justify-between">
+                <span class="text-slate-400">Origin / Trajectory:</span>
+                <span id="comet-origin" class="text-slate-300">Deep IdeaVerse (-84, 42, -110)</span>
+            </div>
+            <div class="flex justify-between">
+                <span class="text-slate-400">Target File:</span>
+                <span id="comet-filename-target" class="text-amber-300 font-semibold">GRAPH_SKETCH.md</span>
+            </div>
+            <div class="flex justify-between">
+                <span class="text-slate-400">Cryptographic SHA:</span>
+                <span id="comet-hash" class="text-purple-300 text-[10px] truncate max-w-[180px]">f6f9934d24a4fdc328307...</span>
+            </div>
+            <div class="flex justify-between">
+                <span class="text-slate-400">Status:</span>
+                <span class="px-2 py-0.5 rounded bg-emerald-950 text-emerald-300 border border-emerald-700 font-bold text-[10px]">VERIFIED RECEIPT</span>
+            </div>
+        </div>
+        <div class="flex gap-2.5 pt-2 font-mono">
+            <button id="btn-import-idea" onclick="importCometToCube()" class="interactive flex-1 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs shadow-lg transition flex items-center justify-center gap-1.5">
+                <span>✨ Ingest into Company Cube</span>
+            </button>
+            <button onclick="closeCometModal()" class="interactive px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold text-xs transition">
+                Dismiss
+            </button>
+        </div>
+    </div>
+
     <!-- ========================================================================= -->
     <!-- 3D SCENE & ENGINE LOGIC                                                    -->
     <!-- ========================================================================= -->
@@ -653,7 +697,7 @@ REV: rel-wad@r2
         let sunGroup, sunSphere, innerSun, sunCoronaRing, sunTorusLoop, eldritchCypherDisc, eldritchCypherDisc2;
         let synapticTendrils = [];
         let pyramidGroups = {};
-        let comets = [];
+        let comets = [], activeComet = null, showComets = true;
         let liquidParticlesInside = null, liquidPositions = null, liquidVels = null, liquidColors = null;
         let currentActiveAgentKey = 'ava';
         let activeLightningMesh = null;
@@ -2102,6 +2146,178 @@ REV: rel-wad@r2
             }
         }
 
+        // --- 6b. Deep-Space 3D Ideaverse Comets (Item 3) ---
+        function spawnComet() {
+            if (comets.length > 3 || !showComets) return;
+
+            const cometGroup = new THREE.Group();
+            
+            // Trajectory: comes towards camera from far deep space at an angle, passing away from the cube
+            const startX = (Math.random() - 0.5) * 55;
+            const startY = (Math.random() - 0.5) * 40;
+            const startZ = -95 - Math.random() * 45;
+
+            // Angle away from cube center (0, 0, 0)
+            const sideSignX = startX >= 0 ? 1 : -1;
+            const sideSignY = startY >= 0 ? 1 : -1;
+            const targetX = startX + sideSignX * (22 + Math.random() * 20);
+            const targetY = startY + sideSignY * (12 + Math.random() * 16);
+            const targetZ = 32; // Passes camera at Z = 14
+
+            const dir = new THREE.Vector3(targetX - startX, targetY - startY, targetZ - startZ).normalize();
+            const speed = 0.38 + Math.random() * 0.22;
+
+            // 1. Nucleus (Radiant Glowing Core)
+            const nGeo = new THREE.SphereGeometry(0.28, 16, 16);
+            const nMat = new THREE.MeshBasicMaterial({
+                color: 0xdfb4ff,
+                transparent: true,
+                opacity: 0.95,
+                blending: THREE.AdditiveBlending
+            });
+            const nucleus = new THREE.Mesh(nGeo, nMat);
+            cometGroup.add(nucleus);
+
+            // Inner bright diamond point
+            const innerGeo = new THREE.SphereGeometry(0.12, 12, 12);
+            const innerMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+            const innerPoint = new THREE.Mesh(innerGeo, innerMat);
+            cometGroup.add(innerPoint);
+
+            // 2. Trailing Stardust Tail
+            const tailPoints = 36;
+            const tailGeo = new THREE.BufferGeometry();
+            const tailPos = new Float32Array(tailPoints * 3);
+            const tailCols = new Float32Array(tailPoints * 3);
+
+            for (let i = 0; i < tailPoints; i++) {
+                const i3 = i * 3;
+                tailPos[i3] = (Math.random() - 0.5) * 0.12 * (i * 0.1);
+                tailPos[i3 + 1] = (Math.random() - 0.5) * 0.12 * (i * 0.1);
+                tailPos[i3 + 2] = - i * 0.65; // Trailing backwards along local -Z
+
+                // Electric cyan to cyber purple fade
+                const t = i / tailPoints;
+                tailCols[i3] = 0.0 * (1 - t) + 0.6 * t;
+                tailCols[i3 + 1] = 0.9 * (1 - t) + 0.2 * t;
+                tailCols[i3 + 2] = 1.0;
+            }
+            tailGeo.setAttribute('position', new THREE.BufferAttribute(tailPos, 3));
+            tailGeo.setAttribute('color', new THREE.BufferAttribute(tailCols, 3));
+
+            const tailMat = new THREE.LineBasicMaterial({
+                vertexColors: true,
+                transparent: true,
+                opacity: 0.85,
+                blending: THREE.AdditiveBlending
+            });
+            const tail = new THREE.Line(tailGeo, tailMat);
+            cometGroup.add(tail);
+
+            // 3. Invisible Hit Sphere for clicking
+            const hitSphere = new THREE.Mesh(
+                new THREE.SphereGeometry(1.4, 12, 12),
+                new THREE.MeshBasicMaterial({ visible: false })
+            );
+            hitSphere.userData = { isComet: true, parentGroup: cometGroup };
+            cometGroup.add(hitSphere);
+
+            cometGroup.position.set(startX, startY, startZ);
+            cometGroup.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), dir);
+
+            const ideaIdNum = Math.floor(10 + Math.random() * 89);
+            const targetFile = RECENT_IDEA_FILES[Math.floor(Math.random() * RECENT_IDEA_FILES.length)];
+            const titles = [
+                "FalkorDB Graph Pipeline & Synaptic Indexing",
+                "Zero-Knowledge State Proof Verification",
+                "Autonomous Agent Memory Ingestion Stream",
+                "Luminous Lattice Shard Synthesis v4",
+                "Cue Sheet Clearance & Multi-Track Licensing"
+            ];
+
+            cometGroup.userData = {
+                isComet: true,
+                parentGroup: cometGroup,
+                velocity: dir.clone().multiplyScalar(speed),
+                life: 0,
+                maxLife: 320,
+                paused: false,
+                ideaId: `IDEA-0${ideaIdNum}`,
+                title: titles[Math.floor(Math.random() * titles.length)],
+                category: "Deep IdeaVerse Ingestion",
+                origin: `(${Math.round(startX)}, ${Math.round(startY)}, ${Math.round(startZ)})`,
+                file: targetFile,
+                hash: "f6f9" + Math.random().toString(16).substring(2, 18)
+            };
+
+            scene.add(cometGroup);
+            comets.push(cometGroup);
+        }
+
+        function interceptComet(group) {
+            if (!group || !group.userData) return;
+            group.userData.paused = true;
+            activeComet = group;
+
+            const modal = document.getElementById('comet-info-modal');
+            if (modal) {
+                modal.classList.remove('hidden');
+                document.getElementById('comet-title').textContent = `${group.userData.ideaId}: ${group.userData.title}`;
+                document.getElementById('comet-category').textContent = group.userData.category;
+                document.getElementById('comet-origin').textContent = `Deep IdeaVerse ${group.userData.origin}`;
+                document.getElementById('comet-filename-target').textContent = group.userData.file;
+                document.getElementById('comet-hash').textContent = group.userData.hash;
+            }
+
+            if (CosmicAudio && CosmicAudio.playStardustChime) {
+                CosmicAudio.playStardustChime(0, 0.7);
+            }
+        }
+
+        function closeCometModal() {
+            const modal = document.getElementById('comet-info-modal');
+            if (modal) modal.classList.add('hidden');
+            if (activeComet) {
+                activeComet.userData.paused = false;
+                activeComet = null;
+            }
+        }
+
+        function importCometToCube() {
+            if (!activeComet) return;
+            const start = activeComet.position.clone();
+            const pulseGeo = new THREE.SphereGeometry(0.35, 16, 16);
+            const pulseMat = new THREE.MeshBasicMaterial({ color: 0x00e5ff, blending: THREE.AdditiveBlending });
+            const pulse = new THREE.Mesh(pulseGeo, pulseMat);
+            pulse.position.copy(start);
+            scene.add(pulse);
+
+            let t = 0;
+            const anim = setInterval(() => {
+                t += 0.05;
+                pulse.position.lerpVectors(start, new THREE.Vector3(0, 0, 0), t);
+                pulse.scale.setScalar(1.0 + Math.sin(t * Math.PI) * 1.5);
+                if (t >= 1) {
+                    clearInterval(anim);
+                    scene.remove(pulse);
+                    if (CosmicAudio && CosmicAudio.playShockwaveBoom) CosmicAudio.playShockwaveBoom(0.85);
+                    // Sun energy pulse reaction!
+                    sunImpulseScale = 1.45;
+                }
+            }, 28);
+
+            // Remove comet
+            scene.remove(activeComet);
+            const idx = comets.indexOf(activeComet);
+            if (idx !== -1) comets.splice(idx, 1);
+            activeComet = null;
+            closeCometModal();
+        }
+
+        window.interceptComet = interceptComet;
+        window.closeCometModal = closeCometModal;
+        window.importCometToCube = importCometToCube;
+
         // --- 7. Double-Click Cube to Enter / Zoom In ---
         function onDoubleClick(event) {
             raycaster.setFromCamera(mouse, camera);
@@ -2956,6 +3172,10 @@ REV: rel-wad@r2
             if (intersects.length > 0) {
                 for (let hit of intersects) {
                     const obj = hit.object;
+                    if (obj.userData && obj.userData.isComet) {
+                        interceptComet(obj.userData.parentGroup || obj);
+                        return;
+                    }
                     if (obj.userData && (obj.userData.isRedNode || obj.userData.isEvidenceNode)) {
                         selectRedNode(obj);
                         return;
@@ -3269,6 +3489,15 @@ REV: rel-wad@r2
             if (closeNodeModalBtn) {
                 closeNodeModalBtn.addEventListener('click', closeNodeModal);
             }
+
+            const closeCometModalBtn = document.getElementById('close-comet-modal-btn');
+            if (closeCometModalBtn) {
+                closeCometModalBtn.addEventListener('click', closeCometModal);
+            }
+            const importIdeaBtn = document.getElementById('btn-import-idea');
+            if (importIdeaBtn) {
+                importIdeaBtn.addEventListener('click', importCometToCube);
+            }
         }
 
         // Precomputed Orbit Rings for clean liquid stardust deflection
@@ -3546,6 +3775,25 @@ REV: rel-wad@r2
 
                 liquidParticlesInside.geometry.attributes.position.needsUpdate = true;
                 liquidParticlesInside.geometry.attributes.color.needsUpdate = true;
+            }
+
+            // 3D Deep-Space Ideaverse Comets Lifecycle (Item 3)
+            if (showComets && !reducedMotion) {
+                if (Math.random() < 0.016 && comets.length < 3) {
+                    spawnComet();
+                }
+
+                for (let i = comets.length - 1; i >= 0; i--) {
+                    const c = comets[i];
+                    if (!c.userData.paused) {
+                        c.position.add(c.userData.velocity);
+                        c.userData.life++;
+                        if (c.userData.life > c.userData.maxLife || c.position.z > 35) {
+                            scene.remove(c);
+                            comets.splice(i, 1);
+                        }
+                    }
+                }
             }
 
             // Near-Field BRL-Style Idea-Verse Comet System
