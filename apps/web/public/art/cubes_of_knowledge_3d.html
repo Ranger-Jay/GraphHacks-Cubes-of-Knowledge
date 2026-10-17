@@ -317,6 +317,10 @@
                     <span class="text-slate-400">Verification Hash:</span>
                     <span id="node-modal-hash" class="text-slate-400 text-[10px] truncate max-w-[180px]">77b8699abb54...</span>
                 </div>
+                <div id="node-modal-summary-row" class="hidden flex-col gap-1 border-t border-red-950/60 pt-1.5">
+                    <span class="text-slate-400">Ingested Summary:</span>
+                    <span id="node-modal-summary" class="text-slate-200 text-[10px] leading-tight bg-slate-900/60 p-1.5 rounded-lg border border-slate-800"></span>
+                </div>
             </div>
             <div class="bg-red-950/30 border border-red-900/50 rounded-lg p-2 text-[11px] text-red-200 flex items-center gap-2 font-mono">
                 <span class="text-red-400">⚡</span>
@@ -1611,15 +1615,32 @@ REV: rel-wad@r2
             if (modal) modal.classList.remove('hidden');
 
             const idEl = document.getElementById('node-modal-id');
-            if (idEl) idEl.textContent = `NODE #${u.id}: FalkorDB Shard`;
+            const isIngested = !!u.isIngestedIdeaNode;
+            if (idEl) {
+                idEl.textContent = isIngested ? `✨ INGESTED IDEA #${u.id}` : `NODE #${u.id}: FalkorDB Shard`;
+                idEl.className = isIngested ? "text-xs font-mono font-bold text-cyan-300" : "text-xs font-mono font-bold text-red-400";
+            }
             const labelEl = document.getElementById('node-modal-label');
             if (labelEl) labelEl.textContent = u.label;
             const clusterEl = document.getElementById('node-modal-cluster');
-            if (clusterEl) clusterEl.textContent = u.cluster;
+            if (clusterEl) clusterEl.textContent = isIngested ? `${u.cluster} (${u.file})` : u.cluster;
             const edgesEl = document.getElementById('node-modal-edges');
-            if (edgesEl) edgesEl.textContent = `${u.neighbors.length} Active Connected Edges`;
+            if (edgesEl) edgesEl.textContent = `${u.neighbors.length} Connected Lattice Synapses`;
             const hashEl = document.getElementById('node-modal-hash');
             if (hashEl) hashEl.textContent = u.hash;
+
+            const summaryRow = document.getElementById('node-modal-summary-row');
+            const summaryEl = document.getElementById('node-modal-summary');
+            if (summaryRow && summaryEl) {
+                if (isIngested && u.summary) {
+                    summaryRow.classList.remove('hidden');
+                    summaryRow.classList.add('flex');
+                    summaryEl.textContent = u.summary;
+                } else {
+                    summaryRow.classList.add('hidden');
+                    summaryRow.classList.remove('flex');
+                }
+            }
 
             // Audio chime on node click
             if (CosmicAudio && CosmicAudio.playStardustChime) {
@@ -1628,14 +1649,18 @@ REV: rel-wad@r2
 
             // Highlight selected node (white) and connected neighbors (gold)
             redNodes.forEach((n, i) => {
-                if (i === u.id - 1) {
+                if (n === node) {
                     n.material.color.setHex(0xffffff);
                     n.scale.set(2.0, 2.0, 2.0);
                 } else if (u.neighbors.includes(i)) {
                     n.material.color.setHex(0xffea00);
                     n.scale.set(1.5, 1.5, 1.5);
                 } else {
-                    n.material.color.setHex(isDatabaseOutage ? 0x550011 : 0xff1744);
+                    if (n.userData && n.userData.isIngestedIdeaNode) {
+                        n.material.color.setHex(0x00e5ff);
+                    } else {
+                        n.material.color.setHex(isDatabaseOutage ? 0x550011 : 0xff1744);
+                    }
                     n.scale.set(1.0, 1.0, 1.0);
                 }
             });
@@ -1646,7 +1671,11 @@ REV: rel-wad@r2
             const modal = document.getElementById('node-info-modal');
             if (modal) modal.classList.add('hidden');
             redNodes.forEach(n => {
-                n.material.color.setHex(isDatabaseOutage ? 0x550011 : 0xff1744);
+                if (n.userData && n.userData.isIngestedIdeaNode) {
+                    n.material.color.setHex(0x00e5ff);
+                } else {
+                    n.material.color.setHex(isDatabaseOutage ? 0x550011 : 0xff1744);
+                }
                 n.scale.set(1.0, 1.0, 1.0);
             });
             if (relationshipLines) relationshipLines.material.opacity = isDatabaseOutage ? 0.15 : 0.45;
@@ -2486,6 +2515,8 @@ REV: rel-wad@r2
 
         function importCometToCube() {
             if (!activeComet) return;
+            const targetFile = (activeComet.userData && activeComet.userData.file) ? activeComet.userData.file : "GRAPH_SKETCH.md";
+            const meta = IDEA_VERSE_METADATA[targetFile];
             const start = activeComet.position.clone();
             const pulseGeo = new THREE.SphereGeometry(0.35, 16, 16);
             const pulseMat = new THREE.MeshBasicMaterial({ color: 0x00e5ff, blending: THREE.AdditiveBlending });
@@ -2504,6 +2535,8 @@ REV: rel-wad@r2
                     if (CosmicAudio && CosmicAudio.playShockwaveBoom) CosmicAudio.playShockwaveBoom(0.85);
                     // Sun energy pulse reaction!
                     sunImpulseScale = 1.45;
+                    // Dynamically birth the new Ingested Idea Node inside the lattice!
+                    spawnIngestedIdeaNode(targetFile, meta);
                 }
             }, 28);
 
@@ -2525,6 +2558,8 @@ REV: rel-wad@r2
         }
 
         function importCurrentIdeaFileToCube() {
+            const file = activeCometTargetFile || IdeaVerseCometState.currentFile || "GRAPH_SKETCH.md";
+            const meta = IDEA_VERSE_METADATA[file];
             let startPos = (IdeaVerseCometState && IdeaVerseCometState.headPos) ? IdeaVerseCometState.headPos.clone() : new THREE.Vector3(0, 2.5, 6);
             if (!IdeaVerseCometState || !IdeaVerseCometState.active) {
                 startPos = new THREE.Vector3(0, 2.5, 6);
@@ -2547,6 +2582,8 @@ REV: rel-wad@r2
                     if (CosmicAudio && CosmicAudio.playShockwaveBoom) CosmicAudio.playShockwaveBoom(0.85);
                     // Sun energy pulse reaction!
                     sunImpulseScale = 1.45;
+                    // Dynamically birth the new Ingested Idea Node inside the lattice!
+                    spawnIngestedIdeaNode(file, meta);
                 }
             }, 28);
 
@@ -2562,6 +2599,132 @@ REV: rel-wad@r2
 
             closeModals();
         }
+
+        function spawnIngestedIdeaNode(fileName, fileMeta) {
+            if (!redGraphGroup) return;
+
+            // Placement: Organically situated within the internal lattice shell (radius 1.15 to 2.25)
+            const r = 1.15 + Math.random() * 1.1;
+            const theta = Math.random() * Math.PI * 2;
+            const phi = Math.acos((Math.random() * 2) - 1);
+            const x = r * Math.sin(phi) * Math.cos(theta);
+            const y = r * Math.sin(phi) * Math.sin(theta);
+            const z = r * Math.cos(phi);
+
+            // Radiant Cyan / Gold Ingested Node (radius 0.17 for distinct visual presence!)
+            const nodeGeo = new THREE.SphereGeometry(0.17, 16, 16);
+            const nodeMat = new THREE.MeshBasicMaterial({
+                color: 0x00e5ff,
+                transparent: true,
+                opacity: 0.98,
+                blending: THREE.AdditiveBlending
+            });
+
+            const node = new THREE.Mesh(nodeGeo, nodeMat);
+            node.position.set(x, y, z);
+            node.scale.set(0.01, 0.01, 0.01); // Bloom outward from origin
+
+            const nodeId = redNodes.length + 1;
+            const hashStr = "idea" + Math.random().toString(16).substring(2, 14) + "9f";
+
+            node.userData = {
+                isRedNode: true,
+                isEvidenceNode: true,
+                isIngestedIdeaNode: true,
+                id: nodeId,
+                label: `:INGESTED_${fileName.replace('.md', '')}`,
+                title: fileMeta ? fileMeta.title : "Ingested Idea Document",
+                cluster: fileMeta ? fileMeta.category : "IdeaVerse Ingestion",
+                summary: fileMeta ? fileMeta.summary : "Ingested repository document",
+                author: fileMeta ? fileMeta.author : "Studio Team",
+                rev: fileMeta ? fileMeta.rev : "v1.0",
+                hash: hashStr,
+                file: fileName,
+                neighbors: []
+            };
+
+            // Animate scale birth bloom
+            let bloomT = 0;
+            const bloomAnim = setInterval(() => {
+                bloomT += 0.08;
+                const s = Math.min(1.0, bloomT) * (1.0 + Math.sin(bloomT * Math.PI) * 0.45);
+                node.scale.set(s, s, s);
+                if (bloomT >= 1.0) {
+                    clearInterval(bloomAnim);
+                    node.scale.set(1.0, 1.0, 1.0);
+                }
+            }, 30);
+
+            // Find closest 2 neighbors in redNodes to connect synaptic lines
+            if (redNodes.length > 0) {
+                const distances = redNodes.map((other, idx) => ({
+                    idx,
+                    dist: node.position.distanceTo(other.position)
+                }));
+                distances.sort((a, b) => a.dist - b.dist);
+                const closest = distances.slice(0, 2);
+
+                const newEdgePts = [];
+                closest.forEach(c => {
+                    node.userData.neighbors.push(c.idx);
+                    if (redNodes[c.idx] && redNodes[c.idx].userData && redNodes[c.idx].userData.neighbors) {
+                        redNodes[c.idx].userData.neighbors.push(nodeId - 1);
+                    }
+                    newEdgePts.push(node.position);
+                    newEdgePts.push(redNodes[c.idx].position);
+                });
+
+                if (newEdgePts.length > 0) {
+                    const edgeGeo = new THREE.BufferGeometry().setFromPoints(newEdgePts);
+                    const edgeMat = new THREE.LineBasicMaterial({
+                        color: 0x00e5ff,
+                        transparent: true,
+                        opacity: 0.75,
+                        blending: THREE.AdditiveBlending
+                    });
+                    const edgeLines = new THREE.LineSegments(edgeGeo, edgeMat);
+                    redGraphGroup.add(edgeLines);
+                }
+            }
+
+            // Create high-res billboard sprite label
+            const labelCanvas = document.createElement('canvas');
+            labelCanvas.width = 384;
+            labelCanvas.height = 72;
+            const lctx = labelCanvas.getContext('2d');
+            lctx.fillStyle = 'rgba(0, 229, 255, 0.25)';
+            lctx.strokeStyle = '#00e5ff';
+            lctx.lineWidth = 3;
+            lctx.beginPath();
+            lctx.roundRect(4, 4, 376, 64, 16);
+            lctx.fill();
+            lctx.stroke();
+
+            lctx.font = 'bold 22px monospace';
+            lctx.fillStyle = '#ffffff';
+            lctx.textAlign = 'center';
+            lctx.textBaseline = 'middle';
+            lctx.fillText(`✨ ${fileName.replace('.md', '')}`, 192, 36);
+
+            const labelTex = new THREE.CanvasTexture(labelCanvas);
+            const labelSpriteMat = new THREE.SpriteMaterial({
+                map: labelTex,
+                transparent: true,
+                opacity: 0.95,
+                depthWrite: false
+            });
+            const labelSprite = new THREE.Sprite(labelSpriteMat);
+            labelSprite.position.set(x, y + 0.28, z);
+            labelSprite.scale.set(0.85, 0.20, 1.0);
+            labelSprite.visible = showNodeNames;
+            redGraphGroup.add(labelSprite);
+            nodeLabels.push(labelSprite);
+
+            redGraphGroup.add(node);
+            redNodes.push(node);
+            redEvidenceNodes.push(node);
+        }
+        window.spawnIngestedIdeaNode = spawnIngestedIdeaNode;
 
         function toggleCometsHud() {
             showComets = !showComets;

@@ -12,6 +12,7 @@
   - `v039.07` (Item 3b: Hyper Flyby Architecture Documentation & Tags)
   - `v039.08` (Item 3 Polish: Dual-Modal Cube Ingestion & Top-Right HUD Controls)
   - `v039.09` (Item 3 Extension: 10-Document Narrative Ledger Expansion)
+  - `v039.10` (Item 3 Extension: Dynamic Ingested Node Synthesis in Lattice & Repository ideaverse/ Folder)
 - **Primary Source**: `apps/web/public/art/cubes_of_knowledge_3d.html`
 - **Studio Mirrors**: `Gem's Art Studio/cubes_of_knowledge_3d.html`
 
@@ -185,6 +186,17 @@ The IdeaVerse documents carried by passing comets have been doubled from 5 to 10
 
 Both the near-field ribbon comet and the 3D deep-space comets now dynamically map their target file, titles, categories, authors, and summaries directly from this verified 10-document ledger.
 
+### 6.4 Dynamic Ingested Node Synthesis in the Lattice (v039.10)
+When an IdeaVerse document is ingested into the Company Cube (via either modal):
+1. **Pulse Projectile & Core Impact**: The cyan energy pulse travels from the comet into the core origin `(0, 0, 0)`, firing the shockwave boom and solar core expansion.
+2. **Birth of Ingested Node**: An authentic new **Ingested Idea Node** is dynamically synthesized within the internal counter-rotating lattice graph (`redGraphGroup`):
+   - **Visual Appearance**: Brilliant Electric Cyan (`#00e5ff`) sphere (radius `0.17`) that blooms outward with a sinusoidal spring animation.
+   - **Synaptic Edge Weaving**: Automatically locates the $K=2$ nearest existing nodes and draws glowing cyan relationship lines connecting them into the active graph.
+   - **High-Resolution Billboard Label**: Renders a glowing canvas sprite banner (`✨ FILENAME`) above the node that obeys the `NODE NAMES: ON / OFF` HUD toggle.
+   - **Interactive Selection**: Clicking an ingested node highlights it in pure white with gold neighbors, playing an audio chime and opening `#node-info-modal` displaying its full Ingested Summary, Category, Connected Synapses, and cryptographic hash!
+3. **Dedicated Repository `ideaverse/` Directory**:
+   - All 10 documents are stored as genuine `.md` files in the repository root (`ideaverse/`), establishing an authentic 1-to-1 digital twin between the filesystem and the 3D visualizer.
+
 ---
 
 ## 7. Preservation of Foundation Features
@@ -199,4 +211,4 @@ All interactive systems remain fully functional:
 
 ## 8. Next Step on the Roadmap
 
-- **Item 4: The Fiery Sun Core** (`v039.10` / `v039.11`): Dynamic plasma mantle wireframe, pulsating solar flares, prominences, and rotating concentric cypher mandala dials.
+- **Item 4: The Fiery Sun Core** (`v039.11` / `v039.12`): Dynamic plasma mantle wireframe, pulsating solar flares, prominences, and rotating concentric cypher mandala dials.
