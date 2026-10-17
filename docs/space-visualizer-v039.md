@@ -26,6 +26,8 @@
   - `v039.21` (Item 6c: Option A Corridor Fluid Architecture Documentation & Tags)
   - `v039.22` (Item 6d: Cardboard Box Marble Physics for Shard Nodes & Ingested Ideas)
   - `v039.23` (Item 6d: Marble Box Physics Architecture Documentation & Tags)
+  - `v039.24` (Item 7: The Eldritch Cypher Shader Mandala, 2048px Runic Canvas & Resonance Rings)
+  - `v039.25` (Item 7: Eldritch Cypher Shader Mandala Architecture Documentation & Tags)
 - **Primary Source**: `apps/web/public/art/cubes_of_knowledge_3d.html`
 - **Studio Mirrors**: `Gem's Art Studio/cubes_of_knowledge_3d.html`
 
@@ -639,7 +641,94 @@ When database connectivity is re-established (**RESTORE DATABASE**):
 
 ---
 
-## 13. Preservation of Foundation Features
+## 13. Item 7: The Eldritch Cypher Shader Mandala (v039.24 / v039.25)
+
+### 13.1 Super-Sampled 2048x2048 Procedural Canvas Runic Generation
+To provide razor-sharp cryptographic and esoteric detail at any zoom distance, the mandala texture is generated dynamically using a super-sampled 2048x2048 HTML5 2D canvas (`THREE.CanvasTexture` with `LinearMipmapLinearFilter` and `LinearFilter`):
+1. **Layer 1: Outer Precision Vernier Calibration Dial ($R = 960$)**:
+   - Primary cyan perimeter stroke ($R = 960$, line width 5, neon shadow blur 18 in `rgba(0, 229, 255, 0.85)`).
+   - Outer concentric hairline guide ($R = 982$, line width 2).
+   - **144 Radial Calibration Ticks**:
+     - 12 Major Cardinal Ticks ($a \% 12 == 0$, $R_1 = 890 \to 960$, line width 4.5, `#00e5ff`) with glowing Golden Pip Beacons ($R = 872$, radius 7, fill `#ffd54f`, glow `#ffb300`).
+     - 24 Intermediate Ticks ($a \% 4 == 0$, $R_1 = 918 \to 960$, line width 2.8, `rgba(0, 229, 255, 0.85)`).
+     - 108 Minor Vernier Ticks ($R_1 = 938 \to 960$, line width 1.6, `rgba(0, 229, 255, 0.42)`).
+   - Vernier baseline delimiter ring at $R = 856$ (line width 2).
+2. **Layer 2: Primary Cypher NLP Inscription Track ($R = 822$)**:
+   - High-contrast bold monospace typography (`bold 30px 'Courier New', monospace`).
+   - Radiant amethyst lavender styling (`#c084fc`, shadow blur 14, `rgba(192, 132, 252, 0.9)`).
+   - Continuous 360-degree perimeter inscription:
+     `"MATCH (a:Agent)-[w:WITNESSED]->(d:Decision) WHERE w.valid=true RETURN a, d ⟐ FALKOR_CORE_STABLE ⟐ GRAPH_EVIDENCED ⟐ 100%_MUTUAL_CONSENSUS ⟐ "`
+   - Inner lavender delimiter ring at $R = 770$ (line width 2.5).
+3. **Layer 3: Middle Relational Schema Track ($R = 675 \sim 740$)**:
+   - Outer solar gold boundary ring at $R = 740$ (line width 3.5, glow `rgba(255, 213, 79, 0.75)`).
+   - Schema typography (`bold 28px 'Courier New', monospace`, `#ffd54f`):
+     `"(:Cut)-[:CUE_COVERAGE]->(:Track)-[:LICENSED_BY]->(:License)-[:RELEASED_IN]->(:Release) ⟐ AUDIT_ESTABLISHED ⟐ ZERO_DEFECT_CLEARANCE ⟐ "`
+   - **16 Sacred Diamond Vernier Nodes & Connecting Polygon Ring ($R = 612$)**:
+     - 16-sided regular polygon guide ring in amber (`rgba(255, 145, 0, 0.45)`).
+     - 16 diamond glyphs (width 20, height 20) with amber stroke (`#ff9100`, width 2.5) and semi-translucent gold fill (`rgba(255, 213, 79, 0.45)`).
+   - Inner amber delimiter ring at $R = 560$ (line width 3).
+4. **Layer 4: Sacred 12-Point Star Lattice & Elder Futhark / Cryptographic Runes ($R = 468 \sim 540$)**:
+   - Interlaced 12-point sacred geometric star cords inscribed between $R = 430$ and $R = 535$ in incandescent orange (`rgba(255, 109, 0, 0.45)`).
+   - Esoteric cipher runes (`bold 28px serif, monospace`, `#ff9100`, shadow blur 12):
+     `"⟐ ᚠ ᚢ ᚦ ᚨ ᚱ ᚲ ᚷ ᚹ ᚺ ᚾ ᛁ ᛃ ᛈ ᛇ ᛉ ᛋ ᛏ ᛒ ᛖ ᛗ ᛚ ᛜ ᛞ ᛟ ⟐ 0x77B8 ⟐ 0x9F8E ⟐ 0x3C4D ⟐ "`
+5. **Layer 5: Inner Cryptographic Shard Verification Ring ($R = 345 \sim 420$)**:
+   - Outer crimson verification boundary at $R = 420$ (line width 3.5, `#ff1744`).
+   - Shard immutability ledger inscription (`bold 24px 'Courier New', monospace`, `#ff5252`):
+     `"FALKOR_SHARD_01 ⟐ ZERO_WRITE_AUDIT_LOCKED ⟐ 100% IMMUTABLE ⟐ ZERO_DEFECT_CONSENSUS ⟐ "`
+   - Inner boundary ring at $R = 300$ (line width 3, `#ff1744`).
+6. **Layer 6: Center Stargate Energy Spokes & Clean Aperture ($R = 130 \to 280$)**:
+   - 24 alternating energy spokes radiating between $R = 140$ and $R = 280$ (crimson `#ff1744` and gold `#ffd54f`).
+   - 8 sacred orbital pips at $R = 210$.
+   - Stargate aperture rim at $R = 136$.
+   - **Destination-Out Center Aperture Clearing ($R < 130$)**: Cleared with `destination-out` so the dynamic 3D plasma mantle wireframe (`sunSphere`), turbulent waves, and incandescent fusion core (`innerSun`) radiate unobstructed through the center of all three orthogonal gimbal planes!
+
+### 13.2 3-Axis Gyroscopic Orthogonal Gimbal & Independent Cloned Materials
+1. **Geometry & Scaling**:
+   - Expanded to `PlaneGeometry(2.35, 2.35)` to span gracefully beyond the solar mantle ($r=0.96$) and prominence loop apices ($r \approx 1.55$).
+2. **Three Orthogonal Axes**:
+   - `eldritchCypherDisc`: XY plane, rotating about Z axis.
+   - `eldritchCypherDisc2`: YZ plane (`rotation.y = Math.PI / 2`), counter-rotating about Z axis.
+   - `eldritchCypherDisc3`: XZ plane (`rotation.x = Math.PI / 2, rotation.z = Math.PI / 4`), rotating about Y axis.
+3. **Cloned Materials for Independent Chromatic Control**:
+   - `cypherMat1`, `cypherMat2`, `cypherMat3` are cloned instances with additive blending (`THREE.AdditiveBlending`), allowing independent opacity, color, and flare modulation without texture re-upload.
+
+### 13.3 Concentric Harmonic Resonance Rings (`mandalaResonanceRings`)
+Three luminous neon acoustic shockwave shells anchored to `sunGroup`:
+1. **Inner Harmonic Ring (Electric Cyan `#00e5ff`)**:
+   - Radii: $R_{\text{in}} = 1.24, R_{\text{out}} = 1.28$, equatorial plane. Opacity $0.55$, rotational speed $+0.003$.
+2. **Middle Harmonic Ring (Amethyst Violet `#c084fc`)**:
+   - Radii: $R_{\text{in}} = 1.58, R_{\text{out}} = 1.62$, tilted $(0.35, 0.45, 0.10)$. Opacity $0.48$, rotational speed $-0.0025$.
+3. **Outer Harmonic Ring (Radiant Solar Gold `#ffd54f`)**:
+   - Radii: $R_{\text{in}} = 1.92, R_{\text{out}} = 1.96$, tilted $(-0.40, 0.25, 0.30)$. Opacity $0.42$, rotational speed $+0.002$.
+4. **Dynamic Sinusoidal Wave Ripples**:
+   - Each ring expands and contracts radially with harmonic phase-staggered wave motion:
+     $$S_{\text{ring}}(t) = 1.0 + 0.045 \sin(2.2t + 0.7i + 1.8i) + 0.22 \cdot I_{\text{flare}}$$
+
+### 13.4 Angular Velocity Momentum Integration & Harmonic Scale Breathing
+1. **Momentum Integration**:
+   - Instead of overriding rotations each frame, the engine integrates continuous angular momentum:
+     $$\Delta \theta_k = \omega_k \cdot M_{\text{outage}} \cdot (1.0 + 3.5 \cdot I_{\text{flare}}) \cdot \Delta t$$
+     where $\omega = (0.12, -0.15, 0.10)$ and $M_{\text{outage}} = 0.08$ during outage vs. $1.0$ online.
+2. **Harmonic Scale Breathing**:
+   - Discs breathe dynamically on staggered harmonic frequencies:
+     $$S_1(t) = 1.0 + 0.035 \sin(2.2t) + 0.16 \cdot I_{\text{flare}}$$
+     $$S_2(t) = 1.0 + 0.035 \cos(2.5t + 1.2) + 0.16 \cdot I_{\text{flare}}$$
+     $$S_3(t) = 1.0 + 0.035 \sin(1.9t + 2.4) + 0.16 \cdot I_{\text{flare}}$$
+3. **Decaying Chromatic Flare Impulse**:
+   - $I_{\text{flare}}$ decays smoothly toward zero each frame: $I_{\text{flare}} = \max(0, I_{\text{flare}} - 0.85 \Delta t)$.
+
+### 13.5 Chromatic Flare Impulse Triggers & Outage Stasis
+1. **Synaptic Query Dispatch (`triggerSynapticQuery`)**:
+   - Injects instant flare impulse $I_{\text{flare}} = 1.0$, angular momentum boosts ($\Delta \theta_1 += 0.85, \Delta \theta_2 -= 0.95, \Delta \theta_3 += 0.80$), and expands the resonance rings!
+2. **Coronal Mass Ejections & Idea Ingestion**:
+   - High-energy CMEs and idea comet captures fire $I_{\text{flare}} = 1.0$, while autonomous solar pulses trigger $I_{\text{flare}} = 0.65$.
+3. **Outage Simulation Stasis & Ignition Recovery**:
+   - **Outage Active**: Rotation slows to an $8\%$ stasis crawl ($M_{\text{outage}} = 0.08$), discs dim to phantom baseline opacity ($0.12$), and resonance rings fade to $0.06$.
+   - **Connection Restored**: Discs return to full opacity ($0.72$), resonance rings restore to base opacities, and an immediate celebratory ignition flare ($I_{\text{flare}} = 1.0$) surges through the mandala!
+
+---
+
+## 14. Preservation of Foundation Features
 
 All interactive systems remain fully functional:
 1. **Synaptic Query Terminal**: NLP cypher queries, quick chips, and live logs.
@@ -654,9 +743,10 @@ All interactive systems remain fully functional:
 10. **Calm vs. Chaotic Velocity Modulation**: $28\%$ calm synchronized laminar drift when online vs. $100\%$ agitated turbulent Brownian jitter during outage.
 11. **Purple Containment Frame & Travelling Light-Balls**: 12 neon struts, 8 corner beacons, 6 forcefield panels, Orocue perimeter race, and $0.62\,\text{s}$ spark explosions.
 12. **Cardboard Box Marble Physics**: Outage antigravity failure, tilting gravity, centrifugal spin drag, 2-pass marble collisions, and smooth reconnection levitation.
+13. **The Eldritch Cypher Shader Mandala**: 2048px super-sampled runic canvas, 3-axis gyroscopic momentum, concentric harmonic resonance rings, and chromatic flare pulses.
 
 ---
 
-## 14. Next Step on the Roadmap
+## 15. Roadmap Completion Summary
 
-- **Item 7: The Eldritch Cypher Shader Mandala** (`v039.24` / `v039.25`): Triple orthogonal 1024x1024 procedural canvas shader rings, dynamic glyph scrolling, harmonic resonance rings, and chromatic flare pulses.
+With the successful landing of **Item 7 (The Eldritch Cypher Shader Mandala)**, all primary objectives across the unified 3D Space Visualizer roadmap (`v039.00` through `v039.25`) are now fully implemented, verified, and synchronized across all three visualizer mirrors!
