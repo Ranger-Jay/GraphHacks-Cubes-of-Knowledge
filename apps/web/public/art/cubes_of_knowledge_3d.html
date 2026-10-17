@@ -252,6 +252,13 @@
             <span class="px-2 py-0.5 rounded bg-cyan-950/90 text-cyan-200 border border-cyan-500 font-mono font-bold text-[10px] shadow-[0_0_12px_#00e5ff]">200% LOCKED</span>
         </div>
 
+        <!-- Solar Core Fusion Status Badge (Item 4) -->
+        <div id="solar-core-badge" class="flex items-center space-x-2 text-xs font-mono px-3 py-1.5 rounded-xl hud-glass border border-amber-500/50 shadow-[0_0_15px_rgba(255,179,0,0.3)]">
+            <span id="solar-core-dot" class="w-2.5 h-2.5 rounded-full bg-amber-400 animate-pulse shadow-[0_0_10px_#ffb300]"></span>
+            <span class="text-amber-300 font-bold uppercase tracking-wider">SOLAR CORE:</span>
+            <span id="solar-core-label" class="px-2 py-0.5 rounded bg-amber-950/90 text-amber-200 border border-amber-500 font-mono font-bold text-[10px] shadow-[0_0_12px_#ffb300]">FUSION ACTIVE</span>
+        </div>
+
         <!-- IdeaVerse Comets Toggle (Item 3) -->
         <button id="comets-toggle-btn" class="interactive hud-glass px-3 py-2 rounded-xl text-xs font-mono transition-all flex items-center space-x-1.5 shadow-lg bg-cyan-950/80 text-cyan-300 border-cyan-500/60 font-bold" title="Toggle IdeaVerse Comets">
             <span id="comets-hud-dot" class="w-2 h-2 rounded-full bg-cyan-400 animate-pulse"></span>
@@ -752,7 +759,9 @@ REV: rel-wad@r2
         let starLayers = [];
         let cubeGroup, wireframeCube, wireframeCubeAura = null, cornerBeacons = [], innerTesseract, cubePlanes = [], redEvidenceNodes = [];
         let redGraphGroup = null, redNodes = [], relationshipLines = null, showNodeNames = false, nodeLabels = [];
-        let sunGroup, sunSphere, innerSun, sunCoronaRing, sunTorusLoop, eldritchCypherDisc, eldritchCypherDisc2;
+        let sunGroup, sunSphere, innerSun, sunCoronaRing, sunCoronaRing2, sunTorusLoop, eldritchCypherDisc, eldritchCypherDisc2, eldritchCypherDisc3;
+        let sunPlasmaShroud = null, sunProminences = [], sunFlareEjections = [], sunMantleBaseVertices = null;
+        let nextAutonomousCME = performance.now() + 10000;
         let synapticTendrils = [];
         let pyramidGroups = {};
         let comets = [], activeComet = null, showComets = true;
@@ -1742,40 +1751,56 @@ REV: rel-wad@r2
         window.selectRedNode = selectRedNode;
         window.closeNodeModal = closeNodeModal;
 
-        // --- 3. The Central Golden Sun ---
+        // --- 3. The Central Fiery Sun Core (Item 4: Plasma Mantle, Coronal Prominences & Cypher Mandala) ---
         function createTheSun() {
             sunGroup = new THREE.Group();
             cubeGroup.add(sunGroup);
 
-            // Plasma Sphere
-            const sunGeo = new THREE.SphereGeometry(0.96, 32, 32);
+            // 1. Dynamic Turbulent Plasma Mantle Wireframe
+            const sunGeo = new THREE.SphereGeometry(0.96, 36, 36);
+            const posAttr = sunGeo.attributes.position;
+            sunMantleBaseVertices = new Float32Array(posAttr.array.length);
+            sunMantleBaseVertices.set(posAttr.array);
+
             const sunMat = new THREE.MeshBasicMaterial({
                 color: 0xffb300,
                 wireframe: true,
                 transparent: true,
-                opacity: 0.75,
+                opacity: 0.85,
                 blending: THREE.AdditiveBlending
             });
             sunSphere = new THREE.Mesh(sunGeo, sunMat);
             sunGroup.add(sunSphere);
 
-            // Inner Core
+            // 2. Secondary Inner Plasma Shroud (Dense multi-faceted incandescent combustion cage)
+            const shroudGeo = new THREE.IcosahedronGeometry(0.84, 2);
+            const shroudMat = new THREE.MeshBasicMaterial({
+                color: 0xff6d00,
+                wireframe: true,
+                transparent: true,
+                opacity: 0.62,
+                blending: THREE.AdditiveBlending
+            });
+            sunPlasmaShroud = new THREE.Mesh(shroudGeo, shroudMat);
+            sunGroup.add(sunPlasmaShroud);
+
+            // 3. Inner Radiant Fusion Core
             const innerSunGeo = new THREE.SphereGeometry(0.68, 32, 32);
             const innerSunMat = new THREE.MeshBasicMaterial({
                 color: 0xffd54f,
                 transparent: true,
-                opacity: 0.92,
+                opacity: 0.94,
                 blending: THREE.AdditiveBlending
             });
             innerSun = new THREE.Mesh(innerSunGeo, innerSunMat);
             sunGroup.add(innerSun);
 
-            // Coronal Ring
-            const ringGeo = new THREE.RingGeometry(1.08, 1.52, 48);
+            // 4. Primary Coronal Ring (Tilted Golden Halo)
+            const ringGeo = new THREE.RingGeometry(1.08, 1.58, 64);
             const ringMat = new THREE.MeshBasicMaterial({
                 color: 0xffb300,
                 transparent: true,
-                opacity: 0.42,
+                opacity: 0.45,
                 side: THREE.DoubleSide,
                 blending: THREE.AdditiveBlending
             });
@@ -1783,74 +1808,222 @@ REV: rel-wad@r2
             sunCoronaRing.rotation.x = Math.PI / 3;
             sunGroup.add(sunCoronaRing);
 
-            // Torus Prominence Loop
-            const torusGeo = new THREE.TorusGeometry(1.18, 0.03, 16, 64);
+            // 5. Secondary Coronal Ring (Orthogonal Fiery Orange Halo)
+            const ringGeo2 = new THREE.RingGeometry(1.15, 1.72, 64);
+            const ringMat2 = new THREE.MeshBasicMaterial({
+                color: 0xff6d00,
+                transparent: true,
+                opacity: 0.35,
+                side: THREE.DoubleSide,
+                blending: THREE.AdditiveBlending
+            });
+            sunCoronaRing2 = new THREE.Mesh(ringGeo2, ringMat2);
+            sunCoronaRing2.rotation.x = -Math.PI / 3;
+            sunCoronaRing2.rotation.y = Math.PI / 6;
+            sunGroup.add(sunCoronaRing2);
+
+            // 6. Torus Magnetic Prominence Loop
+            const torusGeo = new THREE.TorusGeometry(1.22, 0.035, 16, 64);
             const torusMat = new THREE.MeshBasicMaterial({
                 color: 0xffe082,
                 transparent: true,
-                opacity: 0.6,
+                opacity: 0.65,
                 blending: THREE.AdditiveBlending
             });
             sunTorusLoop = new THREE.Mesh(torusGeo, torusMat);
             sunTorusLoop.rotation.y = Math.PI / 4;
             sunGroup.add(sunTorusLoop);
 
-            // Concentric Cypher Mandala Dial
-            const cypherCanvas = document.createElement('canvas');
-            cypherCanvas.width = 512;
-            cypherCanvas.height = 512;
-            const cctx = cypherCanvas.getContext('2d');
-            cctx.translate(256, 256);
+            // 7. Six Procedural 3D Magnetic Prominence Arcs (Solar Flare Loops)
+            sunProminences = [];
+            const prominenceConfigs = [
+                { lat: 0.15, lon: 0.2, span: 0.65, apexAlt: 1.48, tilt: 0.25, color: 0xff6d00, coreColor: 0xffd54f },
+                { lat: -0.35, lon: 1.4, span: 0.55, apexAlt: 1.58, tilt: -0.35, color: 0xff3d00, coreColor: 0xffab00 },
+                { lat: 0.45, lon: 2.8, span: 0.70, apexAlt: 1.44, tilt: 0.40, color: 0xff9100, coreColor: 0xffecb3 },
+                { lat: -0.20, lon: 4.1, span: 0.60, apexAlt: 1.62, tilt: -0.20, color: 0xff6d00, coreColor: 0xffe082 },
+                { lat: 0.60, lon: 5.2, span: 0.50, apexAlt: 1.46, tilt: 0.50, color: 0xff3d00, coreColor: 0xffab00 },
+                { lat: -0.55, lon: 3.3, span: 0.62, apexAlt: 1.54, tilt: -0.30, color: 0xff9100, coreColor: 0xffd54f }
+            ];
 
+            prominenceConfigs.forEach((cfg, idx) => {
+                const promGroup = new THREE.Group();
+                const r0 = 0.90;
+
+                const theta0 = cfg.lon - cfg.span * 0.5;
+                const theta1 = cfg.lon + cfg.span * 0.5;
+                const phi0 = cfg.lat;
+                const phi1 = cfg.lat + cfg.tilt * 0.3;
+
+                const p0 = new THREE.Vector3(
+                    r0 * Math.cos(theta0) * Math.cos(phi0),
+                    r0 * Math.sin(phi0),
+                    r0 * Math.sin(theta0) * Math.cos(phi0)
+                );
+
+                const p4 = new THREE.Vector3(
+                    r0 * Math.cos(theta1) * Math.cos(phi1),
+                    r0 * Math.sin(phi1),
+                    r0 * Math.sin(theta1) * Math.cos(phi1)
+                );
+
+                const mid = new THREE.Vector3().addVectors(p0, p4).multiplyScalar(0.5);
+                const midNormal = mid.clone().normalize();
+                const apex = midNormal.multiplyScalar(cfg.apexAlt);
+                const cross = new THREE.Vector3().crossVectors(p4.clone().sub(p0), apex).normalize();
+                apex.addScaledVector(cross, cfg.tilt * 0.25);
+
+                const p1 = new THREE.Vector3().lerpVectors(p0, apex, 0.52).addScaledVector(midNormal, 0.12);
+                const p3 = new THREE.Vector3().lerpVectors(p4, apex, 0.52).addScaledVector(midNormal, 0.12);
+
+                const curve = new THREE.CatmullRomCurve3([p0, p1, apex, p3, p4]);
+
+                // Outer Glowing Plasma Sheath
+                const tubeGeo = new THREE.TubeGeometry(curve, 28, 0.024, 8, false);
+                const tubeMat = new THREE.MeshBasicMaterial({
+                    color: cfg.color,
+                    transparent: true,
+                    opacity: 0.78,
+                    blending: THREE.AdditiveBlending
+                });
+                const tubeMesh = new THREE.Mesh(tubeGeo, tubeMat);
+                promGroup.add(tubeMesh);
+
+                // Inner Brilliant Filament
+                const coreGeo = new THREE.TubeGeometry(curve, 28, 0.009, 6, false);
+                const coreMat = new THREE.MeshBasicMaterial({
+                    color: cfg.coreColor,
+                    transparent: true,
+                    opacity: 0.95,
+                    blending: THREE.AdditiveBlending
+                });
+                const coreMesh = new THREE.Mesh(coreGeo, coreMat);
+                promGroup.add(coreMesh);
+
+                sunGroup.add(promGroup);
+
+                sunProminences.push({
+                    group: promGroup,
+                    tubeMesh: tubeMesh,
+                    coreMesh: coreMesh,
+                    baseColor: cfg.color,
+                    coreBaseColor: cfg.coreColor,
+                    phase: idx * 1.15,
+                    rotSpeed: 0.002 * (idx % 2 === 0 ? 1 : -1),
+                    flickerSpeed: 3.5 + idx * 0.8
+                });
+            });
+
+            // 8. Concentric High-Definition Cypher Mandala Dials (1024x1024 3-Axis Gyroscope)
+            const cypherCanvas = document.createElement('canvas');
+            cypherCanvas.width = 1024;
+            cypherCanvas.height = 1024;
+            const cctx = cypherCanvas.getContext('2d');
+            cctx.translate(512, 512);
+
+            // Layer A: Outer Precision Cypher Dial (Radius 460)
             cctx.strokeStyle = '#00e5ff';
-            cctx.lineWidth = 3;
+            cctx.lineWidth = 4;
             cctx.beginPath();
-            cctx.arc(0, 0, 230, 0, Math.PI * 2);
+            cctx.arc(0, 0, 460, 0, Math.PI * 2);
             cctx.stroke();
 
-            for (let a = 0; a < 36; a++) {
-                const ang = (a / 36) * Math.PI * 2;
-                const r1 = a % 3 === 0 ? 210 : 220;
+            // 72 Radial Calibration Ticks
+            for (let a = 0; a < 72; a++) {
+                const ang = (a / 72) * Math.PI * 2;
+                const r1 = a % 6 === 0 ? 418 : (a % 2 === 0 ? 436 : 446);
+                cctx.lineWidth = a % 6 === 0 ? 3 : 1.5;
+                cctx.strokeStyle = a % 6 === 0 ? '#00e5ff' : 'rgba(0, 229, 255, 0.55)';
                 cctx.beginPath();
                 cctx.moveTo(Math.cos(ang) * r1, Math.sin(ang) * r1);
-                cctx.lineTo(Math.cos(ang) * 230, Math.sin(ang) * 230);
+                cctx.lineTo(Math.cos(ang) * 460, Math.sin(ang) * 460);
                 cctx.stroke();
             }
 
-            cctx.font = 'bold 15px monospace';
+            // Outer Orbit Cypher Inscription
+            cctx.font = 'bold 22px monospace';
             cctx.fillStyle = '#b388ff';
             cctx.textAlign = 'center';
-            const cypherText = "MATCH (a:Agent)-[w:WITNESSED]->(d:Decision) WHERE w.valid=true RETURN a, d ⟐ ";
-            for (let i = 0; i < cypherText.length; i++) {
-                const charAngle = (i / cypherText.length) * Math.PI * 2 - Math.PI / 2;
+            const cypherText1 = "MATCH (a:Agent)-[w:WITNESSED]->(d:Decision) WHERE w.valid=true RETURN a, d ⟐ FALKOR_CORE_STABLE ⟐ ";
+            for (let i = 0; i < cypherText1.length; i++) {
+                const charAngle = (i / cypherText1.length) * Math.PI * 2 - Math.PI / 2;
                 cctx.save();
                 cctx.rotate(charAngle);
-                cctx.translate(0, -165);
-                cctx.fillText(cypherText[i], 0, 0);
+                cctx.translate(0, -385);
+                cctx.fillText(cypherText1[i], 0, 0);
                 cctx.restore();
             }
 
-            cctx.strokeStyle = '#ff1744';
-            cctx.lineWidth = 2.5;
+            // Layer B: Middle Relational Schema Track (Radius 330)
+            cctx.strokeStyle = '#ffd54f';
+            cctx.lineWidth = 3;
             cctx.beginPath();
-            cctx.arc(0, 0, 120, 0, Math.PI * 2);
+            cctx.arc(0, 0, 330, 0, Math.PI * 2);
             cctx.stroke();
 
+            cctx.font = 'bold 18px monospace';
+            cctx.fillStyle = '#ffd54f';
+            const cypherText2 = "(:Cut)-[:REQUIRES_CLEARANCE]->(:License) ⟐ (:Track)-[:SYNCED_WITH]->(:Scene) ⟐ (:Block)-[:VERIFIED]->(:Lattice) ⟐ ";
+            for (let i = 0; i < cypherText2.length; i++) {
+                const charAngle = (i / cypherText2.length) * Math.PI * 2 - Math.PI / 2;
+                cctx.save();
+                cctx.rotate(charAngle);
+                cctx.translate(0, -285);
+                cctx.fillText(cypherText2[i], 0, 0);
+                cctx.restore();
+            }
+
+            // Layer C: Sacred 8-Point Diamond Star Nodes
+            cctx.strokeStyle = 'rgba(255, 109, 0, 0.7)';
+            cctx.lineWidth = 2.5;
+            for (let s = 0; s < 8; s++) {
+                const sa = (s / 8) * Math.PI * 2;
+                cctx.beginPath();
+                cctx.arc(Math.cos(sa) * 235, Math.sin(sa) * 235, 12, 0, Math.PI * 2);
+                cctx.stroke();
+            }
+
+            // Layer D: Inner Cryptographic Verification Ring (Radius 220)
+            cctx.strokeStyle = '#ff1744';
+            cctx.lineWidth = 3.5;
+            cctx.beginPath();
+            cctx.arc(0, 0, 220, 0, Math.PI * 2);
+            cctx.stroke();
+
+            cctx.font = 'bold 16px monospace';
+            cctx.fillStyle = '#ff5252';
+            const cypherText3 = "FALKOR_SHARD_01 ⟐ ZERO_WRITE_AUDIT_LOCKED ⟐ 100% IMMUTABLE ⟐ ";
+            for (let i = 0; i < cypherText3.length; i++) {
+                const charAngle = (i / cypherText3.length) * Math.PI * 2 - Math.PI / 2;
+                cctx.save();
+                cctx.rotate(charAngle);
+                cctx.translate(0, -185);
+                cctx.fillText(cypherText3[i], 0, 0);
+                cctx.restore();
+            }
+
+            // Central Dual Diamond Core
             cctx.fillStyle = '#ff1744';
             cctx.beginPath();
-            cctx.moveTo(0, -45); cctx.lineTo(32, 0); cctx.lineTo(0, 45); cctx.lineTo(-32, 0);
+            cctx.moveTo(0, -70); cctx.lineTo(50, 0); cctx.lineTo(0, 70); cctx.lineTo(-50, 0);
+            cctx.closePath();
+            cctx.fill();
+
+            cctx.fillStyle = '#ffd54f';
+            cctx.beginPath();
+            cctx.moveTo(0, -35); cctx.lineTo(25, 0); cctx.lineTo(0, 35); cctx.lineTo(-25, 0);
             cctx.closePath();
             cctx.fill();
 
             const cypherTex = new THREE.CanvasTexture(cypherCanvas);
-            const cypherGeo = new THREE.PlaneGeometry(1.88, 1.88);
+            const cypherGeo = new THREE.PlaneGeometry(2.15, 2.15);
             const cypherMat = new THREE.MeshBasicMaterial({
                 map: cypherTex,
                 transparent: true,
-                opacity: 0.65,
+                opacity: 0.72,
                 blending: THREE.AdditiveBlending,
                 side: THREE.DoubleSide
             });
+
             eldritchCypherDisc = new THREE.Mesh(cypherGeo, cypherMat);
             sunGroup.add(eldritchCypherDisc);
 
@@ -1858,9 +2031,43 @@ REV: rel-wad@r2
             eldritchCypherDisc2.rotation.y = Math.PI / 2;
             sunGroup.add(eldritchCypherDisc2);
 
-            const sunLight = new THREE.PointLight(0xffb300, 1.4, 30);
+            eldritchCypherDisc3 = new THREE.Mesh(cypherGeo, cypherMat);
+            eldritchCypherDisc3.rotation.x = Math.PI / 2;
+            eldritchCypherDisc3.rotation.z = Math.PI / 4;
+            sunGroup.add(eldritchCypherDisc3);
+
+            // 9. Central Solar Point Light (Warm Incandescent Illumination)
+            const sunLight = new THREE.PointLight(0xffb300, 1.6, 35);
             sunGroup.add(sunLight);
         }
+
+        // --- Coronal Mass Ejection (CME Shockwave Flare Eruption) ---
+        function triggerCoronalMassEjection(isHighEnergy = false) {
+            if (!sunGroup || isDatabaseOutage) return;
+            const ringGeo = new THREE.RingGeometry(0.96, isHighEnergy ? 1.25 : 1.12, 48);
+            const ringColor = isHighEnergy ? 0xffecb3 : 0xff9100;
+            const ringMat = new THREE.MeshBasicMaterial({
+                color: ringColor,
+                transparent: true,
+                opacity: isHighEnergy ? 0.95 : 0.75,
+                side: THREE.DoubleSide,
+                blending: THREE.AdditiveBlending
+            });
+            const cmeMesh = new THREE.Mesh(ringGeo, ringMat);
+            cmeMesh.rotation.set(
+                Math.random() * Math.PI * 2,
+                Math.random() * Math.PI * 2,
+                Math.random() * Math.PI * 2
+            );
+            sunGroup.add(cmeMesh);
+            sunFlareEjections.push({
+                mesh: cmeMesh,
+                scale: 1.0,
+                growthRate: isHighEnergy ? 0.055 : 0.032,
+                fadeRate: isHighEnergy ? 0.945 : 0.960
+            });
+        }
+        window.triggerCoronalMassEjection = triggerCoronalMassEjection;
 
         // --- 4. Three Orbiting Protector Pyramids INSIDE the Cube (Electrons & Light-Blue Lightning Orbits) ---
         function createOrbitingPyramids() {
@@ -2596,8 +2803,9 @@ REV: rel-wad@r2
                     clearInterval(anim);
                     scene.remove(pulse);
                     if (CosmicAudio && CosmicAudio.playShockwaveBoom) CosmicAudio.playShockwaveBoom(0.85);
-                    // Sun energy pulse reaction!
+                    // Sun energy pulse reaction & CME solar flare burst!
                     sunImpulseScale = 1.45;
+                    triggerCoronalMassEjection(true);
                     // Dynamically birth the new Ingested Idea Node inside the lattice!
                     spawnIngestedIdeaNode(targetFile, meta);
                 }
@@ -2648,8 +2856,9 @@ REV: rel-wad@r2
                     clearInterval(anim);
                     scene.remove(pulse);
                     if (CosmicAudio && CosmicAudio.playShockwaveBoom) CosmicAudio.playShockwaveBoom(0.85);
-                    // Sun energy pulse reaction!
+                    // Sun energy pulse reaction & CME solar flare burst!
                     sunImpulseScale = 1.45;
+                    triggerCoronalMassEjection(true);
                     // Dynamically birth the new Ingested Idea Node inside the lattice!
                     spawnIngestedIdeaNode(file, meta);
                 }
@@ -3160,7 +3369,9 @@ REV: rel-wad@r2
             // Spin Sun Cypher Discs with high impulse
             if (eldritchCypherDisc) eldritchCypherDisc.rotation.z += 1.4;
             if (eldritchCypherDisc2) eldritchCypherDisc2.rotation.z -= 1.6;
+            if (eldritchCypherDisc3) eldritchCypherDisc3.rotation.y += 1.5;
             sunImpulseScale = 1.25;
+            triggerCoronalMassEjection(false);
 
             // Show querying state
             outputCard.classList.remove('hidden');
@@ -4093,19 +4304,44 @@ REV: rel-wad@r2
                         relationshipLines.material.opacity = 0.15;
                     }
                     
+                    // Update Solar Core Badge to Cold Dwarf
+                    const solarBadge = document.getElementById('solar-core-badge');
+                    const solarDot = document.getElementById('solar-core-dot');
+                    const solarLabel = document.getElementById('solar-core-label');
+                    if (solarBadge) solarBadge.className = 'flex items-center space-x-2 text-xs font-mono px-3 py-1.5 rounded-xl hud-glass border border-red-500/40 shadow-[0_0_15px_rgba(255,23,68,0.2)]';
+                    if (solarDot) solarDot.className = 'w-2.5 h-2.5 rounded-full bg-red-800';
+                    if (solarLabel) {
+                        solarLabel.textContent = 'COLD DWARF';
+                        solarLabel.className = 'px-2 py-0.5 rounded bg-red-950/90 text-red-400 border border-red-800 font-mono font-bold text-[10px]';
+                    }
+
                     // The Sun becomes a dying grey-black collapsed core (cold dwarf / ash)
                     if (sunSphere) sunSphere.material.color.setHex(0x1e2029);
+                    if (sunPlasmaShroud) sunPlasmaShroud.material.color.setHex(0x12141a);
                     if (innerSun) innerSun.material.color.setHex(0x0a0c12);
                     if (sunCoronaRing) {
                         sunCoronaRing.material.color.setHex(0x333842);
                         sunCoronaRing.material.opacity = 0.08;
                     }
+                    if (sunCoronaRing2) {
+                        sunCoronaRing2.material.color.setHex(0x242830);
+                        sunCoronaRing2.material.opacity = 0.06;
+                    }
                     if (sunTorusLoop) {
                         sunTorusLoop.material.color.setHex(0x282c37);
                         sunTorusLoop.material.opacity = 0.10;
                     }
+                    if (sunProminences) {
+                        sunProminences.forEach(prom => {
+                            prom.tubeMesh.material.color.setHex(0x1a1c22);
+                            prom.tubeMesh.material.opacity = 0.08;
+                            prom.coreMesh.material.color.setHex(0x111318);
+                            prom.coreMesh.material.opacity = 0.10;
+                        });
+                    }
                     if (eldritchCypherDisc) eldritchCypherDisc.material.opacity = 0.12;
                     if (eldritchCypherDisc2) eldritchCypherDisc2.material.opacity = 0.12;
+                    if (eldritchCypherDisc3) eldritchCypherDisc3.material.opacity = 0.12;
 
                     const btn1 = document.getElementById('btn-import-idea');
                     if (btn1) {
@@ -4135,19 +4371,47 @@ REV: rel-wad@r2
                         relationshipLines.material.opacity = 0.45;
                     }
                     
-                    // Restored radiant Golden Sun
+                    // Update Solar Core Badge back to Fusion Active
+                    const solarBadge = document.getElementById('solar-core-badge');
+                    const solarDot = document.getElementById('solar-core-dot');
+                    const solarLabel = document.getElementById('solar-core-label');
+                    if (solarBadge) solarBadge.className = 'flex items-center space-x-2 text-xs font-mono px-3 py-1.5 rounded-xl hud-glass border border-amber-500/50 shadow-[0_0_15px_rgba(255,179,0,0.3)]';
+                    if (solarDot) solarDot.className = 'w-2.5 h-2.5 rounded-full bg-amber-400 animate-pulse shadow-[0_0_10px_#ffb300]';
+                    if (solarLabel) {
+                        solarLabel.textContent = 'FUSION ACTIVE';
+                        solarLabel.className = 'px-2 py-0.5 rounded bg-amber-950/90 text-amber-200 border border-amber-500 font-mono font-bold text-[10px] shadow-[0_0_12px_#ffb300]';
+                    }
+
+                    // Restored radiant Golden Sun & Fiery Prominences
                     if (sunSphere) sunSphere.material.color.setHex(0xffb300);
+                    if (sunPlasmaShroud) sunPlasmaShroud.material.color.setHex(0xff6d00);
                     if (innerSun) innerSun.material.color.setHex(0xffd54f);
                     if (sunCoronaRing) {
                         sunCoronaRing.material.color.setHex(0xffb300);
-                        sunCoronaRing.material.opacity = 0.42;
+                        sunCoronaRing.material.opacity = 0.45;
+                    }
+                    if (sunCoronaRing2) {
+                        sunCoronaRing2.material.color.setHex(0xff6d00);
+                        sunCoronaRing2.material.opacity = 0.35;
                     }
                     if (sunTorusLoop) {
                         sunTorusLoop.material.color.setHex(0xffe082);
-                        sunTorusLoop.material.opacity = 0.60;
+                        sunTorusLoop.material.opacity = 0.65;
                     }
-                    if (eldritchCypherDisc) eldritchCypherDisc.material.opacity = 0.65;
-                    if (eldritchCypherDisc2) eldritchCypherDisc2.material.opacity = 0.65;
+                    if (sunProminences) {
+                        sunProminences.forEach(prom => {
+                            prom.tubeMesh.material.color.setHex(prom.baseColor);
+                            prom.tubeMesh.material.opacity = 0.78;
+                            prom.coreMesh.material.color.setHex(prom.coreBaseColor);
+                            prom.coreMesh.material.opacity = 0.95;
+                        });
+                    }
+                    if (eldritchCypherDisc) eldritchCypherDisc.material.opacity = 0.72;
+                    if (eldritchCypherDisc2) eldritchCypherDisc2.material.opacity = 0.72;
+                    if (eldritchCypherDisc3) eldritchCypherDisc3.material.opacity = 0.72;
+
+                    // Trigger celebratory CME solar flare ignition burst!
+                    triggerCoronalMassEjection(true);
 
                     const btn1 = document.getElementById('btn-import-idea');
                     if (btn1) {
@@ -4166,6 +4430,10 @@ REV: rel-wad@r2
                 reducedMotion = !reducedMotion;
                 document.body.classList.toggle('reduced-motion', reducedMotion);
                 document.getElementById('motion-toggle-btn').textContent = reducedMotion ? 'MOTION: REDUCED' : 'MOTION: ON';
+                if (reducedMotion && sunSphere && sunMantleBaseVertices) {
+                    sunSphere.geometry.attributes.position.array.set(sunMantleBaseVertices);
+                    sunSphere.geometry.attributes.position.needsUpdate = true;
+                }
             });
 
             // Camera buttons
@@ -4375,7 +4643,7 @@ REV: rel-wad@r2
                 }
             });
 
-            // Sun Breathing & Rotation
+            // Sun Breathing, Plasma Mantle Turbulence & 3-Axis Gyroscopic Cypher Mandala
             if (sunGroup && !reducedMotion) {
                 sunImpulseScale += (1.0 - sunImpulseScale) * 0.08;
                 sunGroup.scale.set(sunImpulseScale, sunImpulseScale, sunImpulseScale);
@@ -4383,12 +4651,102 @@ REV: rel-wad@r2
                 const hoverOffset = Math.sin(time * 1.2) * 0.18;
                 sunGroup.position.y = hoverOffset;
 
-                if (sunSphere) sunSphere.rotation.y = time * 0.25;
-                if (innerSun) innerSun.rotation.y = -time * 0.15;
-                if (sunCoronaRing) sunCoronaRing.rotation.z = time * 0.35;
-                if (sunTorusLoop) sunTorusLoop.rotation.x = time * 0.2;
-                if (eldritchCypherDisc) eldritchCypherDisc.rotation.z = time * 0.15;
-                if (eldritchCypherDisc2) eldritchCypherDisc2.rotation.z = -time * 0.18;
+                // 1. Dynamic Sinusoidal Turbulence on Plasma Mantle Wireframe
+                if (sunSphere && sunMantleBaseVertices && !isDatabaseOutage) {
+                    const posAttr = sunSphere.geometry.attributes.position;
+                    const count = posAttr.count;
+                    for (let i = 0; i < count; i++) {
+                        const bx = sunMantleBaseVertices[i * 3 + 0];
+                        const by = sunMantleBaseVertices[i * 3 + 1];
+                        const bz = sunMantleBaseVertices[i * 3 + 2];
+                        const len = Math.sqrt(bx * bx + by * by + bz * bz) || 1.0;
+                        const nx = bx / len;
+                        const ny = by / len;
+                        const nz = bz / len;
+
+                        const wave1 = Math.sin(time * 3.5 + nx * 4.0 + ny * 3.0) * 0.048;
+                        const wave2 = Math.cos(time * 2.8 + nz * 4.0 + nx * 2.5) * 0.038;
+                        const wave3 = Math.sin(time * 5.2 + ny * 6.0) * 0.022;
+                        const r = 0.96 + wave1 + wave2 + wave3;
+
+                        posAttr.setXYZ(i, nx * r, ny * r, nz * r);
+                    }
+                    posAttr.needsUpdate = true;
+                    sunSphere.rotation.y = time * 0.25;
+                    sunSphere.rotation.x = Math.sin(time * 0.4) * 0.08;
+                }
+
+                // 2. Secondary Inner Combustion Shroud & Core Breathing
+                if (sunPlasmaShroud && !isDatabaseOutage) {
+                    sunPlasmaShroud.rotation.y = -time * 0.32;
+                    sunPlasmaShroud.rotation.z = time * 0.20;
+                    const shroudPulse = 0.96 + Math.sin(time * 3.8) * 0.06;
+                    sunPlasmaShroud.scale.set(shroudPulse, shroudPulse, shroudPulse);
+                }
+
+                if (innerSun && !isDatabaseOutage) {
+                    innerSun.rotation.y = -time * 0.15;
+                    const corePulse = 1.0 + Math.sin(time * 2.4) * 0.045;
+                    innerSun.scale.set(corePulse, corePulse, corePulse);
+                }
+
+                // 3. Coronal Rings Breathing & Counter-Rotation
+                if (sunCoronaRing) {
+                    sunCoronaRing.rotation.z = time * 0.35;
+                    if (!isDatabaseOutage) {
+                        const ringPulse = 1.0 + Math.sin(time * 2.1) * 0.04;
+                        sunCoronaRing.scale.set(ringPulse, ringPulse, 1.0);
+                    }
+                }
+                if (sunCoronaRing2) {
+                    sunCoronaRing2.rotation.z = -time * 0.28;
+                    if (!isDatabaseOutage) {
+                        const ring2Pulse = 1.0 + Math.cos(time * 1.9) * 0.04;
+                        sunCoronaRing2.scale.set(ring2Pulse, ring2Pulse, 1.0);
+                    }
+                }
+                if (sunTorusLoop) {
+                    sunTorusLoop.rotation.x = time * 0.22;
+                    sunTorusLoop.rotation.y = time * 0.18;
+                }
+
+                // 4. Solar Prominences (Magnetic Precession & Opacity Flicker)
+                if (sunProminences && sunProminences.length > 0) {
+                    sunProminences.forEach(prom => {
+                        prom.group.rotation.y += prom.rotSpeed;
+                        if (!isDatabaseOutage) {
+                            const flux = 1.0 + Math.sin(time * 3.0 + prom.phase) * 0.09;
+                            prom.group.scale.set(flux, flux, flux);
+                            prom.tubeMesh.material.opacity = 0.65 + Math.sin(time * prom.flickerSpeed + prom.phase) * 0.25;
+                            prom.coreMesh.material.opacity = 0.82 + Math.cos(time * (prom.flickerSpeed + 1.2) + prom.phase) * 0.16;
+                        }
+                    });
+                }
+
+                // 5. 3-Axis Gyroscopic Cypher Mandala Rotation
+                if (eldritchCypherDisc) eldritchCypherDisc.rotation.z = time * 0.12;
+                if (eldritchCypherDisc2) eldritchCypherDisc2.rotation.z = -time * 0.15;
+                if (eldritchCypherDisc3) eldritchCypherDisc3.rotation.y = time * 0.10;
+
+                // 6. Expanding Coronal Mass Ejections (CME Flare Shockwaves)
+                for (let c = sunFlareEjections.length - 1; c >= 0; c--) {
+                    const cme = sunFlareEjections[c];
+                    cme.scale += cme.growthRate;
+                    cme.mesh.scale.set(cme.scale, cme.scale, 1.0);
+                    cme.mesh.material.opacity *= cme.fadeRate;
+                    if (cme.mesh.material.opacity < 0.015 || cme.scale > 3.8) {
+                        sunGroup.remove(cme.mesh);
+                        cme.mesh.geometry.dispose();
+                        cme.mesh.material.dispose();
+                        sunFlareEjections.splice(c, 1);
+                    }
+                }
+
+                // 7. Autonomous periodic CME flare pulse
+                if (performance.now() > nextAutonomousCME && !isDatabaseOutage) {
+                    triggerCoronalMassEjection(false);
+                    nextAutonomousCME = performance.now() + 10000 + Math.random() * 8000;
+                }
             }
 
             // Orbiting Pyramids INSIDE Cube (Electrons & Pulsing Glyph Cores)
