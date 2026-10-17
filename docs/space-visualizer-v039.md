@@ -495,7 +495,78 @@ When both orbs collide simultaneously at corner $C_3$:
 
 ---
 
-## 11. Preservation of Foundation Features
+---
+
+## 11. Option A Containment Corridor Fluid Physics (v039.20 / v039.21)
+
+### 11.1 Interstitial Shell Geometry & 6-Slab Uniform Distribution
+To fulfill Option A where the liquid starlight particles float strictly within the space between the outer blue cube and inner purple frame:
+1. **Geometric Corridor Envelope**:
+   - **Outer Blue Box Boundary**: $L_{\text{outer}} = 3.32$ (just inside the $3.40$ half-size blue wireframe walls).
+   - **Inner Purple Box Boundary**: $L_{\text{inner}} = 2.82$ (just outside the $2.80$ half-size purple struts).
+   - The containment corridor forms a continuous hollow 3D cubic shell of thickness $0.50$ on all 6 faces:
+     $$\max(|x|, |y|, |z|) \in [2.82, 3.32]$$
+2. **Balanced 6-Slab Initialization**:
+   - All 750 starlight particles are partitioned evenly across the 6 face slabs:
+     - $+Z$ Front slab: $z \in [2.86, 3.30], \quad x, y \in [-3.15, 3.15]$
+     - $-Z$ Back slab: $z \in [-3.30, -2.86], \quad x, y \in [-3.15, 3.15]$
+     - $+X$ Right slab: $x \in [2.86, 3.30], \quad y, z \in [-3.15, 3.15]$
+     - $-X$ Left slab: $x \in [-3.30, -2.86], \quad y, z \in [-3.15, 3.15]$
+     - $+Y$ Top slab: $y \in [2.86, 3.30], \quad x, z \in [-3.15, 3.15]$
+     - $-Y$ Bottom slab: $y \in [-3.30, -2.86], \quad x, z \in [-3.15, 3.15]$
+   - Guarantees an immaculate, uniform celestial coat wrapping all 6 faces of the purple containment chamber.
+
+### 11.2 Calm Synchronized Flow (FalkorDB Connected State)
+When the database cluster is connected and nominal:
+1. **Peaceful Laminar Velocity ($M_{\text{speed}} = 0.28$)**:
+   - Particles move with a slow, graceful, hypnotic drift ($28\%$ speed).
+   - High viscous damping ($0.978$ per frame) suppresses jitter, yielding pristine laminar zero-g fluidity.
+2. **Coherent Global Perimeter Circulation**:
+   - A synchronized orbital circulation field sweeps particles gently around the cube perimeter:
+     $$f_x = (-p_z \cdot 0.0016 + \sin(0.9 p_y + 0.25 t) \cdot 0.0012) \cdot M_{\text{speed}}$$
+     $$f_y = (\cos(0.9 p_x + 0.20 t) \cdot 0.0012 + \sin(0.9 p_z) \cdot 0.0008) \cdot M_{\text{speed}}$$
+     $$f_z = (p_x \cdot 0.0016 + \cos(0.9 p_y + 0.25 t) \cdot 0.0012) \cdot M_{\text{speed}}$$
+   - Produces a unified, serene cosmic dance where particles glide in harmony across the containment faces.
+3. **Gentle Diamond & Jewel Twinkles**:
+   - Soft $1.2 \sim 2.5\,\text{s}$ breathing sparkle cycle ($0.60 + 0.40 \sin(\omega t + \phi)$), accentuating diamond, aquamarine, amethyst, and topaz tones.
+
+### 11.3 Antigravity Interactive Mouse Ripple Field (https://antigravity.google/)
+Recreating the dynamic interactive particle physics of `antigravity.google`:
+1. **Omnidirectional Proximity Displacement Bubble**:
+   - Projected into `cubeGroup` local space whenever the pointer approaches within $|x|, |y|, |z| < 4.2$.
+   - Nearby particles ($d < 1.65$) experience elastic radial repulsion pushing them smoothly away from the pointer:
+     $$\Delta \vec{V}_{\text{push}} = \frac{\vec{P} - \vec{C}_{\text{local}}}{d} \cdot \left(\frac{1.65 - d}{1.65}\right) \cdot 0.018$$
+2. **Dynamic Eddy Wake along Velocity Heading**:
+   - Sweeps particles along the cursor's 3D motion vector ($\Delta \vec{V} += \vec{V}_{\text{cursor}} \cdot \text{factor} \cdot 0.38$).
+3. **Antigravity Tangential Curl Swirl**:
+   - Imparts a micro-vortex swirl curving particles tangentially around the pointer axis:
+     $$\Delta v_x += -c_{dz} \cdot \text{factor} \cdot 0.035, \quad \Delta v_z += c_{dx} \cdot \text{factor} \cdot 0.035$$
+   - As the cursor moves away, particles smoothly decelerate and glide back into their synchronized collective drift.
+
+### 11.4 Chaotic High-Speed Outage Agitation (FalkorDB Outage State)
+When the FalkorDB server connection is severed (**SIMULATE OUTAGE**):
+1. **High-Speed Agitation ($M_{\text{speed}} = 1.0$)**:
+   - Velocity jumps to $3.5\times$ connected speed with lower viscosity damping ($0.945$).
+2. **Multi-Harmonic Turbulent Curl & Brownian Jitter**:
+   - High-frequency chaotic curl perturbation:
+     $$f_{\text{chaos}, x} = \sin(4.2 p_y + 4.5 t) \cos(3.8 p_z + 3.2 t) \cdot 0.015$$
+     $$f_{\text{chaos}, y} = (\sin(4.5 p_z + 3.8 t) \cos(4.2 p_x + 4.0 t) \cdot 0.015 + \sin(5.5 t + 6.0 p_x) \cdot 0.008)$$
+     $$f_{\text{chaos}, z} = \sin(3.8 p_x + 4.2 t) \cos(4.5 p_y + 3.5 t) \cdot 0.015$$
+   - Erratic stochastic velocity kicks ($\Delta \vec{V} += (\text{rand} - 0.5) \cdot 0.007$) create rapid Brownian agitation.
+3. **Corrupted Flickering Embers**:
+   - Colors mutate into volatile crimson/amethyst embers ($R \times 0.25 + 0.55, G \times 0.06, B \times 0.20 + 0.25$).
+   - Rapid strobe flickering ($0.25 + 0.35 \sin(3.5 \omega t + \phi)$), visually conveying containment field electromagnetic instability.
+
+### 11.5 Strict Dual-Boundary Elastic Reflection & Dominant Axis Recovery
+1. **Outer Blue Wall Reflection ($|P| \le 3.32$)**:
+   - Particles reaching $|x|, |y|, |z| > 3.32$ are clamped and reflected inward with an elastic restitution of $0.85$.
+2. **Inner Purple Frame Field Repulsion ($\max(|P|) \ge 2.82$)**:
+   - If a particle's maximum coordinate drops below $2.82$ (penetrating the purple chamber), the field detects the dominant penetration axis $\max(|p_x|, |p_y|, |p_z|)$.
+   - Immediately resets the particle to the purple boundary ($2.82$) and imparts a strong outward velocity boost ($|v| \cdot 0.85 + \text{pen} \cdot 0.15 + 0.01$) pointing back into the interstitial corridor!
+
+---
+
+## 12. Preservation of Foundation Features
 
 All interactive systems remain fully functional:
 1. **Synaptic Query Terminal**: NLP cypher queries, quick chips, and live logs.
@@ -506,12 +577,12 @@ All interactive systems remain fully functional:
 6. **IdeaVerse Comets & Near-Miss Flybys**: Deep space comets, hypersonic Doppler flybys, 10-document narrative ledger, and zero-write outage rejection.
 7. **The Fiery Sun Core**: Dynamic turbulent plasma mantle, 6 magnetic prominence loops, CME flare pulses, and 3-axis Cypher mandala.
 8. **Three Orbiting Protector Pyramids**: Traveling electron shells, calibrated orbital clearance ($2.05, 2.35, 2.65$), and synaptic lightning trigger.
-9. **Internal Liquid Starlight Fluid**: Laminar curl noise, ship bow waves, cursor micro-eddy stirring, and outage ember decay.
-10. **Purple Containment Frame & Travelling Light-Balls**: 12 neon struts, 8 corner beacons, 6 forcefield panels, Orocue perimeter race, and $0.62\,\text{s}$ spark explosions.
+9. **Option A Interstitial Containment Corridor**: 750 starlight particles circulating strictly within $[2.82, 3.32]$.
+10. **Calm vs. Chaotic Velocity Modulation**: $28\%$ calm synchronized laminar drift when online vs. $100\%$ agitated turbulent Brownian jitter during outage.
+11. **Purple Containment Frame & Travelling Light-Balls**: 12 neon struts, 8 corner beacons, 6 forcefield panels, Orocue perimeter race, and $0.62\,\text{s}$ spark explosions.
 
 ---
 
-## 12. Next Step on the Roadmap
+## 13. Next Step on the Roadmap
 
-- **Fluid Containment Interstitial Corridor** (`v039.20` / `v039.21`): Option A strict boundary enforcement where particles float exclusively in the corridor between outer blue box ($[-3.40, 3.40]$) and inner purple box ($[-2.80, 2.80]$), with calm synchronized laminar flow when connected and fast chaotic turbulence during outage.
 - **Item 7: The Eldritch Cypher Shader Mandala** (`v039.22` / `v039.23`): Triple orthogonal 1024x1024 procedural canvas shader rings, dynamic glyph scrolling, harmonic resonance rings, and chromatic flare pulses.
