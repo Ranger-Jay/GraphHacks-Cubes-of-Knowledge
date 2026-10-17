@@ -657,12 +657,13 @@ REV: rel-wad@r2
                 <button id="close-guide-btn" class="text-slate-400 hover:text-white font-mono text-sm px-2 py-1">✕</button>
             </div>
             <div class="space-y-2 text-xs font-mono text-slate-300 leading-relaxed">
-                <p>• <strong>DOUBLE-CLICK CUBE:</strong> Zooms inside to the Core Sanctuary and opens the cube aperture.</p>
-                <p>• <strong>ORBITING PYRAMIDS:</strong> Click Ava, Roy, or Guz to inspect their holographic chamber and speech lines.</p>
-                <p>• <strong>OPPOSING PARALLAX:</strong> Move cursor to shift the deep starfield in opposing inertial parallax.</p>
-                <p>• <strong>IDEA-VERSE COMETS:</strong> Passing glowing comets carry active idea files. Hover to slow them down, click to inspect!</p>
-                <p>• <strong>ANTIGRAVITY LIQUID STARLIGHT:</strong> 750 multi-faceted gem starlight particles drift with zero-g curl noise, deflecting dynamically around the central Sun and orbiting Pyramids. Move your cursor through the cube to stir fluid micro-eddies and trigger pentatonic stardust chimes!</p>
-                <p>• <strong>OUTAGE SIMULATION:</strong> Toggle outage to observe immediate fail-closed proof states.</p>
+                <p>• <strong>DUAL-ROTATION SYSTEM:</strong> Drag on the Company Cube to spin and tumble the cube on its local axes (driving physical marble box tumbling during outage). Drag in open space (or Right-Click drag anywhere) to orbit the camera 360° around the celestial cosmos.</p>
+                <p>• <strong>DOUBLE-CLICK CUBE / SCROLL:</strong> Zooms smoothly between deep space and Core Sanctuary, with distance-driven sliding aperture panels.</p>
+                <p>• <strong>ORBITING PROTECTOR PYRAMIDS:</strong> Click Ava, Roy, or Guz to inspect their holographic chamber and trigger synaptic lightning.</p>
+                <p>• <strong>OPPOSING STARFIELD PARALLAX:</strong> Move cursor to shift the foreground stardust and distant pinpoint starfields in opposing inertial anti-parallax.</p>
+                <p>• <strong>360° CELESTIAL COMETS:</strong> Passing idea-verse comets and hypersonic flybys dynamically align with the 360° starfield orientation, streaming from the distant celestial backdrop past the cube.</p>
+                <p>• <strong>ANTIGRAVITY LIQUID STARLIGHT:</strong> 750 multi-faceted gem starlight particles drift in Option A interstitial corridor with zero-g curl noise, deflecting around the Sun and Pyramids. Move your cursor to stir fluid micro-eddies and trigger pentatonic stardust chimes!</p>
+                <p>• <strong>CARDBOARD BOX MARBLE PHYSICS:</strong> In database outage, antigravity powers shut down—red nodes and ingested blue nodes fall to the bottom of the purple containment field and roll like physical marbles.</p>
             </div>
         </div>
     </div>
@@ -783,11 +784,14 @@ REV: rel-wad@r2
         let lightningTimer = null;
         let sunImpulseScale = 1.0;
 
-        // Interaction & Camera Target State
+        // Interaction & Dual-Rotation State (Row 8: Independent Cube Spin & 360° Celestial Cosmos Orbit)
         let isDragging = false;
         let isMouseDown = false;
+        let dragMode = null; // 'cube' (spin Company Cube) | 'orbit' (360° celestial cosmos camera orbit)
+        let dragButton = 0; // 0 = Left, 2 = Right
         let previousMousePosition = { x: 0, y: 0 };
-        let targetRotation = { x: 0.2, y: 0.4 };
+        let targetRotation = { x: 0.2, y: 0.4 }; // Rotation 1: Company Cube independent local spin
+        let cameraOrbit = { theta: 0.0, phi: 0.08 }; // Rotation 2: 360° Celestial Cosmos spherical angles
         let cameraTargetDistance = 14.0;
         let cameraTarget = new THREE.Vector3(0, 0, 0);
         let isInsideCube = false;
@@ -1275,13 +1279,14 @@ REV: rel-wad@r2
             createInternalFluidStarlight();
             initIdeaVerseComet();
 
-            // Event Listeners
+            // Event Listeners & Dual-Rotation Controls
             window.addEventListener('resize', onWindowResize);
             window.addEventListener('mousemove', onMouseMove);
             window.addEventListener('mousedown', onMouseDown);
             window.addEventListener('mouseup', onMouseUp);
             window.addEventListener('wheel', onWheel, { passive: true });
             window.addEventListener('dblclick', onDoubleClick);
+            window.addEventListener('contextmenu', (e) => e.preventDefault()); // Seamless right-click 360° cosmos orbit
 
             // Touch events
             window.addEventListener('touchstart', onTouchStart, { passive: true });
@@ -3248,22 +3253,40 @@ REV: rel-wad@r2
             IdeaVerseCometState.currentFile = RECENT_IDEA_FILES[IdeaVerseCometState.idx % RECENT_IDEA_FILES.length];
             activeCometTargetFile = IdeaVerseCometState.currentFile;
 
-            // Sweeps across the active upper/middle viewport at near-field plane Z = -4.8
-            // Camera Z = 14, cometPlaneZ = -4.8, bounds: X in ~[-15.5, 15.5], Y in ~[-8.6, 8.6]
+            // Camera-relative viewplane trajectory: sweeps across active upper/middle viewport in front of user
+            const camPos = camera ? camera.position.clone() : new THREE.Vector3(0, 0, 14);
+            const camDir = new THREE.Vector3();
+            if (camera) camera.getWorldDirection(camDir);
+            else camDir.set(0, 0, -1);
+            const camUp = new THREE.Vector3(0, 1, 0);
+            const camRight = new THREE.Vector3().crossVectors(camDir, camUp).normalize();
+            const camRealUp = new THREE.Vector3().crossVectors(camRight, camDir).normalize();
+
             const goRight = Math.random() > 0.5;
             const startX = goRight ? -16.0 : 16.0;
             const endX = goRight ? 16.0 : -16.0;
             const startY = 3.2 + Math.random() * 4.2;
             const endY = -1.2 - Math.random() * 3.4;
-            const startZ = cometPlaneZ + (Math.random() - 0.5) * 0.3;
-            const endZ = cometPlaneZ + (Math.random() - 0.5) * 0.3;
+            const planeDist = 18.8; // Distance in front of camera
 
-            IdeaVerseCometState.startPos.set(startX, startY, startZ);
-            IdeaVerseCometState.endPos.set(endX, endY, endZ);
-            IdeaVerseCometState.currentDir.subVectors(IdeaVerseCometState.endPos, IdeaVerseCometState.startPos).normalize();
+            const startPos = new THREE.Vector3()
+                .copy(camPos)
+                .addScaledVector(camDir, planeDist)
+                .addScaledVector(camRight, startX)
+                .addScaledVector(camRealUp, startY);
+
+            const endPos = new THREE.Vector3()
+                .copy(camPos)
+                .addScaledVector(camDir, planeDist)
+                .addScaledVector(camRight, endX)
+                .addScaledVector(camRealUp, endY);
+
+            IdeaVerseCometState.startPos.copy(startPos);
+            IdeaVerseCometState.endPos.copy(endPos);
+            IdeaVerseCometState.currentDir.subVectors(endPos, startPos).normalize();
 
             cometUniforms.uDir.value.copy(IdeaVerseCometState.currentDir);
-            cometUniforms.uHead.value.copy(IdeaVerseCometState.startPos);
+            cometUniforms.uHead.value.copy(startPos);
             cometUniforms.uFade.value = 0.0;
 
             IdeaVerseCometState.p = 0.0;
@@ -3464,25 +3487,47 @@ REV: rel-wad@r2
             }
         }
 
-        // --- 6b. Deep-Space 3D Ideaverse Comets (Item 3) ---
+        // --- 6b. Deep-Space 3D Ideaverse Comets (Item 3 & Row 8: 360° Celestial Cosmos Vector Alignment) ---
         function spawnComet() {
             if (comets.length > 3 || !showComets) return;
 
             const cometGroup = new THREE.Group();
             
-            // Trajectory: comes towards camera from far deep space at an angle, passing away from the cube
-            const startX = (Math.random() - 0.5) * 55;
-            const startY = (Math.random() - 0.5) * 40;
-            const startZ = -95 - Math.random() * 45;
+            // Build trajectory using camera's active celestial orientation vectors!
+            // When user orbits the 360° starfield, comets emerge from the distant celestial backdrop
+            // in the direction of the view and sweep across the cosmos past the Company Cube.
+            const camPos = camera ? camera.position.clone() : new THREE.Vector3(0, 0, 14);
+            const camDir = new THREE.Vector3();
+            if (camera) camera.getWorldDirection(camDir);
+            else camDir.set(0, 0, -1);
 
-            // Angle away from cube center (0, 0, 0)
-            const sideSignX = startX >= 0 ? 1 : -1;
-            const sideSignY = startY >= 0 ? 1 : -1;
-            const targetX = startX + sideSignX * (22 + Math.random() * 20);
-            const targetY = startY + sideSignY * (12 + Math.random() * 16);
-            const targetZ = 32; // Passes camera at Z = 14
+            const camUp = new THREE.Vector3(0, 1, 0);
+            const camRight = new THREE.Vector3().crossVectors(camDir, camUp).normalize();
+            const camRealUp = new THREE.Vector3().crossVectors(camRight, camDir).normalize();
 
-            const dir = new THREE.Vector3(targetX - startX, targetY - startY, targetZ - startZ).normalize();
+            // Spawn deep in the background starfield behind the cube along the camera sightline
+            const spawnDist = 110.0 + Math.random() * 40.0;
+            const spreadX = (Math.random() - 0.5) * 55.0;
+            const spreadY = (Math.random() - 0.5) * 40.0;
+
+            const startPos = new THREE.Vector3()
+                .copy(camDir).multiplyScalar(spawnDist)
+                .addScaledVector(camRight, spreadX)
+                .addScaledVector(camRealUp, spreadY);
+
+            // Target in foreground: passes away from cube center towards the viewer
+            const sideSignX = spreadX >= 0 ? 1 : -1;
+            const sideSignY = spreadY >= 0 ? 1 : -1;
+            const targetDist = -(25.0 + Math.random() * 20.0);
+            const targetX = spreadX + sideSignX * (22.0 + Math.random() * 18.0);
+            const targetY = spreadY + sideSignY * (12.0 + Math.random() * 16.0);
+
+            const targetPos = new THREE.Vector3()
+                .copy(camDir).multiplyScalar(targetDist)
+                .addScaledVector(camRight, targetX)
+                .addScaledVector(camRealUp, targetY);
+
+            const dir = new THREE.Vector3().subVectors(targetPos, startPos).normalize();
             const speed = 0.38 + Math.random() * 0.22;
 
             // 1. Nucleus (Radiant Glowing Core)
@@ -3540,7 +3585,7 @@ REV: rel-wad@r2
             hitSphere.userData = { isComet: true, parentGroup: cometGroup };
             cometGroup.add(hitSphere);
 
-            cometGroup.position.set(startX, startY, startZ);
+            cometGroup.position.copy(startPos);
             cometGroup.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), dir);
 
             const ideaIdNum = Math.floor(10 + Math.random() * 89);
@@ -3550,14 +3595,16 @@ REV: rel-wad@r2
             cometGroup.userData = {
                 isComet: true,
                 parentGroup: cometGroup,
+                startPos: startPos.clone(),
+                maxDist: startPos.distanceTo(targetPos) + 35.0,
                 velocity: dir.clone().multiplyScalar(speed),
                 life: 0,
-                maxLife: 320,
+                maxLife: 380,
                 paused: false,
                 ideaId: `IDEA-0${ideaIdNum}`,
                 title: meta ? meta.title : "FalkorDB Graph Pipeline & Synaptic Indexing",
                 category: meta ? meta.category : "Deep IdeaVerse Ingestion",
-                origin: `(${Math.round(startX)}, ${Math.round(startY)}, ${Math.round(startZ)})`,
+                origin: `(${Math.round(startPos.x)}, ${Math.round(startPos.y)}, ${Math.round(startPos.z)})`,
                 file: targetFile,
                 hash: "f6f9" + Math.random().toString(16).substring(2, 18)
             };
@@ -3899,12 +3946,20 @@ REV: rel-wad@r2
             }
         }
 
-        // --- 6c. Near-Miss Hyper Flyby Comet & Half-Life Ice Particles (Item 3b / v039.06) ---
+        // --- 6c. Near-Miss Hyper Flyby Comet & Half-Life Ice Particles (Item 3b & Row 8: 360° Frustum Invariant) ---
         function spawnCosmicIceParticles(originPos, count = 65) {
             const now = performance.now();
             if (!sharedIceGeo) {
                 sharedIceGeo = new THREE.OctahedronGeometry(0.065, 0);
             }
+
+            const camPos = camera ? camera.position.clone() : new THREE.Vector3(0, 0, 14);
+            const camDir = new THREE.Vector3();
+            if (camera) camera.getWorldDirection(camDir);
+            else camDir.set(0, 0, -1);
+            const camUp = new THREE.Vector3(0, 1, 0);
+            const camRight = new THREE.Vector3().crossVectors(camDir, camUp).normalize();
+            const camRealUp = new THREE.Vector3().crossVectors(camRight, camDir).normalize();
 
             for (let i = 0; i < count; i++) {
                 const color = Math.random() < 0.65 ? 0xa0f5ff : (Math.random() < 0.85 ? 0xffffff : 0x70d8ff);
@@ -3917,13 +3972,17 @@ REV: rel-wad@r2
                 });
                 const mesh = new THREE.Mesh(sharedIceGeo, mat);
 
-                // Cluster near the camera frustum where the comet swept past
-                const camZ = camera ? camera.position.z : 14.0;
-                const px = (originPos ? originPos.x * 0.45 : 0) + (Math.random() - 0.5) * 4.6;
-                const py = (originPos ? originPos.y * 0.45 : 0) + (Math.random() - 0.5) * 3.4;
-                const pz = camZ - 1.2 - Math.random() * 2.4; // Directly in front of the screen!
+                // Cluster near the camera frustum where the comet swept past in 3D
+                const spreadX = (Math.random() - 0.5) * 4.6;
+                const spreadY = (Math.random() - 0.5) * 3.4;
+                const forwardDist = 1.5 + Math.random() * 2.2;
+                const p = new THREE.Vector3()
+                    .copy(camPos)
+                    .addScaledVector(camDir, forwardDist)
+                    .addScaledVector(camRight, spreadX)
+                    .addScaledVector(camRealUp, spreadY);
 
-                mesh.position.set(px, py, pz);
+                mesh.position.copy(p);
                 const initialScale = 0.8 + Math.random() * 0.9;
                 mesh.scale.setScalar(initialScale);
                 scene.add(mesh);
@@ -3956,28 +4015,40 @@ REV: rel-wad@r2
 
             const cometGroup = new THREE.Group();
 
-            // Spawn in deep space directly in front of the camera axis
-            const startX = (Math.random() - 0.5) * 6;
-            const startY = (Math.random() - 0.5) * 4;
-            const startZ = -140 - Math.random() * 20;
+            const camPos = camera ? camera.position.clone() : new THREE.Vector3(0, 0, 14);
+            const camDir = new THREE.Vector3();
+            if (camera) camera.getWorldDirection(camDir);
+            else camDir.set(0, 0, -1);
 
-            // Target near-miss: passes camera (Z = 14) extremely close!
+            const camUp = new THREE.Vector3(0, 1, 0);
+            const camRight = new THREE.Vector3().crossVectors(camDir, camUp).normalize();
+            const camRealUp = new THREE.Vector3().crossVectors(camRight, camDir).normalize();
+
+            // Spawn in deep space along active camera sightline
+            const deepDistance = 140.0 + Math.random() * 20.0;
+            const startX = (Math.random() - 0.5) * 6.0;
+            const startY = (Math.random() - 0.5) * 4.0;
+            const startVec = new THREE.Vector3()
+                .copy(camDir).multiplyScalar(deepDistance)
+                .addScaledVector(camRight, startX)
+                .addScaledVector(camRealUp, startY);
+
+            // Target near-miss: sweeps right past the camera position!
             const sideSignX = Math.random() < 0.5 ? 1 : -1;
             const sideSignY = Math.random() < 0.5 ? 1 : -1;
-            const camTargetZ = camera ? camera.position.z : 14.0;
             const missX = sideSignX * (1.15 + Math.random() * 0.65);
             const missY = sideSignY * (0.75 + Math.random() * 0.55);
 
-            // Vector extends beyond camera into rear void (Z = 28)
-            const endZ = camTargetZ + 14.0;
-            const endX = missX * 2.1;
-            const endY = missY * 2.1;
+            const missVec = new THREE.Vector3()
+                .copy(camPos)
+                .addScaledVector(camRight, missX)
+                .addScaledVector(camRealUp, missY);
 
-            const startVec = new THREE.Vector3(startX, startY, startZ);
-            const missVec = new THREE.Vector3(missX, missY, camTargetZ);
-            const endVec = new THREE.Vector3(endX, endY, endZ);
+            // Vector extends beyond camera into rear void
+            const flightDirection = new THREE.Vector3().subVectors(missVec, startVec).normalize();
+            const endVec = new THREE.Vector3().copy(missVec).addScaledVector(flightDirection, 24.0);
 
-            const flightDir = new THREE.Vector3().subVectors(endVec, startVec).normalize();
+            const flightDir = flightDirection;
             const flightSpeed = 0.88; // Fast, dramatic hypersonic transit
 
             // 1. Inner Pure White Diamond Core
@@ -4912,12 +4983,21 @@ REV: rel-wad@r2
                 mouseParallax.ty = ty;
             }
 
+            // Dual-Rotation Drag Handler:
             if (isDragging && !reducedMotion) {
                 const deltaX = event.clientX - previousMousePosition.x;
                 const deltaY = event.clientY - previousMousePosition.y;
 
-                targetRotation.y += deltaX * 0.007;
-                targetRotation.x += deltaY * 0.007;
+                if (dragMode === 'cube') {
+                    // ROTATION 1: Spin Company Cube on local axes (drives cardboard marble box)
+                    targetRotation.y += deltaX * 0.007;
+                    targetRotation.x += deltaY * 0.007;
+                } else if (dragMode === 'orbit') {
+                    // ROTATION 2: Orbit Camera 360° around Celestial Cosmos
+                    cameraOrbit.theta -= deltaX * 0.005;
+                    cameraOrbit.phi += deltaY * 0.005;
+                    cameraOrbit.phi = Math.max(-1.35, Math.min(1.35, cameraOrbit.phi));
+                }
 
                 previousMousePosition = { x: event.clientX, y: event.clientY };
             }
@@ -4947,7 +5027,9 @@ REV: rel-wad@r2
             if (camera && !isDragging) {
                 const hoverHits = raycaster.intersectObjects(scene.children, true);
                 let hitInteractive = false;
+                let hitCube = false;
                 let hoveredKey = null;
+
                 for (let h of hoverHits) {
                     const u = h.object.userData;
                     if (u && (u.isPyramid || u.isRedNode || u.isEvidenceNode || u.isComet)) {
@@ -4955,8 +5037,27 @@ REV: rel-wad@r2
                         if (u.isPyramid && u.agentKey) hoveredKey = u.agentKey;
                         break;
                     }
+                    let cur = h.object;
+                    while (cur) {
+                        if (cur === cubeGroup || (cur.userData && (cur.userData.isCubePlane || cur.userData.isInnerBox || cur.userData.isPurpleBox))) {
+                            hitCube = true;
+                            break;
+                        }
+                        cur = cur.parent;
+                    }
+                    if (hitCube || cubePlanes.includes(h.object)) {
+                        hitCube = true;
+                        break;
+                    }
                 }
-                document.body.style.cursor = hitInteractive ? 'pointer' : 'default';
+
+                if (hitInteractive) {
+                    document.body.style.cursor = 'pointer';
+                } else if (hitCube) {
+                    document.body.style.cursor = 'grab';
+                } else {
+                    document.body.style.cursor = 'default';
+                }
 
                 Object.keys(pyramidGroups).forEach(k => {
                     const pyr = pyramidGroups[k];
@@ -4969,6 +5070,7 @@ REV: rel-wad@r2
         function onMouseDown(event) {
             if (event.target.closest('.interactive')) return;
 
+            dragButton = event.button;
             isDragging = true;
             isMouseDown = true;
             singularityStartTime = performance.now();
@@ -4976,7 +5078,14 @@ REV: rel-wad@r2
 
             CosmicAudio.init();
 
-            // Raycast for Pyramids & Red Evidence Nodes
+            // Right-click drag OR Shift-click drag ALWAYS orbits the 360° celestial cosmos!
+            if (event.button === 2 || event.shiftKey) {
+                dragMode = 'orbit';
+                document.body.style.cursor = 'move';
+                return;
+            }
+
+            // Raycast for Pyramids, Comets, Red Evidence Nodes, and Company Cube
             raycaster.setFromCamera(mouse, camera);
             const intersects = raycaster.intersectObjects(scene.children, true);
 
@@ -4984,14 +5093,23 @@ REV: rel-wad@r2
                 for (let hit of intersects) {
                     const obj = hit.object;
                     if (obj.userData && obj.userData.isComet) {
+                        isDragging = false;
+                        isMouseDown = false;
+                        dragMode = null;
                         interceptComet(obj.userData.parentGroup || obj);
                         return;
                     }
                     if (obj.userData && (obj.userData.isRedNode || obj.userData.isEvidenceNode)) {
+                        isDragging = false;
+                        isMouseDown = false;
+                        dragMode = null;
                         selectRedNode(obj);
                         return;
                     }
                     if (obj.userData && obj.userData.isPyramid) {
+                        isDragging = false;
+                        isMouseDown = false;
+                        dragMode = null;
                         const key = obj.userData.agentKey;
                         if (key && pyramidGroups[key]) {
                             pyramidGroups[key].scaleImpulse = 1.35;
@@ -5000,13 +5118,34 @@ REV: rel-wad@r2
                         openAgentChamber(key);
                         return;
                     }
+                    // Hit detection on Company Cube:
+                    let cur = obj;
+                    let isCubeHit = false;
+                    while (cur) {
+                        if (cur === cubeGroup || (cur.userData && (cur.userData.isCubePlane || cur.userData.isInnerBox || cur.userData.isPurpleBox))) {
+                            isCubeHit = true;
+                            break;
+                        }
+                        cur = cur.parent;
+                    }
+                    if (isCubeHit || cubePlanes.includes(obj)) {
+                        dragMode = 'cube';
+                        document.body.style.cursor = 'grabbing';
+                        return;
+                    }
                 }
             }
+
+            // Outside the cube in open space: Orbit the 360° Celestial Cosmos!
+            dragMode = 'orbit';
+            document.body.style.cursor = 'move';
         }
 
         function onMouseUp() {
             isDragging = false;
             isMouseDown = false;
+            dragMode = null;
+            document.body.style.cursor = 'default';
         }
 
         function onWheel(event) {
@@ -5014,7 +5153,7 @@ REV: rel-wad@r2
             cameraTargetDistance = Math.max(2.8, Math.min(26.0, cameraTargetDistance));
         }
 
-        let touchStartX = 0, touchStartY = 0;
+        let touchStartX = 0, touchStartY = 0, touchStartDistance = 0;
         function onTouchStart(event) {
             if (event.target.closest('.interactive')) return;
             if (event.touches.length === 1) {
@@ -5024,6 +5163,32 @@ REV: rel-wad@r2
                 previousMousePosition = { x: touchStartX, y: touchStartY };
                 FaceRigState.mouseScreenX = touchStartX;
                 FaceRigState.mouseScreenY = touchStartY;
+
+                // Raycast to decide touch mode: cube vs orbit
+                mouse.x = (touchStartX / window.innerWidth) * 2 - 1;
+                mouse.y = -(touchStartY / window.innerHeight) * 2 + 1;
+                raycaster.setFromCamera(mouse, camera);
+                const intersects = raycaster.intersectObjects(scene.children, true);
+                let hitCube = false;
+                for (let hit of intersects) {
+                    let cur = hit.object;
+                    while (cur) {
+                        if (cur === cubeGroup || (cur.userData && (cur.userData.isCubePlane || cur.userData.isInnerBox || cur.userData.isPurpleBox))) {
+                            hitCube = true;
+                            break;
+                        }
+                        cur = cur.parent;
+                    }
+                    if (hitCube || cubePlanes.includes(hit.object)) {
+                        hitCube = true;
+                        break;
+                    }
+                }
+                dragMode = hitCube ? 'cube' : 'orbit';
+            } else if (event.touches.length === 2) {
+                const dx = event.touches[0].clientX - event.touches[1].clientX;
+                const dy = event.touches[0].clientY - event.touches[1].clientY;
+                touchStartDistance = Math.sqrt(dx * dx + dy * dy);
             }
         }
 
@@ -5035,14 +5200,30 @@ REV: rel-wad@r2
             if (isDragging && event.touches.length === 1 && !reducedMotion) {
                 const deltaX = event.touches[0].clientX - previousMousePosition.x;
                 const deltaY = event.touches[0].clientY - previousMousePosition.y;
-                targetRotation.y += deltaX * 0.007;
-                targetRotation.x += deltaY * 0.007;
+
+                if (dragMode === 'cube') {
+                    targetRotation.y += deltaX * 0.007;
+                    targetRotation.x += deltaY * 0.007;
+                } else {
+                    cameraOrbit.theta -= deltaX * 0.005;
+                    cameraOrbit.phi += deltaY * 0.005;
+                    cameraOrbit.phi = Math.max(-1.35, Math.min(1.35, cameraOrbit.phi));
+                }
                 previousMousePosition = { x: event.touches[0].clientX, y: event.touches[0].clientY };
+            } else if (event.touches.length === 2) {
+                const dx = event.touches[0].clientX - event.touches[1].clientX;
+                const dy = event.touches[0].clientY - event.touches[1].clientY;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+                const diff = touchStartDistance - dist;
+                cameraTargetDistance += diff * 0.02;
+                cameraTargetDistance = Math.max(2.8, Math.min(26.0, cameraTargetDistance));
+                touchStartDistance = dist;
             }
         }
 
         function onTouchEnd() {
             isDragging = false;
+            dragMode = null;
         }
 
         function onKeyDown(e) {
@@ -5060,6 +5241,8 @@ REV: rel-wad@r2
             } else if (e.key === 'r' || e.key === 'R') {
                 targetRotation.x = 0.2;
                 targetRotation.y = 0.4;
+                cameraOrbit.theta = 0.0;
+                cameraOrbit.phi = 0.08;
                 cameraTarget.set(0, 0, 0);
                 cameraTargetDistance = 14;
                 isInsideCube = false;
@@ -5411,6 +5594,8 @@ REV: rel-wad@r2
             document.getElementById('cam-reset').addEventListener('click', () => {
                 targetRotation.x = 0.2;
                 targetRotation.y = 0.4;
+                cameraOrbit.theta = 0.0;
+                cameraOrbit.phi = 0.08;
                 cameraTarget.set(0, 0, 0);
                 cameraTargetDistance = 14;
                 isInsideCube = false;
@@ -5869,9 +6054,18 @@ REV: rel-wad@r2
                     }
                     layer.geometry.attributes.color.needsUpdate = true;
                 });
+
+                // Anti-parallax on near and far starfield layers (Studio visualizer depth standard)
+                if (starFieldNear && starFieldFar) {
+                    starFieldNear.position.x += (mouse.x * 2.2 - starFieldNear.position.x) * 0.05;
+                    starFieldNear.position.y += (mouse.y * 2.2 - starFieldNear.position.y) * 0.05;
+                    // Far stars move in opposing anti-parallax
+                    starFieldFar.position.x += (-mouse.x * 2.0 - starFieldFar.position.x) * 0.05;
+                    starFieldFar.position.y += (-mouse.y * 2.0 - starFieldFar.position.y) * 0.05;
+                }
             }
 
-            // Smooth Cube Rotation
+            // Smooth Cube Rotation (Rotation 1: Independent Company Cube spin)
             if (cubeGroup && !reducedMotion) {
                 cubeGroup.rotation.y += (targetRotation.y - cubeGroup.rotation.y) * 0.08;
                 cubeGroup.rotation.x += (targetRotation.x - cubeGroup.rotation.x) * 0.08;
@@ -5923,11 +6117,17 @@ REV: rel-wad@r2
                 });
             }
 
-            // Camera Zoom Lerp
-            camera.position.z += (cameraTargetDistance - camera.position.z) * 0.06;
+            // 360° Spherical Celestial Camera Orbit & Zoom (Rotation 2: Entire 360° Cosmos)
+            const targetCamX = cameraTargetDistance * Math.cos(cameraOrbit.phi) * Math.sin(cameraOrbit.theta);
+            const targetCamY = cameraTargetDistance * Math.sin(cameraOrbit.phi);
+            const targetCamZ = cameraTargetDistance * Math.cos(cameraOrbit.phi) * Math.cos(cameraOrbit.theta);
+            const targetCamPos = new THREE.Vector3(targetCamX, targetCamY, targetCamZ);
+            camera.position.lerp(targetCamPos, 0.08);
+            camera.lookAt(cameraTarget);
 
-            // Aperture Opening of Cube Panels on Zoom
-            const openAmount = Math.max(0, Math.min(1, (10.0 - camera.position.z) / 6.0));
+            // Aperture Opening of Cube Panels on Zoom (Distance-driven in 3D from origin)
+            const camDist = camera.position.length();
+            const openAmount = Math.max(0, Math.min(1, (10.0 - camDist) / 6.0));
             cubePlanes.forEach(p => {
                 if (p.userData && p.userData.initialPos && p.userData.openDir) {
                     const offset = p.userData.openDir.clone().multiplyScalar(openAmount * 2.2);
@@ -6346,7 +6546,9 @@ REV: rel-wad@r2
                     if (!c.userData.paused) {
                         c.position.add(c.userData.velocity);
                         c.userData.life++;
-                        if (c.userData.life > c.userData.maxLife || c.position.z > 35) {
+                        const distFromStart = c.userData.startPos ? c.position.distanceTo(c.userData.startPos) : 0;
+                        const maxTravelDist = c.userData.maxDist || 180.0;
+                        if (c.userData.life > c.userData.maxLife || distFromStart > maxTravelDist || c.position.length() > 220) {
                             scene.remove(c);
                             comets.splice(i, 1);
                         }
@@ -6354,7 +6556,7 @@ REV: rel-wad@r2
                 }
             }
 
-            // --- Near-Miss Hyper Flyby Comet Lifecycle (Item 3b / v039.06) ---
+            // --- Near-Miss Hyper Flyby Comet Lifecycle (Item 3b / v039.06 & Row 8: 360° Orbit Invariant) ---
             const now = performance.now();
 
             if (showComets && !reducedMotion && !activeFlybyComet) {
@@ -6367,51 +6569,58 @@ REV: rel-wad@r2
                 const c = activeFlybyComet;
                 c.position.addScaledVector(c.userData.flightDir, c.userData.speed);
 
+                // Subtle celestial deflection / gravitational slingshot near the Company Cube
+                const distToOrigin = c.position.length();
+                if (distToOrigin < 14.0 && distToOrigin > 2.2) {
+                    const pull = c.position.clone().negate().normalize().multiplyScalar(0.007);
+                    c.position.add(pull);
+                }
+
                 if (c.userData.crossGroup) {
                     c.userData.crossGroup.rotation.z += 0.08;
                 }
 
                 const camPos = camera ? camera.position : new THREE.Vector3(0, 0, 14);
-                const camZ = camPos.z;
                 const distToCam = c.position.distanceTo(camPos);
 
-                const totalZRange = camZ - c.userData.startVec.z;
-                const zProgress = Math.max(0, (c.position.z - c.userData.startVec.z) / totalZRange);
+                const totalDist = c.userData.startVec.distanceTo(c.userData.missVec);
+                const distTraveled = c.position.distanceTo(c.userData.startVec);
+                const flightProgress = Math.max(0, distTraveled / totalDist);
 
                 // Looming Scale Expansion ("it gets slowly bigger and bigger, brighter and brighter")
-                const loomScale = 1.0 + 3.8 * Math.pow(Math.min(1.0, Math.max(0, (c.position.z + 60) / (camZ + 60))), 2.4);
+                const loomScale = 1.0 + 3.8 * Math.pow(Math.min(1.0, Math.max(0, flightProgress)), 2.4);
                 c.scale.setScalar(loomScale);
 
                 // Update Procedural Rocket Roar with Doppler Sweep
                 if (CosmicAudio && CosmicAudio.updateRocketRoar) {
-                    CosmicAudio.updateRocketRoar(distToCam, zProgress, c.userData.sideSignX);
+                    CosmicAudio.updateRocketRoar(distToCam, flightProgress, c.userData.sideSignX);
                 }
 
                 // Update Dynamic Screen Flare Glare ("and the brightness goes back to normal")
                 const flashEl = document.getElementById('flyby-screen-flash');
                 if (flashEl) {
-                    if (zProgress < 1.0 && c.position.z > -35 && c.position.z < (camZ - 0.5)) {
+                    if (flightProgress < 1.05 && distToCam > 0.6 && distTraveled > 40.0) {
                         const proj = c.position.clone().project(camera);
                         const sx = (proj.x * 0.5 + 0.5) * 100;
                         const sy = (-proj.y * 0.5 + 0.5) * 100;
-                        const proximity = Math.max(0, Math.min(1, (c.position.z + 35) / (camZ + 35)));
+                        const proximity = Math.max(0, Math.min(1, 1.0 - (distToCam / 24.0)));
                         const flashOpacity = Math.pow(proximity, 2.6) * 0.65;
                         flashEl.style.background = `radial-gradient(circle at ${sx.toFixed(1)}% ${sy.toFixed(1)}%, rgba(255,255,255,0.88) 0%, rgba(0,229,255,0.48) 35%, rgba(170,51,255,0.18) 65%, transparent 80%)`;
                         flashEl.style.opacity = flashOpacity.toFixed(2);
-                    } else if (c.position.z >= (camZ - 0.5)) {
-                        const fadeOut = Math.max(0, 1.0 - (c.position.z - (camZ - 0.5)) / 8.0);
+                    } else if (flightProgress >= 1.05) {
+                        const fadeOut = Math.max(0, 1.0 - (flightProgress - 1.05) * 2.5);
                         flashEl.style.opacity = (fadeOut * 0.45).toFixed(2);
                     }
                 }
 
                 // Climax Moment: Spawn Near-Field Twinkling Cosmic Ice & Dust Particles!
-                if (!c.userData.iceSpawned && c.position.z >= (camZ - 1.5)) {
+                if (!c.userData.iceSpawned && flightProgress >= 0.95) {
                     c.userData.iceSpawned = true;
                     spawnCosmicIceParticles(c.position, 65);
                 }
 
                 // Exited beyond camera view
-                if (c.position.z > (camZ + 16.0)) {
+                if (flightProgress > 1.35 || c.position.distanceTo(c.userData.endVec) < 2.0 || distTraveled > (totalDist + 30.0)) {
                     scene.remove(c);
                     if (flashEl) flashEl.style.opacity = '0';
                     if (CosmicAudio && CosmicAudio.stopRocketRoar) CosmicAudio.stopRocketRoar();
