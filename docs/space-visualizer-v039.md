@@ -798,7 +798,47 @@ Anchoring the depth engine to the zero-g studio standard:
 
 ---
 
-## 15. Preservation of Foundation Features
+## 15. Sound Architecture & Cybernetic Gem-Unfolding Chamber Opening UI (Row 9 / v039.30 - v039.31)
+
+Following Jay's architectural specification ("number 9 is up... we can leave the pyramids inside, but we do need to work on the UI a little, to make it seem like it's opening when it is clicked!"), the visualizer introduces a fully unified audio engine and a dramatic cybernetic gem-unfolding chamber opening sequence.
+
+### 15.1 Unified Audio Architecture
+1. **Embedded Authentic Character Voice Greetings**:
+   - Extracted from the master zero-g visualizer and embedded directly into `AGENTS` as permanent, self-contained base64 WAV data URIs:
+     - **Ava (`AGENTS.ava.audioBase64`)**: Cybernetic neural coordinator voice greeting ($233\,\text{KB}$).
+     - **Roy (`AGENTS.roy.audioBase64`)**: Tactical cybernetic intelligence voice greeting ($199\,\text{KB}$).
+     - **Guz (`AGENTS.guz.audioBase64`)**: Cryptographic proofs specialist voice greeting ($307\,\text{KB}$).
+   - **Zero Network Dependency**: Functions 100% offline and across `file://` / `http://` protocols with zero latency or asset path failures.
+   - **Synchronized Lip-Sync & Viseme Articulation**: Directly drives the 2D HTML5 Canvas Facial Rig (`simulateVisemes(durationMs)`), matching mouth shapes (`open`, `wide`, `round`, `rest`), chin jaw-drop warp, and eyelid micro-gaze tracking to the active audio waveform.
+   - **Speech Synthesis Fallback**: If browser autoplay policies temporarily restrict media elements, the engine seamlessly falls back to synthesized Web Speech API (`speakPhrase`).
+2. **Dedicated Voice Replay Button (`#btn-replay-voice`)**:
+   - An interactive glowing button with an animated 3-bar audio equalizer (`#voice-eq-bars`) positioned right below the spoken caption box.
+   - Users can replay the agent's real voice lines on demand at any time without closing and re-opening the chamber.
+3. **Procedural Sound Suite (`CosmicAudio`)**:
+   - **Dark Matter Sub-Bass Drone**: $48\,\text{Hz} - 55\,\text{Hz}$ dual-oscillator continuous deep-space drone.
+   - **Aperture Swoosh**: Resonant bandpass filter sweep accompanying cube panel opening and chamber expansion.
+   - **Pentatonic Stardust Chimes**: Velocity-scaled crystalline chimes triggered by cursor movement through the starlight field.
+   - **Marble Impact Clicks**: ASMR tactile triangle-wave micro-clicks ($1450 - 2300\,\text{Hz}$) emitted during physical collisions inside the purple containment chamber.
+   - **Hypersonic Doppler Rocket Roar**: 3D distance-scaled frequency swell ($90\,\text{Hz} \to 680\,\text{Hz}$) with stereo panning for near-miss flyby comets.
+   - **Synaptic Lightning Zaps**: High-frequency electrical discharge crackles during query execution.
+   - **Shockwave Booms**: Resonant $65\,\text{Hz}$ explosive detonations when catching comets or executing major consensus events.
+
+### 15.2 Cybernetic Gem-Unfolding Chamber Opening Sequence
+1. **3D Camera Approach & Aperture Unfolding**:
+   - Clicking an agent pyramid (or pressing `1`, `2`, `3`, or clicking the bottom camera dock) immediately zooms the camera to distance $R_{\text{cam}} = 4.8$.
+   - Because the 3D aperture opening is distance-driven ($\text{openAmount} = \text{clamp}((10.0 - d_{\text{cam}})/6.0, 0, 1)$), approaching the Core Sanctuary causes the Company Cube's glass panels to glide outward along their normal vectors, revealing the interior in real time!
+2. **Polygonal Gem-Aperture Keyframe Expansion (`.gem-chamber-unfold`)**:
+   - The chamber dialog (`#agent-chamber-card`) executes an authentic cybernetic geometric unfold:
+     $$\text{clip-path: } \text{polygon}(50\% \, 0\%, 100\% \, 50\%, 50\% \, 100\%, 0\% \, 50\%) \longrightarrow \text{polygon}(0 \, 0, 100\% \, 0, 100\% \, 100\%, 0 \, 100\%)$$
+   - Begins at scale $0.22$ with a $-5^\circ$ cant, expanding through a luminous chromatic bloom (`blur(14px)`, `brightness(2.6)`, electric cyan and amethyst shadows) before locking seamlessly into full scale at $0.52\,\text{s}$.
+3. **Dynamic Holographic Iris Shutter Burst (`.iris-shutter-burst`)**:
+   - A radiant neon cyan/violet circular iris ring rapidly expands from scale $0.1 \to 2.2$ across the viewport, visually telegraphing the holographic aperture activation.
+4. **Synaptic Lightning Surge**:
+   - Concurrently triggers `spawnSynapticLightning(key, isDatabaseOutage)`, arcing an electric jagged plasma bolt between the agent's pyramid and the central Sun.
+
+---
+
+## 16. Preservation of Foundation Features
 
 All interactive systems remain fully functional:
 1. **Synaptic Query Terminal**: NLP cypher queries, quick chips, and live logs.
@@ -808,16 +848,18 @@ All interactive systems remain fully functional:
 5. **Red Graph Counter-Rotation**: Organic 28-node constellation counter-rotating at 50% speed.
 6. **IdeaVerse Comets & Near-Miss Flybys**: Deep space comets, hypersonic Doppler flybys, 10-document narrative ledger, and zero-write outage rejection.
 7. **The Fiery Sun Core**: Dynamic turbulent plasma mantle, 6 magnetic prominence loops, CME flare pulses, and 3-axis Cypher mandala.
-8. **Three Orbiting Protector Pyramids**: Traveling electron shells, calibrated orbital clearance ($2.05, 2.35, 2.65$), and synaptic lightning trigger.
+8. **Three Orbiting Protector Pyramids**: Traveling electron shells, calibrated orbital clearance ($2.05, 2.35, 2.65$), inside-cube placement, and synaptic lightning trigger.
 9. **Option A Interstitial Containment Corridor**: 750 starlight particles circulating strictly within $[2.82, 3.32]$.
 10. **Calm vs. Chaotic Velocity Modulation**: $28\%$ calm synchronized laminar drift when online vs. $100\%$ agitated turbulent Brownian jitter during outage.
 11. **Purple Containment Frame & Travelling Light-Balls**: 12 neon struts, 8 corner beacons, 6 forcefield panels, Orocue perimeter race, and $0.62\,\text{s}$ spark explosions.
 12. **Cardboard Box Marble Physics**: Outage antigravity failure, tilting gravity, centrifugal spin drag, 2-pass marble collisions, and smooth reconnection levitation.
 13. **The Eldritch Cypher Shader Mandala**: 2048px super-sampled runic canvas, 3-axis gyroscopic momentum, concentric harmonic resonance rings, and chromatic flare pulses.
-14. **Dual-Rotation & 360° Celestial Cosmos**: Independent Company Cube spin, 360° spherical camera orbit, Euclidean aperture sliding, opposing starfield anti-parallax, and invariant 3D comet trajectories.
+14. **Dual-Rotation & 360° Celestial Cosmos**: Independent Company Cube spin with generous $5.2$ radius spatial bounding hit volume, 360° spherical camera orbit, Euclidean aperture sliding, opposing starfield anti-parallax, and invariant 3D comet trajectories.
+15. **Unified Sound Architecture**: Ambient procedural audio + authentic embedded base64 voice greetings for Ava, Roy, and Guz + replay voice button + gem-unfolding chamber opening UI.
 
 ---
 
-## 16. Roadmap Completion Summary
+## 17. Roadmap Completion Summary
 
-With the successful landing of **Row 8: Background Starfield & Dual-Rotation 360° Celestial Cosmos** (`v039.26` / `v039.27`), all objectives across the dual-rotation engine are verified, documented, and synchronized across all three visualizer mirrors. Next milestones proceed to **Row 9: Sound Architecture** (`v039.28` / `v039.29`) and **Row 10: UI & Outage Simulation Suite** (`v039.30` / `v039.31`).
+With the successful landing of **Row 9: Sound Architecture & Gem-Unfolding Chamber Opening UI** (`v039.30` / `v039.31`), the audio engine and agent chamber interaction have achieved complete parity with the master visualizer. All objectives are verified, documented, and synchronized across all three visualizer mirrors. The final milestone proceeds to **Row 10: UI & Outage Simulation Suite** (`v039.32` / `v039.33`).
+
