@@ -661,7 +661,7 @@ REV: rel-wad@r2
                 <p>• <strong>ORBITING PYRAMIDS:</strong> Click Ava, Roy, or Guz to inspect their holographic chamber and speech lines.</p>
                 <p>• <strong>OPPOSING PARALLAX:</strong> Move cursor to shift the deep starfield in opposing inertial parallax.</p>
                 <p>• <strong>IDEA-VERSE COMETS:</strong> Passing glowing comets carry active idea files. Hover to slow them down, click to inspect!</p>
-                <p>• <strong>GEM STARDUST FLUID:</strong> Multi-faceted gem particles inside the cube drift with curl noise, avoiding the Sun and Pyramids.</p>
+                <p>• <strong>ANTIGRAVITY LIQUID STARLIGHT:</strong> 750 multi-faceted gem starlight particles drift with zero-g curl noise, deflecting dynamically around the central Sun and orbiting Pyramids. Move your cursor through the cube to stir fluid micro-eddies and trigger pentatonic stardust chimes!</p>
                 <p>• <strong>OUTAGE SIMULATION:</strong> Toggle outage to observe immediate fail-closed proof states.</p>
             </div>
         </div>
@@ -790,6 +790,7 @@ REV: rel-wad@r2
         let liquidRipples = [];
         let singularityStartTime = 0;
         let lastRippleTime = 0;
+        let lastStardustChimeTime = 0;
         let mouse3D = new THREE.Vector3();
         let prevMouse3D = new THREE.Vector3();
         let mouseVelocity3D = new THREE.Vector3();
@@ -4171,7 +4172,9 @@ REV: rel-wad@r2
                     mouseVelocity3D.subVectors(mouse3D, prevMouse3D);
 
                     const speed = mouseVelocity3D.length();
-                    if (speed > 0.035) {
+                    const nowChime = performance.now();
+                    if (speed > 0.035 && nowChime - lastStardustChimeTime > 115) {
+                        lastStardustChimeTime = nowChime;
                         CosmicAudio.playStardustChime(mouse.x, speed);
                     }
                 }
@@ -4458,6 +4461,11 @@ REV: rel-wad@r2
                         }
                     });
 
+                    // Liquid Starlight particles dim during outage
+                    if (liquidParticlesInside) {
+                        liquidParticlesInside.material.opacity = 0.40;
+                    }
+
                     const btn1 = document.getElementById('btn-import-idea');
                     if (btn1) {
                         btn1.innerHTML = '<span>⚠️ Ingestion Locked (Database Offline)</span>';
@@ -4546,6 +4554,11 @@ REV: rel-wad@r2
                             });
                         }
                     });
+
+                    // Liquid Starlight restored to radiant brilliance
+                    if (liquidParticlesInside) {
+                        liquidParticlesInside.material.opacity = 0.95;
+                    }
 
                     // Trigger celebratory CME solar flare ignition burst!
                     triggerCoronalMassEjection(true);
@@ -4910,6 +4923,7 @@ REV: rel-wad@r2
                         Math.sin(item.angle + 0.04) * r
                     ).applyEuler(euler);
                     const tangent = pNext.clone().sub(p).normalize();
+                    item.tangent = tangent;
                     const normal = p.clone().normalize();
                     const flightQuat = new THREE.Quaternion().setFromUnitVectors(
                         new THREE.Vector3(0, 1, 0),
@@ -4973,14 +4987,38 @@ REV: rel-wad@r2
                 const phases = uData.twinklePhases;
                 const spds = uData.twinkleSpeeds;
 
-                // Live pyramid coordinates in cubeGroup space
-                const livePyramidPositions = [];
+                // Live pyramid coordinates & tangent headings in cubeGroup space
+                const livePyramids = [];
                 Object.keys(pyramidGroups).forEach(key => {
                     const item = pyramidGroups[key];
                     if (item && item.group) {
-                        livePyramidPositions.push(item.group.position);
+                        livePyramids.push({
+                            pos: item.group.position,
+                            tangent: item.tangent || null
+                        });
                     }
                 });
+
+                // Cursor fluid eddy wake inside cubeGroup
+                let cursorLocal = null;
+                let cursorLocalVel = null;
+                let hasActiveCursor = false;
+                if (camera && mouseVelocity3D && mouse3D && cubeGroup) {
+                    const tempCursor = mouse3D.clone();
+                    cubeGroup.worldToLocal(tempCursor);
+                    if (Math.abs(tempCursor.x) < 3.8 && Math.abs(tempCursor.y) < 3.8 && Math.abs(tempCursor.z) < 3.8) {
+                        cursorLocal = tempCursor;
+                        const velClone = mouseVelocity3D.clone();
+                        velClone.applyQuaternion(cubeGroup.quaternion.clone().invert());
+                        if (velClone.length() > 0.015) {
+                            cursorLocalVel = velClone;
+                            hasActiveCursor = true;
+                        }
+                    }
+                }
+
+                const outageActive = isDatabaseOutage;
+                const flowMultiplier = outageActive ? 0.45 : 1.0;
 
                 const sunY = sunGroup ? sunGroup.position.y : 0;
                 const rSun = 1.38; // Strict exclusion radius around central Sun
@@ -4997,9 +5035,9 @@ REV: rel-wad@r2
                     let vz = v[i3 + 2];
 
                     // 1. Organic Antigravity 3D Curl Noise Circulation Field
-                    const fx = Math.sin(py * 1.3 + time * 0.7) * Math.cos(pz * 1.3 + time * 0.5) * 0.005;
-                    const fy = Math.sin(pz * 1.3 + time * 0.6) * Math.cos(px * 1.3 + time * 0.7) * 0.005 + Math.sin(time * 0.8 + px * 2.0) * 0.0025;
-                    const fz = Math.sin(px * 1.3 + time * 0.5) * Math.cos(py * 1.3 + time * 0.6) * 0.005;
+                    const fx = Math.sin(py * 1.3 + time * 0.7) * Math.cos(pz * 1.3 + time * 0.5) * 0.005 * flowMultiplier;
+                    const fy = (Math.sin(pz * 1.3 + time * 0.6) * Math.cos(px * 1.3 + time * 0.7) * 0.005 + Math.sin(time * 0.8 + px * 2.0) * 0.0025) * flowMultiplier;
+                    const fz = Math.sin(px * 1.3 + time * 0.5) * Math.cos(py * 1.3 + time * 0.6) * 0.005 * flowMultiplier;
                     vx += fx; vy += fy; vz += fz;
 
                     // 2. Strict Exclusion 1: The Central Sun (Repel outward + laminar orbital swirl)
@@ -5019,12 +5057,12 @@ REV: rel-wad@r2
                         vz += nx * 0.007;
                     }
 
-                    // 3. Strict Exclusion 2: The Orbiting Pyramids (Roy, Ava, Guz live positions)
-                    for (let k = 0; k < livePyramidPositions.length; k++) {
-                        const pyrPos = livePyramidPositions[k];
-                        const dx = px - pyrPos.x;
-                        const dy = py - pyrPos.y;
-                        const dz = pz - pyrPos.z;
+                    // 3. Strict Exclusion 2: The Orbiting Pyramids (Roy, Ava, Guz live positions & fluid bow wave wake)
+                    for (let k = 0; k < livePyramids.length; k++) {
+                        const pyr = livePyramids[k];
+                        const dx = px - pyr.pos.x;
+                        const dy = py - pyr.pos.y;
+                        const dz = pz - pyr.pos.z;
                         const distPyr = Math.sqrt(dx * dx + dy * dy + dz * dz);
                         if (distPyr < rDeflectPyr) {
                             const pen = rDeflectPyr - distPyr;
@@ -5032,6 +5070,12 @@ REV: rel-wad@r2
                             vx += dx * invD * (pen * 0.09 + 0.01);
                             vy += dy * invD * (pen * 0.09 + 0.01);
                             vz += dz * invD * (pen * 0.09 + 0.01);
+                            // Tangential fluid bow wave along flight heading
+                            if (pyr.tangent) {
+                                vx += pyr.tangent.x * pen * 0.035;
+                                vy += pyr.tangent.y * pen * 0.035;
+                                vz += pyr.tangent.z * pen * 0.035;
+                            }
                         }
                     }
 
@@ -5057,6 +5101,23 @@ REV: rel-wad@r2
                                 vy += _tempRingNorm.y * (pen * 0.08 + 0.008);
                                 vz += _tempRingNorm.z * (pen * 0.08 + 0.008);
                             }
+                        }
+                    }
+
+                    // 4b. Interactive Cursor Fluid Stirring (Micro-eddy wake)
+                    if (hasActiveCursor && cursorLocal && cursorLocalVel) {
+                        const cdx = px - cursorLocal.x;
+                        const cdy = py - cursorLocal.y;
+                        const cdz = pz - cursorLocal.z;
+                        const distCursor = Math.sqrt(cdx * cdx + cdy * cdy + cdz * cdz);
+                        if (distCursor < 1.35) {
+                            const cFactor = (1.35 - distCursor) / 1.35;
+                            vx += cursorLocalVel.x * cFactor * 0.40;
+                            vy += cursorLocalVel.y * cFactor * 0.40;
+                            vz += cursorLocalVel.z * cFactor * 0.40;
+                            // Tangential eddy curl around pointer
+                            vx += -cdz * cFactor * 0.05;
+                            vz += cdx * cFactor * 0.05;
                         }
                     }
 
@@ -5086,12 +5147,20 @@ REV: rel-wad@r2
                     v[i3 + 1] = vy;
                     v[i3 + 2] = vz;
 
-                    // 8. Gem Starlight Twinkling (Multi-faceted sparkle glints)
-                    const tw = 0.55 + 0.45 * Math.sin(time * spds[i] + phases[i]);
-                    const sparkle = tw > 0.88 ? 1.45 : tw;
-                    colors[i3] = bCols[i3] * sparkle;
-                    colors[i3 + 1] = bCols[i3 + 1] * sparkle;
-                    colors[i3 + 2] = bCols[i3 + 2] * sparkle;
+                    // 8. Gem Starlight Twinkling (Multi-faceted sparkle glints & outage ember decay)
+                    if (outageActive) {
+                        // Dormant corrupted crimson/amethyst embers during database outage
+                        const emberTw = 0.22 + 0.18 * Math.sin(time * (spds[i] * 0.5) + phases[i]);
+                        colors[i3] = (bCols[i3] * 0.22 + 0.45) * emberTw;
+                        colors[i3 + 1] = (bCols[i3] * 0.05) * emberTw;
+                        colors[i3 + 2] = (bCols[i3] * 0.15 + 0.10) * emberTw;
+                    } else {
+                        const tw = 0.55 + 0.45 * Math.sin(time * spds[i] + phases[i]);
+                        const sparkle = tw > 0.88 ? 1.45 : tw;
+                        colors[i3] = bCols[i3] * sparkle;
+                        colors[i3 + 1] = bCols[i3 + 1] * sparkle;
+                        colors[i3 + 2] = bCols[i3 + 2] * sparkle;
+                    }
                 }
 
                 liquidParticlesInside.geometry.attributes.position.needsUpdate = true;
