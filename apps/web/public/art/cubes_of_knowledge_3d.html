@@ -5234,6 +5234,11 @@ REV: rel-wad@r2
                 const deltaX = event.clientX - previousMousePosition.x;
                 const deltaY = event.clientY - previousMousePosition.y;
 
+                const dragDist = Math.hypot(event.clientX - startMousePosition.x, event.clientY - startMousePosition.y);
+                if (dragDist > 4) {
+                    hasMovedDuringDrag = true;
+                }
+
                 if (dragMode === 'cube') {
                     // ROTATION 1: Spin Company Cube on local axes (drives cardboard marble box)
                     targetRotation.y += deltaX * 0.007;
@@ -5299,7 +5304,7 @@ REV: rel-wad@r2
 
                 if (!hitCube) {
                     const distToCenter = raycaster.ray.distanceToPoint(new THREE.Vector3(0, 0, 0));
-                    if (distToCenter <= 5.2) {
+                    if (distToCenter <= 6.2) {
                         hitCube = true;
                     }
                 }
@@ -5320,8 +5325,18 @@ REV: rel-wad@r2
             }
         }
 
+        let pendingClickObject = null;
+        let startMousePosition = { x: 0, y: 0 };
+        let hasMovedDuringDrag = false;
+
         function onMouseDown(event) {
             if (event.target.closest('.interactive')) return;
+
+            // If agent chamber or modal is open, prevent 3D canvas interaction (Item 7)
+            const agentChamber = document.getElementById('agent-chamber');
+            if (agentChamber && !agentChamber.classList.contains('hidden')) {
+                return;
+            }
 
             // Immediately update normalized mouse coordinates from client event
             mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
@@ -5330,7 +5345,10 @@ REV: rel-wad@r2
             dragButton = event.button;
             isDragging = true;
             isMouseDown = true;
+            hasMovedDuringDrag = false;
+            pendingClickObject = null;
             singularityStartTime = performance.now();
+            startMousePosition = { x: event.clientX, y: event.clientY };
             previousMousePosition = { x: event.clientX, y: event.clientY };
 
             CosmicAudio.init();
@@ -5349,39 +5367,18 @@ REV: rel-wad@r2
             if (intersects.length > 0) {
                 for (let hit of intersects) {
                     const obj = hit.object;
-                    if (obj.userData && obj.userData.isComet) {
-                        isDragging = false;
-                        isMouseDown = false;
-                        dragMode = null;
-                        interceptComet(obj.userData.parentGroup || obj);
-                        return;
-                    }
-                    if (obj.userData && (obj.userData.isRedNode || obj.userData.isEvidenceNode)) {
-                        isDragging = false;
-                        isMouseDown = false;
-                        dragMode = null;
-                        selectRedNode(obj);
-                        return;
-                    }
-                    if (obj.userData && obj.userData.isPyramid) {
-                        isDragging = false;
-                        isMouseDown = false;
-                        dragMode = null;
-                        const key = obj.userData.agentKey;
-                        if (key && pyramidGroups[key]) {
-                            pyramidGroups[key].scaleImpulse = 1.35;
-                            spawnSynapticLightning(key, isDatabaseOutage);
-                        }
-                        openAgentChamber(key);
-                        return;
+                    if (obj.userData && (obj.userData.isComet || obj.userData.isRedNode || obj.userData.isEvidenceNode || obj.userData.isPyramid)) {
+                        pendingClickObject = obj;
+                        break;
                     }
                 }
             }
 
             // Generous spatial boundary check for Company Cube (Rotation 1: Independent cube spin)
+            // Radius 6.2 covers the entire Company Cube including corners and outer tesseract!
             let isCubeHit = false;
             const distToCubeCenter = raycaster.ray.distanceToPoint(new THREE.Vector3(0, 0, 0));
-            if (distToCubeCenter <= 5.2) {
+            if (distToCubeCenter <= 6.2) {
                 isCubeHit = true;
             } else if (intersects.length > 0) {
                 for (let hit of intersects) {
@@ -5412,9 +5409,27 @@ REV: rel-wad@r2
         }
 
         function onMouseUp() {
+            if (!hasMovedDuringDrag && pendingClickObject) {
+                const obj = pendingClickObject;
+                if (obj.userData && obj.userData.isComet) {
+                    interceptComet(obj.userData.parentGroup || obj);
+                } else if (obj.userData && (obj.userData.isRedNode || obj.userData.isEvidenceNode)) {
+                    selectRedNode(obj);
+                } else if (obj.userData && obj.userData.isPyramid) {
+                    const key = obj.userData.agentKey;
+                    if (key && pyramidGroups[key]) {
+                        pyramidGroups[key].scaleImpulse = 1.35;
+                        spawnSynapticLightning(key, isDatabaseOutage);
+                    }
+                    openAgentChamber(key);
+                }
+            }
+
             isDragging = false;
             isMouseDown = false;
             dragMode = null;
+            pendingClickObject = null;
+            hasMovedDuringDrag = false;
             document.body.style.cursor = 'default';
         }
 
