@@ -18,6 +18,8 @@
   - `v039.13` (Item 4: Solar Architecture Documentation & Tags)
   - `v039.14` (Item 5: Orbiting Protector Pyramids, Electron Shells, Flight Heading & Synaptic Arc)
   - `v039.15` (Item 5: Pyramid Architecture Documentation & Tags)
+  - `v039.16` (Item 6: Internal Antigravity Liquid Starlight, Cursor Eddies, Pyramid Bow Waves & Outage Decay)
+  - `v039.17` (Item 6: Liquid Starlight Architecture Documentation & Tags)
 - **Primary Source**: `apps/web/public/art/cubes_of_knowledge_3d.html`
 - **Studio Mirrors**: `Gem's Art Studio/cubes_of_knowledge_3d.html`
 
@@ -353,7 +355,76 @@ Real-time coronal loops erupting from the solar chromosphere:
 
 ---
 
-## 9. Preservation of Foundation Features
+## 9. Item 6: Internal Antigravity Liquid Starlight (v039.16 / v039.17)
+
+### 9.1 Procedural Faceted Gem Starlight Texture & Multi-Chromatic Palette
+1. **Procedural Gemstone Diamond Core (`createGemStarTexture()`)**:
+   - High-resolution 128x128 2D canvas texture generator synthesizing optical refraction properties:
+     - **Iridescent Dispersion Outer Halo**: Multi-stop radial gradient cycling from white core through sky blue (`rgba(128, 222, 255, 0.88)`), amethyst violet (`rgba(179, 136, 255, 0.42)`), to electric cyan.
+     - **Octahedral Diamond Facet Polygon**: Geometric 8-vertex cut-gem polygon with dual internal facet cross-lines.
+     - **Cardinal Diffraction Needle Spikes**: 4-point cardinal hairline spikes (`128x2.4px`) simulating high-index optical refraction.
+     - **Diagonal Refraction Glints**: Secondary $45^\circ$ diagonal cross glints (`84x1.8px`) producing authentic crystal sparkle.
+2. **750 Volumetric Particles & Jewel Starlight Palette**:
+   - 750 particles distributed inside Company Cube volume ($[-3.15, 3.15]$), strictly bounded outside the Sun core ($r > 1.45$).
+   - 6-color jewel palette:
+     - Aquamarine Cyan (`#00e5ff`)
+     - Diamond White Brilliance (`#ffffff`)
+     - Amethyst Violet (`#b388ff`)
+     - Peridot / Emerald Spark (`#76ff03`)
+     - Topaz Amber Flame (`#ffd54f`)
+     - Sapphire Sky (`#80d8ff`)
+   - High-frequency individual phase and speed sinusoidal twinkling glints with non-linear sparkle bursts ($\text{sparkle} = 1.45$ on peak).
+
+### 9.2 Antigravity Micro-Turbulence & Curl Noise Circulation
+1. **3D Laminar Curl Noise Field**:
+   - Sinusoidal 3D vector circulation field driving gentle zero-g laminar currents throughout the cube interior:
+     $$f_x = \sin(1.3 y + 0.7 t) \cos(1.3 z + 0.5 t) \cdot 0.005 \cdot M_{\text{flow}}$$
+     $$f_y = (\sin(1.3 z + 0.6 t) \cos(1.3 x + 0.7 t) \cdot 0.005 + \sin(0.8 t + 2.0 x) \cdot 0.0025) \cdot M_{\text{flow}}$$
+     $$f_z = \sin(1.3 x + 0.5 t) \cos(1.3 y + 0.6 t) \cdot 0.005 \cdot M_{\text{flow}}$$
+2. **Viscous Momentum Damping**:
+   - Viscous resistance decay factor of $0.965$ per frame prevents runaway acceleration, preserving fluid stability.
+3. **Elastic Cube Wall Boundary**:
+   - Soft elastic reflection when particles approach cube boundaries ($|x|, |y|, |z| > 3.15$), dampening bounce velocity by $0.80$.
+
+### 9.3 Solar Core & Electrical Orbit Ring Exclusion Envelopes
+1. **Solar Core Exclusion ($r=1.38$)**:
+   - Particles repelled non-linearly outward from the solar center, with a laminar angular vortex velocity component swirling around the $Y$-axis ($\Delta v_x = -n_z \cdot 0.007, \Delta v_z = n_x \cdot 0.007$).
+2. **Electrical Orbit Ring Tube Collision Exclusion ($r_{\text{tube}}=0.26$)**:
+   - Closed-form distance evaluation against the 3 tilted orbit planes via inverse quaternion transformation:
+     $$\vec{V}_{\text{local}} = \mathbf{q}^{-1} \vec{P}$$
+     $$d_{\text{circle}} = \sqrt{(\|\vec{V}_{xz}\| - R)^2 + V_y^2}$$
+   - Particles approaching within $0.26$ of an orbit ring are repelled smoothly outward, keeping electrical orbit tracks crystal-clear.
+
+### 9.4 Fluid Dynamic Pyramid Deflection & Tangential Bow Wave
+1. **Ship Wake Bow Wave Dynamics**:
+   - As Ava, Roy, and Guz patrol their orbits, particles within $r_{\text{deflect}} = 0.82$ are pushed outward along the radial normal.
+   - Crucially, particles also receive a forward impulse along each pyramid's tangent flight heading $\vec{T}$:
+     $$\Delta \vec{V} = \vec{T} \cdot \text{pen} \cdot 0.035$$
+   - This creates an authentic hydrodynamic bow wave wake trailing each aerospace pyramid!
+
+### 9.5 Interactive Cursor Micro-Eddy Wake & Pentatonic Stardust Chimes
+1. **Cursor Raycast Projection into Cube Local Space**:
+   - 3D cursor position $\vec{P}_{\text{mouse}}$ and velocity vector $\vec{V}_{\text{mouse}}$ are projected through `cubeGroup.worldToLocal()`.
+   - When the user moves the cursor through the cube interior ($|x|, |y|, |z| < 3.8$), nearby particles ($d < 1.35$) are swept along the cursor's velocity vector with an added micro-eddy curl swirl.
+2. **Throttled Pentatonic Web Audio Chimes**:
+   - High-velocity cursor swipes stir the starlight and trigger `CosmicAudio.playStardustChime()`:
+     - 7-tone pentatonic scale ($587.33\,\text{Hz} - 1318.51\,\text{Hz}$).
+     - Stereo-panned according to screen horizontal position.
+     - 115ms throttle ensures delicate, glassy chime cascades with zero audio buffer distortion.
+
+### 9.6 Simulated Outage Degradation & Reconnection
+- **Active Outage**:
+  - Liquid starlight particles drop opacity from $0.95$ to $0.40$.
+  - Circulation velocity slows to $45\%$ ($M_{\text{flow}} = 0.45$).
+  - Particle colors shift smoothly from brilliant multi-chromatic jewel tones into dormant, dying crimson/amethyst embers ($R \times 0.22 + 0.45, G \times 0.05, B \times 0.15$).
+  - Glitter sparkle peak is suppressed to sluggish ember pulses ($0.22 - 0.40$).
+- **Restored Reconnection**:
+  - Instantly snaps back to $0.95$ opacity and $100\%$ circulation velocity.
+  - Full radiant diamond, aquamarine, emerald, and amethyst sparkles flare back into life!
+
+---
+
+## 10. Preservation of Foundation Features
 
 All interactive systems remain fully functional:
 1. **Synaptic Query Terminal**: NLP cypher queries, quick chips, and live logs.
@@ -363,9 +434,10 @@ All interactive systems remain fully functional:
 5. **Red Graph Counter-Rotation**: Organic 28-node constellation counter-rotating at 50% speed.
 6. **IdeaVerse Comets & Near-Miss Flybys**: Deep space comets, hypersonic Doppler flybys, 10-document narrative ledger, and zero-write outage rejection.
 7. **The Fiery Sun Core**: Turbulent plasma mantle wireframe, 6 magnetic prominence loops, CME flare pulses, and 3-axis Cypher mandala.
+8. **Three Orbiting Protector Pyramids**: Traveling electron shells, aerospace velocity heading, holographic badges, and synaptic lightning trigger.
 
 ---
 
-## 10. Next Step on the Roadmap
+## 11. Next Step on the Roadmap
 
-- **Item 6: Internal Antigravity Liquid Starlight** (`v039.16` / `v039.17`): Faceted gem starlight particles, zero-g micro-turbulence, fluid dynamic pyramid deflection, and core exclusion envelope.
+- **Item 7: The Eldritch Cypher Shader Mandala** (`v039.18` / `v039.19`): Triple orthogonal 1024x1024 procedural canvas shader rings, dynamic glyph scrolling, harmonic resonance rings, and chromatic flare pulses.
