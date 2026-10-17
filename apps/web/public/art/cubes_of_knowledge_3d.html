@@ -252,6 +252,12 @@
             <span class="px-2 py-0.5 rounded bg-cyan-950/90 text-cyan-200 border border-cyan-500 font-mono font-bold text-[10px] shadow-[0_0_12px_#00e5ff]">200% LOCKED</span>
         </div>
 
+        <!-- IdeaVerse Comets Toggle (Item 3) -->
+        <button id="comets-toggle-btn" class="interactive hud-glass px-3 py-2 rounded-xl text-xs font-mono transition-all flex items-center space-x-1.5 shadow-lg bg-cyan-950/80 text-cyan-300 border-cyan-500/60 font-bold" title="Toggle IdeaVerse Comets">
+            <span id="comets-hud-dot" class="w-2 h-2 rounded-full bg-cyan-400 animate-pulse"></span>
+            <span id="comets-hud-label">COMETS: ON</span>
+        </button>
+
         <!-- Audio Synthesizer Toggle -->
         <button id="audio-toggle-btn" class="interactive hud-glass px-3 py-2 rounded-xl text-xs font-mono transition-all flex items-center space-x-1.5 shadow-lg bg-emerald-950/80 text-emerald-300 border-emerald-500/60 font-bold">
             <span id="audio-icon">🔊</span>
@@ -643,6 +649,15 @@ REV: rel-wad@r2
                     <span class="text-slate-400">GIT BRANCH:</span>
                     <span class="px-2 py-0.5 rounded text-cyan-300 bg-cyan-950/80 border border-cyan-500/30 font-bold">gem/ideaverse-followup-v024</span>
                 </div>
+            </div>
+            <!-- Ingestion and Dismiss Actions -->
+            <div class="flex gap-2.5 pt-3 font-mono border-t border-cyan-500/20">
+                <button id="btn-import-idea-modal" onclick="importCurrentIdeaFileToCube()" class="interactive flex-1 py-2.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-bold text-xs shadow-lg transition flex items-center justify-center gap-1.5 shadow-[0_0_20px_rgba(0,229,255,0.35)]">
+                    <span>✨ Ingest into Company Cube</span>
+                </button>
+                <button id="btn-dismiss-idea-modal" onclick="closeModals()" class="interactive px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold text-xs transition">
+                    Dismiss
+                </button>
             </div>
         </div>
     </div>
@@ -2144,6 +2159,15 @@ REV: rel-wad@r2
         function updateIdeaVerseComet(dt) {
             const badge = document.getElementById('comet-badge');
 
+            if (!showComets || reducedMotion) {
+                if (badge && !badge.classList.contains('hidden')) {
+                    badge.classList.add('hidden');
+                }
+                if (cometHeadSprite) cometHeadSprite.visible = false;
+                if (cometRibbonMesh) cometRibbonMesh.visible = false;
+                return;
+            }
+
             if (!IdeaVerseCometState.active) {
                 IdeaVerseCometState.wait -= dt;
                 if (IdeaVerseCometState.wait <= 0) {
@@ -2466,6 +2490,90 @@ REV: rel-wad@r2
             closeCometModal();
         }
 
+        function importCurrentIdeaFileToCube() {
+            let startPos = (IdeaVerseCometState && IdeaVerseCometState.headPos) ? IdeaVerseCometState.headPos.clone() : new THREE.Vector3(0, 2.5, 6);
+            if (!IdeaVerseCometState || !IdeaVerseCometState.active) {
+                startPos = new THREE.Vector3(0, 2.5, 6);
+            }
+
+            const pulseGeo = new THREE.SphereGeometry(0.38, 16, 16);
+            const pulseMat = new THREE.MeshBasicMaterial({ color: 0x00e5ff, blending: THREE.AdditiveBlending });
+            const pulse = new THREE.Mesh(pulseGeo, pulseMat);
+            pulse.position.copy(startPos);
+            scene.add(pulse);
+
+            let t = 0;
+            const anim = setInterval(() => {
+                t += 0.05;
+                pulse.position.lerpVectors(startPos, new THREE.Vector3(0, 0, 0), t);
+                pulse.scale.setScalar(1.0 + Math.sin(t * Math.PI) * 1.8);
+                if (t >= 1) {
+                    clearInterval(anim);
+                    scene.remove(pulse);
+                    if (CosmicAudio && CosmicAudio.playShockwaveBoom) CosmicAudio.playShockwaveBoom(0.85);
+                    // Sun energy pulse reaction!
+                    sunImpulseScale = 1.45;
+                }
+            }, 28);
+
+            // Hide the near-field ribbon comet and badge & reset its cycle
+            if (IdeaVerseCometState) {
+                IdeaVerseCometState.active = false;
+                IdeaVerseCometState.wait = 4.5 + Math.random() * 4.0;
+            }
+            const badge = document.getElementById('comet-badge');
+            if (badge) badge.classList.add('hidden');
+            if (cometHeadSprite) cometHeadSprite.visible = false;
+            if (cometRibbonMesh) cometRibbonMesh.visible = false;
+
+            closeModals();
+        }
+
+        function toggleCometsHud() {
+            showComets = !showComets;
+            const btn = document.getElementById('comets-toggle-btn');
+            const dot = document.getElementById('comets-hud-dot');
+            const label = document.getElementById('comets-hud-label');
+
+            if (showComets) {
+                if (btn) btn.className = 'interactive hud-glass px-3 py-2 rounded-xl text-xs font-mono transition-all flex items-center space-x-1.5 shadow-lg bg-cyan-950/80 text-cyan-300 border-cyan-500/60 font-bold';
+                if (dot) dot.className = 'w-2 h-2 rounded-full bg-cyan-400 animate-pulse';
+                if (label) label.textContent = 'COMETS: ON';
+                if (comets.length === 0) spawnComet();
+            } else {
+                if (btn) btn.className = 'interactive hud-glass px-3 py-2 rounded-xl text-xs font-mono transition-all flex items-center space-x-1.5 shadow-lg bg-slate-900/80 text-slate-400 border-slate-700/60 font-normal';
+                if (dot) dot.className = 'w-2 h-2 rounded-full bg-slate-500';
+                if (label) label.textContent = 'COMETS: OFF';
+
+                // Remove all active deep-space comets
+                for (let i = 0; i < comets.length; i++) {
+                    scene.remove(comets[i]);
+                }
+                comets = [];
+
+                // Remove flyby comet if active
+                if (activeFlybyComet) {
+                    if (CosmicAudio && CosmicAudio.stopRocketRoar) CosmicAudio.stopRocketRoar();
+                    const flashEl = document.getElementById('flyby-screen-flash');
+                    if (flashEl) flashEl.style.opacity = '0';
+                    scene.remove(activeFlybyComet);
+                    activeFlybyComet = null;
+                }
+
+                // Hide ribbon comet & badge
+                if (IdeaVerseCometState) {
+                    IdeaVerseCometState.active = false;
+                }
+                const badge = document.getElementById('comet-badge');
+                if (badge) badge.classList.add('hidden');
+                if (cometHeadSprite) cometHeadSprite.visible = false;
+                if (cometRibbonMesh) cometRibbonMesh.visible = false;
+
+                closeCometModal();
+                closeModals();
+            }
+        }
+
         // --- 6c. Near-Miss Hyper Flyby Comet & Half-Life Ice Particles (Item 3b / v039.06) ---
         function spawnCosmicIceParticles(originPos, count = 65) {
             const now = performance.now();
@@ -2663,6 +2771,9 @@ REV: rel-wad@r2
         window.interceptComet = interceptComet;
         window.closeCometModal = closeCometModal;
         window.importCometToCube = importCometToCube;
+        window.importCurrentIdeaFileToCube = importCurrentIdeaFileToCube;
+        window.toggleCometsHud = toggleCometsHud;
+        window.closeIdeaModal = closeModals;
         window.spawnCosmicIceParticles = spawnCosmicIceParticles;
         window.triggerCameraFlybyComet = triggerCameraFlybyComet;
 
@@ -3845,6 +3956,18 @@ REV: rel-wad@r2
             const importIdeaBtn = document.getElementById('btn-import-idea');
             if (importIdeaBtn) {
                 importIdeaBtn.addEventListener('click', importCometToCube);
+            }
+            const cometsToggleBtn = document.getElementById('comets-toggle-btn');
+            if (cometsToggleBtn) {
+                cometsToggleBtn.addEventListener('click', toggleCometsHud);
+            }
+            const importIdeaModalBtn = document.getElementById('btn-import-idea-modal');
+            if (importIdeaModalBtn) {
+                importIdeaModalBtn.addEventListener('click', importCurrentIdeaFileToCube);
+            }
+            const dismissIdeaModalBtn = document.getElementById('btn-dismiss-idea-modal');
+            if (dismissIdeaModalBtn) {
+                dismissIdeaModalBtn.addEventListener('click', closeModals);
             }
         }
 

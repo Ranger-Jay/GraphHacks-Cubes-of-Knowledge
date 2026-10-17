@@ -10,6 +10,7 @@
   - `v039.05` (Item 3: Comet Architecture Documentation & Tags)
   - `v039.06` (Item 3b: Near-Miss Hyper Flyby Comet, Doppler Rocket Roar & Half-Life Ice Particles)
   - `v039.07` (Item 3b: Hyper Flyby Architecture Documentation & Tags)
+  - `v039.08` (Item 3 Polish: Dual-Modal Cube Ingestion & Top-Right HUD Controls)
 - **Primary Source**: `apps/web/public/art/cubes_of_knowledge_3d.html`
 - **Studio Mirrors**: `Gem's Art Studio/cubes_of_knowledge_3d.html`
 
@@ -150,7 +151,35 @@ At the instant of closest passage ($Z \ge Z_{\text{cam}} - 1.5$), the comet leav
 
 ---
 
-## 6. Preservation of Foundation Features
+## 6. Item 3 Polish: Dual-Modal Cube Ingestion & Top-Right HUD Controls (v039.08)
+
+### 6.1 Top-Right HUD Header Toggle
+- Added dedicated `COMETS: ON / OFF` toggle button to the top-right controls bar (`top-4 right-6`), positioned alongside `LATTICE GLOW`, `AUDIO`, `ENTER CUBE`, `OUTAGE`, and `MOTION`.
+- Visual styling: Electric cyan glass with pulsing cyan beacon (`COMETS: ON`) toggling to muted slate with static dim dot (`COMETS: OFF`).
+- System behavior: When toggled OFF, immediately clears all active deep-space comets, cancels active flyby comets and rocket roar audio, hides the near-field ribbon comet and floating pill badge, and dismisses active comet modals. When toggled ON, immediately spawns a celestial comet to provide instant feedback.
+
+### 6.2 Dual-Modal Ingestion Architecture
+To provide a seamless, intuitive experience whether the user catches a comet by clicking its 3D mesh or clicking its near-field floating pill badge:
+1. **Near-Field Badge Modal (`#idea-modal`)**:
+   - Added **"✨ Ingest into Company Cube"** primary button and **"Dismiss"** button.
+   - Connected to `importCurrentIdeaFileToCube()`.
+2. **Deep-Space 3D Intercept Modal (`#comet-info-modal`)**:
+   - Primary **"✨ Ingest into Company Cube"** button connected to `importCometToCube()`.
+3. **Ingestion Energy Mechanics**:
+   - Launches a glowing cyan energy projectile lerping from the comet's head position into the Company Cube center `(0, 0, 0)`.
+   - On impact with the core, triggers the procedural sub-bass shockwave boom (`CosmicAudio.playShockwaveBoom`), expands the fiery Sun core (`sunImpulseScale = 1.45`), retires the comet, and closes the modal.
+
+### 6.3 Idea-Verse Canonical Repository Documents
+The documents carried by passing comets correspond to the 5 foundational architecture specifications:
+- `GRAPH_SKETCH.md`: Graph Schema & FalkorDB Relational Specification (:Cut, :Track, :License, :Release).
+- `CUBE_VISUAL_CONCEPT.md`: Tesseract Hologram & Sacred Geometry Blueprint.
+- `DECISIONS_WARNINGS_AFTER_DARK.md`: Fail-Closed Proof Auditing & Outage Protocol.
+- `ROLES.md`: Agent Matrix & Executive Clearance Hierarchy.
+- `DEMO_PRODUCTION_PLAN.md`: Multi-Agent Broadcast & Live Interactive Demo Roadmap.
+
+---
+
+## 7. Preservation of Foundation Features
 
 All interactive systems remain fully functional:
 1. **Synaptic Query Terminal**: NLP cypher queries, quick chips, and live logs.
@@ -160,6 +189,6 @@ All interactive systems remain fully functional:
 
 ---
 
-## 7. Next Step on the Roadmap
+## 8. Next Step on the Roadmap
 
-- **Item 4: The Fiery Sun Core** (`v039.08` / `v039.09`): Dynamic plasma mantle wireframe, pulsating solar flares, prominences, and rotating concentric cypher mandala dials.
+- **Item 4: The Fiery Sun Core** (`v039.09` / `v039.10`): Dynamic plasma mantle wireframe, pulsating solar flares, prominences, and rotating concentric cypher mandala dials.
