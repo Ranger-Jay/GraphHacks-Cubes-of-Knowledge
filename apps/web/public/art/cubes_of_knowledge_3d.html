@@ -353,13 +353,13 @@
     <!-- ========================================================================= -->
     <!-- COLLAPSIBLE TELEMETRY & ENVIRONMENTAL MATRIX DRAWER (ROW 10)            -->
     <!-- ========================================================================= -->
-    <aside id="side-matrix-drawer" class="fixed top-20 right-6 z-40 w-88 max-h-[calc(100vh-140px)] overflow-y-auto bg-slate-950/95 backdrop-blur-2xl border border-cyan-500/40 rounded-3xl p-5 shadow-[0_0_60px_rgba(0,229,255,0.25)] transition-all duration-300 transform translate-x-[420px] flex flex-col gap-4 interactive">
+    <aside id="side-matrix-drawer" class="fixed top-20 right-6 z-40 w-80 max-w-[340px] max-h-[calc(100vh-140px)] overflow-y-auto bg-slate-950/95 backdrop-blur-2xl border border-cyan-500/40 rounded-3xl p-4 shadow-[0_0_50px_rgba(0,229,255,0.25)] transition-transform duration-300 transform translate-x-[calc(100%+40px)] flex flex-col gap-3.5 interactive">
         <div class="flex justify-between items-center border-b border-slate-800 pb-3">
             <div class="flex items-center gap-2">
                 <span class="w-2.5 h-2.5 rounded-full bg-cyan-400 animate-pulse shadow-[0_0_8px_#00e5ff]"></span>
                 <h3 class="text-xs font-mono font-bold uppercase tracking-wider text-cyan-300">Telemetry &amp; Environment</h3>
             </div>
-            <button id="btn-close-matrix" class="text-slate-400 hover:text-white font-mono text-sm px-2 py-0.5 rounded-lg border border-slate-800 hover:border-cyan-500 transition">✕</button>
+            <button id="btn-close-matrix" onclick="closeMatrixDrawer()" class="text-slate-400 hover:text-white font-mono text-sm px-2 py-0.5 rounded-lg border border-slate-800 hover:border-cyan-500 transition cursor-pointer">✕</button>
         </div>
 
         <!-- Section 1: Zero-G Fluid Dynamics -->
@@ -4428,10 +4428,11 @@ REV: rel-wad@r2
             chamber.classList.remove('hidden');
 
             // Stow telemetry matrix drawer so it never overlaps or covers chamber
-            const matrixDrawer = document.getElementById('side-matrix-drawer');
-            if (matrixDrawer) {
-                matrixDrawer.classList.add('translate-x-full');
-                matrixDrawer.classList.add('translate-x-[420px]');
+            if (typeof closeMatrixDrawer === 'function') {
+                closeMatrixDrawer();
+            } else {
+                const matrixDrawer = document.getElementById('side-matrix-drawer');
+                if (matrixDrawer) matrixDrawer.classList.add('translate-x-[calc(100%+40px)]');
             }
 
             // Trigger Cybernetic Gem-Unfolding Animation on Chamber Dialog
@@ -5541,8 +5542,7 @@ REV: rel-wad@r2
                 closeModals();
                 closeNodeModal();
                 closeCometModal();
-                const matrixDrawer = document.getElementById('side-matrix-drawer');
-                if (matrixDrawer) matrixDrawer.classList.add('translate-x-[420px]');
+                closeMatrixDrawer();
             } else if (e.key === '1') {
                 openAgentChamber('roy');
             } else if (e.key === '2') {
@@ -5569,6 +5569,27 @@ REV: rel-wad@r2
             }
         }
 
+        function toggleMatrixDrawer() {
+            const matrixDrawer = document.getElementById('side-matrix-drawer');
+            if (!matrixDrawer) return;
+            matrixDrawer.classList.toggle('translate-x-[calc(100%+40px)]');
+        }
+
+        function closeMatrixDrawer() {
+            const matrixDrawer = document.getElementById('side-matrix-drawer');
+            if (!matrixDrawer) return;
+            matrixDrawer.classList.add('translate-x-[calc(100%+40px)]');
+        }
+
+        function openMatrixDrawer() {
+            const matrixDrawer = document.getElementById('side-matrix-drawer');
+            if (!matrixDrawer) return;
+            matrixDrawer.classList.remove('translate-x-[calc(100%+40px)]');
+        }
+        window.toggleMatrixDrawer = toggleMatrixDrawer;
+        window.closeMatrixDrawer = closeMatrixDrawer;
+        window.openMatrixDrawer = openMatrixDrawer;
+
         function openEvidenceModal(data) {
             const modal = document.getElementById('evidence-modal');
             document.getElementById('ev-id').textContent = data.id;
@@ -5591,11 +5612,7 @@ REV: rel-wad@r2
         function openHumanModal() {
             const modal = document.getElementById('human-modal');
             if (!modal) return;
-            const matrixDrawer = document.getElementById('side-matrix-drawer');
-            if (matrixDrawer) {
-                matrixDrawer.classList.add('translate-x-full');
-                matrixDrawer.classList.add('translate-x-[420px]');
-            }
+            closeMatrixDrawer();
             modal.classList.remove('opacity-0', 'pointer-events-none');
         }
 
@@ -6092,18 +6109,13 @@ REV: rel-wad@r2
             // =========================================================================
             // ROW 10: TELEMETRY MATRIX DRAWER & UNIFIED BOTTOM DOCK LISTENERS
             // =========================================================================
-            const matrixDrawer = document.getElementById('side-matrix-drawer');
             const toggleMatrixBtn = document.getElementById('btn-toggle-matrix');
             const closeMatrixBtn = document.getElementById('btn-close-matrix');
-            if (toggleMatrixBtn && matrixDrawer) {
-                toggleMatrixBtn.addEventListener('click', () => {
-                    matrixDrawer.classList.toggle('translate-x-[420px]');
-                });
+            if (toggleMatrixBtn) {
+                toggleMatrixBtn.addEventListener('click', toggleMatrixDrawer);
             }
-            if (closeMatrixBtn && matrixDrawer) {
-                closeMatrixBtn.addEventListener('click', () => {
-                    matrixDrawer.classList.add('translate-x-[420px]');
-                });
+            if (closeMatrixBtn) {
+                closeMatrixBtn.addEventListener('click', closeMatrixDrawer);
             }
 
             // Zero-G Fluid Sliders & Caustics
