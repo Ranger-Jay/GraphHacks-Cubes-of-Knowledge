@@ -989,6 +989,13 @@ All 10 milestone rows across the 3D Space Visualizer roadmap are now **100% COMP
 - **Drawer Stowing Guard**: Opening the agent chamber automatically stows the Telemetry Matrix drawer to prevent top-right button occlusion.
 - **Three-Mirror Synchronization**: All 3 visualizer mirrors locked with SHA-256 `FEAEC99E28267F239B8F0C85F3C3F891DC29F7A2BB5B1DA9A5EAF04846DB65FD`.
 
+### 18.9 Telemetry Matrix Compact Width & Zero-Leak Initial Collapse (`v040.02` / `v040.03`)
+- **50% Width Reduction (`w-80` / `max-w-[340px]`)**: Compacted `#side-matrix-drawer` from an unconstrained 600px+ box down to a sleek 320px width (`w-80`). On deployment, its left edge remains safely contained to the right of the `TELEMETRY MATRIX` button's left boundary, preserving an unblocked view of the Company Cube and Core Sanctuary.
+- **100% Collapsed On Load (`translate-x-[calc(100%+40px)]`)**: Replaced fixed 420px translation with dynamic `calc(100% + 40px)` translation, guaranteeing that the drawer is completely invisible and zero-leak off-screen on initial page load.
+- **Modular Toggle Architecture**: Unified drawer state handling under `openMatrixDrawer()`, `closeMatrixDrawer()`, and `toggleMatrixDrawer()`, fully integrated with keyboard <kbd>ESC</kbd> dismiss, close button `✕`, and modal exclusivity guards.
+- **Three-Mirror Synchronization**: All 3 visualizer mirrors locked with SHA-256 `2B84FD10F24638D6F17605B53F8ABD5A995D540222335C6DFC6F693CB7EABC48`.
+
+
 
 
 
