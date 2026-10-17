@@ -16,6 +16,8 @@
   - `v039.11` (Item 3 Polish: Outage Zero-Write Ingestion Defense & Alert Dialog)
   - `v039.12` (Item 4: Fiery Sun Core, Dynamic Plasma Mantle, Prominences & 3-Axis Cypher Mandala)
   - `v039.13` (Item 4: Solar Architecture Documentation & Tags)
+  - `v039.14` (Item 5: Orbiting Protector Pyramids, Electron Shells, Flight Heading & Synaptic Arc)
+  - `v039.15` (Item 5: Pyramid Architecture Documentation & Tags)
 - **Primary Source**: `apps/web/public/art/cubes_of_knowledge_3d.html`
 - **Studio Mirrors**: `Gem's Art Studio/cubes_of_knowledge_3d.html`
 
@@ -292,7 +294,66 @@ Real-time coronal loops erupting from the solar chromosphere:
 
 ---
 
-## 8. Preservation of Foundation Features
+## 8. Item 5: Three Orbiting Protector Pyramids (v039.14 / v039.15)
+
+### 8.1 Clean Internal Cube Orbits & Traveling Electron Shells
+1. **Geometric Containment Inside Cube Bounds**:
+   - The three agent pyramids orbit within radii safely bounded inside the Company Cube (cube size $8.5$, half-size $4.25$):
+     - **Ava (Chief Architect)**: Radius $2.15$, tilt $(0.35, 0.20, 0.10)$, speed $0.90$, accent Cyan (`#00e5ff`).
+     - **Roy (Security Auditor)**: Radius $2.65$, tilt $(-0.40, 0.60, -0.20)$, speed $0.72$, accent Violet (`#b388ff`).
+     - **Guz (Creative Director)**: Radius $3.10$, tilt $(0.60, -0.30, 0.50)$, speed $0.55$, accent Emerald (`#69f0ae`).
+2. **Dual-Layer Electrical Orbit Tracks**:
+   - 96-segment smooth tilted orbit paths rendered with additive electrical cyan lines (`0x40c4ff`, opacity $0.65$).
+3. **Traveling Electron Energy Packets (Data Shells)**:
+   - 3 luminous data packet beads (`SphereGeometry(0.068, 12, 12)`, ice-white `#e0f7ff`) per orbit.
+   - Advance along the tilted orbital curve at fixed phase offsets ($0, 120^\circ, 240^\circ$), twinkling with high-frequency starlight energy ($\text{scale} = 0.85 + 0.35 \sin(8t + 2i)$).
+
+### 8.2 Aerospace Patrol Heading & Tangent Velocity Alignment
+1. **Forward Flight Orientation**:
+   - Rather than tumbling randomly, each pyramid dynamically aligns its heading vector with its forward orbital tangent velocity:
+     $$\vec{T}(\theta) = \frac{P(\theta + 0.04) - P(\theta)}{\|P(\theta + 0.04) - P(\theta)\|}$$
+   - The pyramid's apex and nose bank slightly inward toward the Sun along the centrifugal normal vector, producing an authentic cybernetic patrol flight dynamic.
+2. **Internal Glyph Cores & Apex Sensor Crystals**:
+   - Inner octahedron glyph cores spin on dual axes ($Y = -0.045t, Z = 0.03t$) with sinusoidal scale pulsing.
+   - Apex sensor crystals strobe with high-luminance sensor strobing ($\text{opacity} = 0.82 + 0.18 \sin(6.5t)$).
+
+### 8.3 Floating Holographic Agent Badges & Responsive Hit Spheres
+1. **2D Canvas Billboard Badges**:
+   - Attached above the apex of each pyramid ($y = +0.72$):
+     - `AVA // ARCHITECT` (Cyan `#00e5ff`)
+     - `ROY // AUDITOR` (Violet `#b388ff`)
+     - `GUZ // CREATIVE` (Emerald `#69f0ae`)
+   - High-contrast rounded pill styling with glowing accent borders.
+2. **Invisible Raycast Hit Spheres**:
+   - Each pyramid rig includes an invisible bounding sphere (`radius 0.68`) ensuring pointer hover and click interactions are effortless.
+3. **Pointer Feedback & Hover Expansion**:
+   - Moving the cursor over an orbiting pyramid activates pointer cursor feedback and smoothly expands the pyramid's scale by $+18\%$ ($\text{scale} \times 1.18$) while intensifying wireframe glow.
+
+### 8.4 Synaptic Lightning Trigger & Chamber Inspection
+1. **Direct 3D Click Interaction**:
+   - Clicking an orbiting pyramid immediately fires `spawnSynapticLightning(agentKey, isDatabaseOutage)`:
+     - An authentic jagged 3D electric lightning bolt arcs from the pyramid's current coordinates directly into the central Sun!
+     - During normal operation, the lightning spans $100\%$ distance in brilliant cyan (`0x00e5ff`).
+     - In simulated outage, the lightning sparks crimson (`0xff1744`) and severes abruptly at $52\%$ distance, illustrating a broken connection.
+2. **Chamber Activation & Viseme Synchronization**:
+   - Triggers pyramid spring expansion ($\text{scaleImpulse} = 1.35 \to 1.0$).
+   - Plays aperture audio and opens `#agent-chamber` with real-time 2D canvas face rig:
+     - Multi-stage viseme lip sync (`open`, `wide`, `round`, `fricative`, `rest`).
+     - Realistic lower-lip/jaw displacement on speech.
+     - Natural upper-eyelid blinking, pupil micro-gaze tracking, and dashboard proximity smile!
+
+### 8.5 Outage Degradation & Reconnection
+- **Outage Active**:
+  - Pyramid wireframes and faces shift to warning blood crimson (`0xaa2030`, opacity $0.18$).
+  - Glyph cores shift to corrupted crimson pulse (`0xff1744`).
+  - Electrical orbit paths dim to dark corrupted red (`0x551015`, opacity $0.20$).
+  - Electron beads dim to sputtering red embers (`0x880010`, opacity $0.25$).
+- **Restored State**:
+  - Instantly returns to full vibrant agent accent neons (`#00e5ff`, `#b388ff`, `#69f0ae`) and electrical blue tracks (`0x40c4ff`).
+
+---
+
+## 9. Preservation of Foundation Features
 
 All interactive systems remain fully functional:
 1. **Synaptic Query Terminal**: NLP cypher queries, quick chips, and live logs.
@@ -301,9 +362,10 @@ All interactive systems remain fully functional:
 4. **Deep-Space 3-Layer Parallax**: Opposing cursor parallax across near, mid, and far starfields.
 5. **Red Graph Counter-Rotation**: Organic 28-node constellation counter-rotating at 50% speed.
 6. **IdeaVerse Comets & Near-Miss Flybys**: Deep space comets, hypersonic Doppler flybys, 10-document narrative ledger, and zero-write outage rejection.
+7. **The Fiery Sun Core**: Turbulent plasma mantle wireframe, 6 magnetic prominence loops, CME flare pulses, and 3-axis Cypher mandala.
 
 ---
 
-## 9. Next Step on the Roadmap
+## 10. Next Step on the Roadmap
 
-- **Item 5: Three Orbiting Protector Pyramids** (`v039.14` / `v039.15`): Clean internal cube orbits, tilted electrical orbit paths, multi-stage viseme lip sync, and real-time facial articulation synchronization.
+- **Item 6: Internal Antigravity Liquid Starlight** (`v039.16` / `v039.17`): Faceted gem starlight particles, zero-g micro-turbulence, fluid dynamic pyramid deflection, and core exclusion envelope.
