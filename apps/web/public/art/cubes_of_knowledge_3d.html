@@ -5608,9 +5608,9 @@ REV: rel-wad@r2
                 }
 
                 if (dragMode === 'cube') {
-                    // ROTATION 1: Spin Company Cube on local axes with tactile sensitivity (f22d6d63 alignment)
-                    targetRotation.y += deltaX * 0.015;
-                    targetRotation.x += deltaY * 0.015;
+                    // ROTATION 1: Spin Company Cube on local axes (f22d6d63 reference sensitivity)
+                    targetRotation.y += deltaX * 0.007;
+                    targetRotation.x += deltaY * 0.007;
                 } else if (dragMode === 'orbit') {
                     // ROTATION 2: Orbit Camera 360° around Celestial Cosmos
                     cameraOrbit.theta -= deltaX * 0.005;
@@ -6966,10 +6966,10 @@ REV: rel-wad@r2
                 }
             }
 
-            // Smooth Cube Rotation (Rotation 1: Independent Company Cube spin)
+            // Smooth Cube Rotation (Rotation 1: Independent Company Cube spin - f22d6d63 reference smoothing)
             if (cubeGroup && !reducedMotion) {
-                cubeGroup.rotation.y += (targetRotation.y - cubeGroup.rotation.y) * 0.20;
-                cubeGroup.rotation.x += (targetRotation.x - cubeGroup.rotation.x) * 0.20;
+                cubeGroup.rotation.y += (targetRotation.y - cubeGroup.rotation.y) * 0.08;
+                cubeGroup.rotation.x += (targetRotation.x - cubeGroup.rotation.x) * 0.08;
             }
 
             // Red Dot Graph & Physical Marble Box Simulation inside Purple Containment Chamber
