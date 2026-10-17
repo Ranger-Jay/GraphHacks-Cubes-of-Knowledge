@@ -5051,6 +5051,13 @@ REV: rel-wad@r2
                     }
                 }
 
+                if (!hitCube) {
+                    const distToCenter = raycaster.ray.distanceToPoint(new THREE.Vector3(0, 0, 0));
+                    if (distToCenter <= 5.2) {
+                        hitCube = true;
+                    }
+                }
+
                 if (hitInteractive) {
                     document.body.style.cursor = 'pointer';
                 } else if (hitCube) {
@@ -5069,6 +5076,10 @@ REV: rel-wad@r2
 
         function onMouseDown(event) {
             if (event.target.closest('.interactive')) return;
+
+            // Immediately update normalized mouse coordinates from client event
+            mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+            mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
 
             dragButton = event.button;
             isDragging = true;
@@ -5118,9 +5129,17 @@ REV: rel-wad@r2
                         openAgentChamber(key);
                         return;
                     }
-                    // Hit detection on Company Cube:
-                    let cur = obj;
-                    let isCubeHit = false;
+                }
+            }
+
+            // Generous spatial boundary check for Company Cube (Rotation 1: Independent cube spin)
+            let isCubeHit = false;
+            const distToCubeCenter = raycaster.ray.distanceToPoint(new THREE.Vector3(0, 0, 0));
+            if (distToCubeCenter <= 5.2) {
+                isCubeHit = true;
+            } else if (intersects.length > 0) {
+                for (let hit of intersects) {
+                    let cur = hit.object;
                     while (cur) {
                         if (cur === cubeGroup || (cur.userData && (cur.userData.isCubePlane || cur.userData.isInnerBox || cur.userData.isPurpleBox))) {
                             isCubeHit = true;
@@ -5128,12 +5147,17 @@ REV: rel-wad@r2
                         }
                         cur = cur.parent;
                     }
-                    if (isCubeHit || cubePlanes.includes(obj)) {
-                        dragMode = 'cube';
-                        document.body.style.cursor = 'grabbing';
-                        return;
+                    if (isCubeHit || cubePlanes.includes(hit.object)) {
+                        isCubeHit = true;
+                        break;
                     }
                 }
+            }
+
+            if (isCubeHit) {
+                dragMode = 'cube';
+                document.body.style.cursor = 'grabbing';
+                return;
             }
 
             // Outside the cube in open space: Orbit the 360° Celestial Cosmos!
@@ -5170,18 +5194,23 @@ REV: rel-wad@r2
                 raycaster.setFromCamera(mouse, camera);
                 const intersects = raycaster.intersectObjects(scene.children, true);
                 let hitCube = false;
-                for (let hit of intersects) {
-                    let cur = hit.object;
-                    while (cur) {
-                        if (cur === cubeGroup || (cur.userData && (cur.userData.isCubePlane || cur.userData.isInnerBox || cur.userData.isPurpleBox))) {
+                const distToCenter = raycaster.ray.distanceToPoint(new THREE.Vector3(0, 0, 0));
+                if (distToCenter <= 5.2) {
+                    hitCube = true;
+                } else {
+                    for (let hit of intersects) {
+                        let cur = hit.object;
+                        while (cur) {
+                            if (cur === cubeGroup || (cur.userData && (cur.userData.isCubePlane || cur.userData.isInnerBox || cur.userData.isPurpleBox))) {
+                                hitCube = true;
+                                break;
+                            }
+                            cur = cur.parent;
+                        }
+                        if (hitCube || cubePlanes.includes(hit.object)) {
                             hitCube = true;
                             break;
                         }
-                        cur = cur.parent;
-                    }
-                    if (hitCube || cubePlanes.includes(hit.object)) {
-                        hitCube = true;
-                        break;
                     }
                 }
                 dragMode = hitCube ? 'cube' : 'orbit';
