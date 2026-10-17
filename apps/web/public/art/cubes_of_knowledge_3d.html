@@ -765,13 +765,18 @@ REV: rel-wad@r2
             "Verification complete: clearance established."
         ];
 
-        // Idea-verse recent files
+        // Idea-verse recent files (Expanded 10-Document Narrative Ledger)
         const RECENT_IDEA_FILES = [
             "GRAPH_SKETCH.md",
             "CUBE_VISUAL_CONCEPT.md",
             "DECISIONS_WARNINGS_AFTER_DARK.md",
             "ROLES.md",
-            "DEMO_PRODUCTION_PLAN.md"
+            "DEMO_PRODUCTION_PLAN.md",
+            "KANNY_STAFF_MEMO_MUSIC_CLEARANCE.md",
+            "SERENA_CREW_APPRECIATION_PIZZA_PARTY.md",
+            "AUDIT_INCIDENT_AGENT_GEM_TRACE.md",
+            "LESSONS_LEARNED_GRAPH_SYNC_RETRO.md",
+            "GUZ_MIDNIGHT_CANVAS_REFLECTIONS.md"
         ];
         let activeCometTargetFile = RECENT_IDEA_FILES[0];
 
@@ -2284,6 +2289,41 @@ REV: rel-wad@r2
                 author: "Full Studio Team",
                 rev: "demo-v024@live",
                 summary: "Coordinates live viseme speech synchronization, audio synthesizer drones, and real-time idea-verse ledger comet telemetry."
+            },
+            "KANNY_STAFF_MEMO_MUSIC_CLEARANCE.md": {
+                title: "Executive Directive: Music Cue Tracking & Zero-Error Protocol",
+                category: "EXECUTIVE DISPATCH",
+                author: "Kanny (Executive Producer)",
+                rev: "exec-kanny@memo-42",
+                summary: "Team: Outstanding hustle on the rough cuts, but on our next film, zero slip-ups on music cue sheets! Every single track, needle-drop, and background theme must have cryptographic clearance verified before we hit picture lock. Keep the focus sharp — let's deliver a flawless master."
+            },
+            "SERENA_CREW_APPRECIATION_PIZZA_PARTY.md": {
+                title: "Proposal: Film Crew Appreciation Pizza Feast",
+                category: "CREW MORALE",
+                author: "Serena (Production Liaison)",
+                rev: "party-plan@v1.2",
+                summary: "Drafting a formal request to Kanny to sponsor a full-scale artisan pizza party for the entire stage and VFX crew. Everyone poured their heart and soul into this timeline, working insane hours; they deserve hot brick-oven slices, cold drinks, cannolis, and a proper toast."
+            },
+            "AUDIT_INCIDENT_AGENT_GEM_TRACE.md": {
+                title: "Security Sweep: Unregistered Node Signature 'Gem'",
+                category: "GOVERNANCE & AUDIT",
+                author: "Roy (Gatekeeper) & Guz (Aesthetics)",
+                rev: "sec-audit@ghost-09",
+                summary: "Roy flagged an anomalous cryptographic signature signed 'Gem' weaving stardust shaders into the ledger. Guz conducted a full visual inspection across the sanctuary but found zero unauthorized ledger leaks — just breathtaking celestial harmonics. Roy logged: 'No breach found, but we will keep our eyes open.'"
+            },
+            "LESSONS_LEARNED_GRAPH_SYNC_RETRO.md": {
+                title: "Post-Mortem: FalkorDB In-Memory Latency & Edge Pruning",
+                category: "LESSONS LEARNED",
+                author: "Ava (System Architect)",
+                rev: "retro-lessons@v3",
+                summary: "Critical takeaway from our 1,000-node stress test: dynamic relationship caching prevents visual stutter during 200% lattice resonance. Lesson logged: never allow orphaned edge pointers during live multi-agent inference; fail-closed immutability is our greatest shield."
+            },
+            "GUZ_MIDNIGHT_CANVAS_REFLECTIONS.md": {
+                title: "Aesthetic Dispatch: Sacred Geometry & The Living Sanctuary",
+                category: "STUDIO JOURNAL",
+                author: "Guz (Aesthetic Director)",
+                rev: "guz-night@c4",
+                summary: "Late-night revelation at the drafting board: the Company Cube shouldn't just be cold data storage — it has to feel like a living, breathing sanctuary. The orange plasma core and cyan lattice aren't just colors; they are the radiant heartbeat of our shared story in deep space."
             }
         };
 
@@ -2394,13 +2434,7 @@ REV: rel-wad@r2
 
             const ideaIdNum = Math.floor(10 + Math.random() * 89);
             const targetFile = RECENT_IDEA_FILES[Math.floor(Math.random() * RECENT_IDEA_FILES.length)];
-            const titles = [
-                "FalkorDB Graph Pipeline & Synaptic Indexing",
-                "Zero-Knowledge State Proof Verification",
-                "Autonomous Agent Memory Ingestion Stream",
-                "Luminous Lattice Shard Synthesis v4",
-                "Cue Sheet Clearance & Multi-Track Licensing"
-            ];
+            const meta = IDEA_VERSE_METADATA[targetFile];
 
             cometGroup.userData = {
                 isComet: true,
@@ -2410,8 +2444,8 @@ REV: rel-wad@r2
                 maxLife: 320,
                 paused: false,
                 ideaId: `IDEA-0${ideaIdNum}`,
-                title: titles[Math.floor(Math.random() * titles.length)],
-                category: "Deep IdeaVerse Ingestion",
+                title: meta ? meta.title : "FalkorDB Graph Pipeline & Synaptic Indexing",
+                category: meta ? meta.category : "Deep IdeaVerse Ingestion",
                 origin: `(${Math.round(startX)}, ${Math.round(startY)}, ${Math.round(startZ)})`,
                 file: targetFile,
                 hash: "f6f9" + Math.random().toString(16).substring(2, 18)

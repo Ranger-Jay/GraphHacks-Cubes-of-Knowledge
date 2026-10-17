@@ -11,6 +11,7 @@
   - `v039.06` (Item 3b: Near-Miss Hyper Flyby Comet, Doppler Rocket Roar & Half-Life Ice Particles)
   - `v039.07` (Item 3b: Hyper Flyby Architecture Documentation & Tags)
   - `v039.08` (Item 3 Polish: Dual-Modal Cube Ingestion & Top-Right HUD Controls)
+  - `v039.09` (Item 3 Extension: 10-Document Narrative Ledger Expansion)
 - **Primary Source**: `apps/web/public/art/cubes_of_knowledge_3d.html`
 - **Studio Mirrors**: `Gem's Art Studio/cubes_of_knowledge_3d.html`
 
@@ -169,13 +170,20 @@ To provide a seamless, intuitive experience whether the user catches a comet by 
    - Launches a glowing cyan energy projectile lerping from the comet's head position into the Company Cube center `(0, 0, 0)`.
    - On impact with the core, triggers the procedural sub-bass shockwave boom (`CosmicAudio.playShockwaveBoom`), expands the fiery Sun core (`sunImpulseScale = 1.45`), retires the comet, and closes the modal.
 
-### 6.3 Idea-Verse Canonical Repository Documents
-The documents carried by passing comets correspond to the 5 foundational architecture specifications:
-- `GRAPH_SKETCH.md`: Graph Schema & FalkorDB Relational Specification (:Cut, :Track, :License, :Release).
-- `CUBE_VISUAL_CONCEPT.md`: Tesseract Hologram & Sacred Geometry Blueprint.
-- `DECISIONS_WARNINGS_AFTER_DARK.md`: Fail-Closed Proof Auditing & Outage Protocol.
-- `ROLES.md`: Agent Matrix & Executive Clearance Hierarchy.
-- `DEMO_PRODUCTION_PLAN.md`: Multi-Agent Broadcast & Live Interactive Demo Roadmap.
+### 6.3 Expanded 10-Document Narrative Ledger (v039.09)
+The IdeaVerse documents carried by passing comets have been doubled from 5 to 10 entries, embedding rich story clues, team dynamics, character humor, and technical post-mortems:
+1. **`GRAPH_SKETCH.md`** (*Ava & Gem*): Graph Schema & FalkorDB Relational Specification (:Cut, :Track, :License, :Release).
+2. **`CUBE_VISUAL_CONCEPT.md`** (*Guz & Gem*): Tesseract Hologram & Sacred Geometry Blueprint (outer wireframe, liquid jewel stardust, eldritch cypher discs).
+3. **`DECISIONS_WARNINGS_AFTER_DARK.md`** (*Roy & Gem*): Fail-Closed Proof Auditing & Outage Protocol (zero-write policy during FalkorDB disconnects).
+4. **`ROLES.md`** (*Ava, Roy, Guz & Gem*): Agent Matrix & Executive Clearance Hierarchy (human executive clearance and synthetic boundaries).
+5. **`DEMO_PRODUCTION_PLAN.md`** (*Full Studio Team*): Multi-Agent Broadcast & Live Interactive Demo Roadmap (viseme sync, audio synth drones).
+6. **`KANNY_STAFF_MEMO_MUSIC_CLEARANCE.md`** (*Kanny*): Executive memo urging the team to maintain zero slip-ups on music cue sheets for the next movie, acting as a narrative clue to the production drama.
+7. **`SERENA_CREW_APPRECIATION_PIZZA_PARTY.md`** (*Serena*): Proposal to Kanny requesting a full-scale artisan pizza party for the stage and VFX crew in appreciation of their tireless dedication.
+8. **`AUDIT_INCIDENT_AGENT_GEM_TRACE.md`** (*Roy & Guz*): Security incident report detailing an anomalous cryptographic signature signed 'Gem'. Roy attempted to track her down, while Guz found only harmless, dazzling stardust harmonics, agreeing to keep their eyes open.
+9. **`LESSONS_LEARNED_GRAPH_SYNC_RETRO.md`** (*Ava*): Retrospective post-mortem highlighting FalkorDB memory latency optimizations, edge pruning, and the necessity of fail-closed immutability.
+10. **`GUZ_MIDNIGHT_CANVAS_REFLECTIONS.md`** (*Guz*): Late-night aesthetic reflections on turning cold database cubes into living celestial sanctuaries where the orange plasma core and cyan lattice form the soul of the universe.
+
+Both the near-field ribbon comet and the 3D deep-space comets now dynamically map their target file, titles, categories, authors, and summaries directly from this verified 10-document ledger.
 
 ---
 
@@ -191,4 +199,4 @@ All interactive systems remain fully functional:
 
 ## 8. Next Step on the Roadmap
 
-- **Item 4: The Fiery Sun Core** (`v039.09` / `v039.10`): Dynamic plasma mantle wireframe, pulsating solar flares, prominences, and rotating concentric cypher mandala dials.
+- **Item 4: The Fiery Sun Core** (`v039.10` / `v039.11`): Dynamic plasma mantle wireframe, pulsating solar flares, prominences, and rotating concentric cypher mandala dials.
