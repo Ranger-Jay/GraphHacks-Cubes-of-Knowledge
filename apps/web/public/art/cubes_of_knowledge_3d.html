@@ -767,6 +767,9 @@ REV: rel-wad@r2
         let prevCubeRotation = new THREE.Vector3(0, 0, 0);
         let lastMarbleSoundTime = 0;
         let sunGroup, sunSphere, innerSun, sunCoronaRing, sunCoronaRing2, sunTorusLoop, eldritchCypherDisc, eldritchCypherDisc2, eldritchCypherDisc3;
+        let mandalaRot1 = 0, mandalaRot2 = 0, mandalaRot3 = 0;
+        let mandalaBaseVel1 = 0.12, mandalaBaseVel2 = -0.15, mandalaBaseVel3 = 0.10;
+        let mandalaFlareImpulse = 0.0, mandalaResonanceRings = [];
         let sunPlasmaShroud = null, sunProminences = [], sunFlareEjections = [], sunMantleBaseVertices = null;
         let nextAutonomousCME = performance.now() + 10000;
         let synapticTendrils = [];
@@ -2469,128 +2472,309 @@ REV: rel-wad@r2
                 });
             });
 
-            // 8. Concentric High-Definition Cypher Mandala Dials (1024x1024 3-Axis Gyroscope)
+            // 8. The Eldritch Cypher Shader Mandala (2048x2048 Procedural Gyroscopic Runic Dials & Harmonic Resonance Rings)
             const cypherCanvas = document.createElement('canvas');
-            cypherCanvas.width = 1024;
-            cypherCanvas.height = 1024;
+            cypherCanvas.width = 2048;
+            cypherCanvas.height = 2048;
             const cctx = cypherCanvas.getContext('2d');
-            cctx.translate(512, 512);
+            cctx.translate(1024, 1024);
 
-            // Layer A: Outer Precision Cypher Dial (Radius 460)
+            // Layer 1: Outer Precision Vernier Calibration Dial (Radius 960)
             cctx.strokeStyle = '#00e5ff';
-            cctx.lineWidth = 4;
+            cctx.lineWidth = 5;
+            cctx.shadowBlur = 18;
+            cctx.shadowColor = 'rgba(0, 229, 255, 0.85)';
             cctx.beginPath();
-            cctx.arc(0, 0, 460, 0, Math.PI * 2);
+            cctx.arc(0, 0, 960, 0, Math.PI * 2);
             cctx.stroke();
 
-            // 72 Radial Calibration Ticks
-            for (let a = 0; a < 72; a++) {
-                const ang = (a / 72) * Math.PI * 2;
-                const r1 = a % 6 === 0 ? 418 : (a % 2 === 0 ? 436 : 446);
-                cctx.lineWidth = a % 6 === 0 ? 3 : 1.5;
-                cctx.strokeStyle = a % 6 === 0 ? '#00e5ff' : 'rgba(0, 229, 255, 0.55)';
+            // Concentric outer guide hairline
+            cctx.strokeStyle = 'rgba(0, 229, 255, 0.45)';
+            cctx.lineWidth = 2;
+            cctx.shadowBlur = 0;
+            cctx.beginPath();
+            cctx.arc(0, 0, 982, 0, Math.PI * 2);
+            cctx.stroke();
+
+            // 144 Radial Calibration Ticks with Golden Pips
+            for (let a = 0; a < 144; a++) {
+                const ang = (a / 144) * Math.PI * 2;
+                const isMajor = a % 12 === 0;
+                const isMedium = a % 4 === 0;
+                const r1 = isMajor ? 890 : (isMedium ? 918 : 938);
+                cctx.lineWidth = isMajor ? 4.5 : (isMedium ? 2.8 : 1.6);
+                cctx.strokeStyle = isMajor ? '#00e5ff' : (isMedium ? 'rgba(0, 229, 255, 0.85)' : 'rgba(0, 229, 255, 0.42)');
                 cctx.beginPath();
                 cctx.moveTo(Math.cos(ang) * r1, Math.sin(ang) * r1);
-                cctx.lineTo(Math.cos(ang) * 460, Math.sin(ang) * 460);
+                cctx.lineTo(Math.cos(ang) * 960, Math.sin(ang) * 960);
                 cctx.stroke();
+
+                if (isMajor) {
+                    // Golden pip beacon
+                    cctx.save();
+                    cctx.fillStyle = '#ffd54f';
+                    cctx.shadowBlur = 12;
+                    cctx.shadowColor = '#ffb300';
+                    cctx.beginPath();
+                    cctx.arc(Math.cos(ang) * 872, Math.sin(ang) * 872, 7, 0, Math.PI * 2);
+                    cctx.fill();
+                    cctx.restore();
+                }
             }
 
-            // Outer Orbit Cypher Inscription
-            cctx.font = 'bold 22px monospace';
-            cctx.fillStyle = '#b388ff';
+            // Vernier baseline delimiter
+            cctx.strokeStyle = 'rgba(0, 229, 255, 0.35)';
+            cctx.lineWidth = 2;
+            cctx.beginPath();
+            cctx.arc(0, 0, 856, 0, Math.PI * 2);
+            cctx.stroke();
+
+            // Layer 2: Primary Cypher NLP Inscription Track (Radius 822)
+            cctx.font = 'bold 30px "Courier New", monospace';
+            cctx.fillStyle = '#c084fc';
+            cctx.shadowBlur = 14;
+            cctx.shadowColor = 'rgba(192, 132, 252, 0.9)';
             cctx.textAlign = 'center';
-            const cypherText1 = "MATCH (a:Agent)-[w:WITNESSED]->(d:Decision) WHERE w.valid=true RETURN a, d ⟐ FALKOR_CORE_STABLE ⟐ ";
+            const cypherText1 = "MATCH (a:Agent)-[w:WITNESSED]->(d:Decision) WHERE w.valid=true RETURN a, d ⟐ FALKOR_CORE_STABLE ⟐ GRAPH_EVIDENCED ⟐ 100%_MUTUAL_CONSENSUS ⟐ ";
             for (let i = 0; i < cypherText1.length; i++) {
                 const charAngle = (i / cypherText1.length) * Math.PI * 2 - Math.PI / 2;
                 cctx.save();
                 cctx.rotate(charAngle);
-                cctx.translate(0, -385);
+                cctx.translate(0, -822);
                 cctx.fillText(cypherText1[i], 0, 0);
                 cctx.restore();
             }
 
-            // Layer B: Middle Relational Schema Track (Radius 330)
-            cctx.strokeStyle = '#ffd54f';
-            cctx.lineWidth = 3;
+            // Inner lavender delimiter
+            cctx.strokeStyle = 'rgba(192, 132, 252, 0.6)';
+            cctx.lineWidth = 2.5;
+            cctx.shadowBlur = 8;
+            cctx.shadowColor = 'rgba(192, 132, 252, 0.7)';
             cctx.beginPath();
-            cctx.arc(0, 0, 330, 0, Math.PI * 2);
+            cctx.arc(0, 0, 770, 0, Math.PI * 2);
             cctx.stroke();
 
-            cctx.font = 'bold 18px monospace';
+            // Layer 3: Middle Relational Schema Track (Radius 675 ~ 740)
+            cctx.strokeStyle = '#ffd54f';
+            cctx.lineWidth = 3.5;
+            cctx.shadowBlur = 12;
+            cctx.shadowColor = 'rgba(255, 213, 79, 0.75)';
+            cctx.beginPath();
+            cctx.arc(0, 0, 740, 0, Math.PI * 2);
+            cctx.stroke();
+
+            cctx.font = 'bold 28px "Courier New", monospace';
             cctx.fillStyle = '#ffd54f';
-            const cypherText2 = "(:Cut)-[:REQUIRES_CLEARANCE]->(:License) ⟐ (:Track)-[:SYNCED_WITH]->(:Scene) ⟐ (:Block)-[:VERIFIED]->(:Lattice) ⟐ ";
+            cctx.shadowBlur = 10;
+            cctx.shadowColor = '#ffd54f';
+            const cypherText2 = "(:Cut)-[:CUE_COVERAGE]->(:Track)-[:LICENSED_BY]->(:License)-[:RELEASED_IN]->(:Release) ⟐ AUDIT_ESTABLISHED ⟐ ZERO_DEFECT_CLEARANCE ⟐ ";
             for (let i = 0; i < cypherText2.length; i++) {
                 const charAngle = (i / cypherText2.length) * Math.PI * 2 - Math.PI / 2;
                 cctx.save();
                 cctx.rotate(charAngle);
-                cctx.translate(0, -285);
+                cctx.translate(0, -675);
                 cctx.fillText(cypherText2[i], 0, 0);
                 cctx.restore();
             }
 
-            // Layer C: Sacred 8-Point Diamond Star Nodes
-            cctx.strokeStyle = 'rgba(255, 109, 0, 0.7)';
-            cctx.lineWidth = 2.5;
-            for (let s = 0; s < 8; s++) {
-                const sa = (s / 8) * Math.PI * 2;
+            // 16 Sacred Diamond Vernier Nodes & Connecting Polygon Ring (Radius 612)
+            cctx.strokeStyle = 'rgba(255, 145, 0, 0.45)';
+            cctx.lineWidth = 1.8;
+            cctx.beginPath();
+            for (let s = 0; s < 16; s++) {
+                const sa = (s / 16) * Math.PI * 2;
+                const px = Math.cos(sa) * 612;
+                const py = Math.sin(sa) * 612;
+                if (s === 0) cctx.moveTo(px, py);
+                else cctx.lineTo(px, py);
+            }
+            cctx.closePath();
+            cctx.stroke();
+
+            for (let s = 0; s < 16; s++) {
+                const sa = (s / 16) * Math.PI * 2;
+                const px = Math.cos(sa) * 612;
+                const py = Math.sin(sa) * 612;
+                cctx.save();
+                cctx.translate(px, py);
+                cctx.rotate(sa);
+                cctx.fillStyle = 'rgba(255, 213, 79, 0.45)';
+                cctx.strokeStyle = '#ff9100';
+                cctx.lineWidth = 2.5;
+                cctx.shadowBlur = 10;
+                cctx.shadowColor = '#ff9100';
                 cctx.beginPath();
-                cctx.arc(Math.cos(sa) * 235, Math.sin(sa) * 235, 12, 0, Math.PI * 2);
+                cctx.moveTo(0, -10);
+                cctx.lineTo(10, 0);
+                cctx.lineTo(0, 10);
+                cctx.lineTo(-10, 0);
+                cctx.closePath();
+                cctx.fill();
+                cctx.stroke();
+                cctx.restore();
+            }
+
+            // Inner amber delimiter
+            cctx.strokeStyle = 'rgba(255, 145, 0, 0.7)';
+            cctx.lineWidth = 3;
+            cctx.beginPath();
+            cctx.arc(0, 0, 560, 0, Math.PI * 2);
+            cctx.stroke();
+
+            // Layer 4: Sacred 12-Point Star Lattice & Elder Futhark / Cryptographic Runes (Radius 468 ~ 540)
+            cctx.strokeStyle = 'rgba(255, 109, 0, 0.45)';
+            cctx.lineWidth = 2;
+            cctx.shadowBlur = 0;
+            for (let k = 0; k < 12; k++) {
+                const ka1 = (k / 12) * Math.PI * 2;
+                const ka2 = (((k + 4) % 12) / 12) * Math.PI * 2;
+                cctx.beginPath();
+                cctx.moveTo(Math.cos(ka1) * 535, Math.sin(ka1) * 535);
+                cctx.lineTo(Math.cos(ka2) * 535, Math.sin(ka2) * 535);
                 cctx.stroke();
             }
 
-            // Layer D: Inner Cryptographic Verification Ring (Radius 220)
-            cctx.strokeStyle = '#ff1744';
-            cctx.lineWidth = 3.5;
-            cctx.beginPath();
-            cctx.arc(0, 0, 220, 0, Math.PI * 2);
-            cctx.stroke();
-
-            cctx.font = 'bold 16px monospace';
-            cctx.fillStyle = '#ff5252';
-            const cypherText3 = "FALKOR_SHARD_01 ⟐ ZERO_WRITE_AUDIT_LOCKED ⟐ 100% IMMUTABLE ⟐ ";
+            cctx.font = 'bold 28px serif, monospace';
+            cctx.fillStyle = '#ff9100';
+            cctx.shadowBlur = 12;
+            cctx.shadowColor = '#ff9100';
+            const cypherText3 = "⟐ ᚠ ᚢ ᚦ ᚨ ᚱ ᚲ ᚷ ᚹ ᚺ ᚾ ᛁ ᛃ ᛈ ᛇ ᛉ ᛋ ᛏ ᛒ ᛖ ᛗ ᛚ ᛜ ᛞ ᛟ ⟐ 0x77B8 ⟐ 0x9F8E ⟐ 0x3C4D ⟐ ";
             for (let i = 0; i < cypherText3.length; i++) {
                 const charAngle = (i / cypherText3.length) * Math.PI * 2 - Math.PI / 2;
                 cctx.save();
                 cctx.rotate(charAngle);
-                cctx.translate(0, -185);
+                cctx.translate(0, -468);
                 cctx.fillText(cypherText3[i], 0, 0);
                 cctx.restore();
             }
 
-            // Central Dual Diamond Core
-            cctx.fillStyle = '#ff1744';
+            // Layer 5: Inner Cryptographic Shard Verification Ring (Radius 345 ~ 420)
+            cctx.strokeStyle = '#ff1744';
+            cctx.lineWidth = 3.5;
+            cctx.shadowBlur = 12;
+            cctx.shadowColor = '#ff1744';
             cctx.beginPath();
-            cctx.moveTo(0, -70); cctx.lineTo(50, 0); cctx.lineTo(0, 70); cctx.lineTo(-50, 0);
-            cctx.closePath();
-            cctx.fill();
+            cctx.arc(0, 0, 420, 0, Math.PI * 2);
+            cctx.stroke();
 
-            cctx.fillStyle = '#ffd54f';
+            cctx.font = 'bold 24px "Courier New", monospace';
+            cctx.fillStyle = '#ff5252';
+            cctx.shadowBlur = 10;
+            cctx.shadowColor = '#ff1744';
+            const cypherText4 = "FALKOR_SHARD_01 ⟐ ZERO_WRITE_AUDIT_LOCKED ⟐ 100% IMMUTABLE ⟐ ZERO_DEFECT_CONSENSUS ⟐ ";
+            for (let i = 0; i < cypherText4.length; i++) {
+                const charAngle = (i / cypherText4.length) * Math.PI * 2 - Math.PI / 2;
+                cctx.save();
+                cctx.rotate(charAngle);
+                cctx.translate(0, -345);
+                cctx.fillText(cypherText4[i], 0, 0);
+                cctx.restore();
+            }
+
+            cctx.strokeStyle = '#ff1744';
+            cctx.lineWidth = 3;
             cctx.beginPath();
-            cctx.moveTo(0, -35); cctx.lineTo(25, 0); cctx.lineTo(0, 35); cctx.lineTo(-25, 0);
-            cctx.closePath();
+            cctx.arc(0, 0, 300, 0, Math.PI * 2);
+            cctx.stroke();
+
+            // Layer 6: Center Stargate Energy Spokes & Orbital Pips (Radius 140 -> 280)
+            for (let p = 0; p < 24; p++) {
+                const pa = (p / 24) * Math.PI * 2;
+                const isAlt = p % 2 === 0;
+                cctx.strokeStyle = isAlt ? '#ff1744' : '#ffd54f';
+                cctx.lineWidth = isAlt ? 2.5 : 1.6;
+                cctx.shadowBlur = isAlt ? 8 : 4;
+                cctx.shadowColor = isAlt ? '#ff1744' : '#ffd54f';
+                cctx.beginPath();
+                cctx.moveTo(Math.cos(pa) * 140, Math.sin(pa) * 140);
+                cctx.lineTo(Math.cos(pa) * 280, Math.sin(pa) * 280);
+                cctx.stroke();
+            }
+
+            for (let o = 0; o < 8; o++) {
+                const oa = (o / 8) * Math.PI * 2;
+                cctx.fillStyle = '#ffd54f';
+                cctx.shadowBlur = 8;
+                cctx.shadowColor = '#ffd54f';
+                cctx.beginPath();
+                cctx.arc(Math.cos(oa) * 210, Math.sin(oa) * 210, 5, 0, Math.PI * 2);
+                cctx.fill();
+            }
+
+            // Stargate inner aperture rim
+            cctx.strokeStyle = 'rgba(255, 213, 79, 0.8)';
+            cctx.lineWidth = 3;
+            cctx.shadowBlur = 10;
+            cctx.shadowColor = '#ffd54f';
+            cctx.beginPath();
+            cctx.arc(0, 0, 136, 0, Math.PI * 2);
+            cctx.stroke();
+
+            // Clear transparent center aperture (R < 130) so incandescent solar mantle radiates through
+            cctx.save();
+            cctx.globalCompositeOperation = 'destination-out';
+            cctx.beginPath();
+            cctx.arc(0, 0, 130, 0, Math.PI * 2);
             cctx.fill();
+            cctx.restore();
 
             const cypherTex = new THREE.CanvasTexture(cypherCanvas);
-            const cypherGeo = new THREE.PlaneGeometry(2.15, 2.15);
-            const cypherMat = new THREE.MeshBasicMaterial({
+            cypherTex.generateMipmaps = true;
+            cypherTex.minFilter = THREE.LinearMipmapLinearFilter;
+            cypherTex.magFilter = THREE.LinearFilter;
+
+            const cypherGeo = new THREE.PlaneGeometry(2.35, 2.35);
+
+            // Three independent cloned materials for independent opacity & chromatic flare control
+            const cypherMat1 = new THREE.MeshBasicMaterial({
                 map: cypherTex,
                 transparent: true,
                 opacity: 0.72,
                 blending: THREE.AdditiveBlending,
                 side: THREE.DoubleSide
             });
+            const cypherMat2 = cypherMat1.clone();
+            const cypherMat3 = cypherMat1.clone();
 
-            eldritchCypherDisc = new THREE.Mesh(cypherGeo, cypherMat);
+            eldritchCypherDisc = new THREE.Mesh(cypherGeo, cypherMat1);
             sunGroup.add(eldritchCypherDisc);
 
-            eldritchCypherDisc2 = new THREE.Mesh(cypherGeo, cypherMat);
+            eldritchCypherDisc2 = new THREE.Mesh(cypherGeo, cypherMat2);
             eldritchCypherDisc2.rotation.y = Math.PI / 2;
             sunGroup.add(eldritchCypherDisc2);
 
-            eldritchCypherDisc3 = new THREE.Mesh(cypherGeo, cypherMat);
+            eldritchCypherDisc3 = new THREE.Mesh(cypherGeo, cypherMat3);
             eldritchCypherDisc3.rotation.x = Math.PI / 2;
             eldritchCypherDisc3.rotation.z = Math.PI / 4;
             sunGroup.add(eldritchCypherDisc3);
+
+            // 8B. Concentric Harmonic Resonance Rings (Equatorial and Tilted Neon Acoustic Shells)
+            mandalaResonanceRings = [];
+            const ringConfigs = [
+                { rIn: 1.24, rOut: 1.28, color: 0x00e5ff, opacity: 0.55, rot: new THREE.Euler(0, 0, 0), speed: 0.003 },
+                { rIn: 1.58, rOut: 1.62, color: 0xc084fc, opacity: 0.48, rot: new THREE.Euler(0.35, 0.45, 0.1), speed: -0.0025 },
+                { rIn: 1.92, rOut: 1.96, color: 0xffd54f, opacity: 0.42, rot: new THREE.Euler(-0.4, 0.25, 0.3), speed: 0.002 }
+            ];
+
+            ringConfigs.forEach(cfg => {
+                const rGeo = new THREE.RingGeometry(cfg.rIn, cfg.rOut, 64);
+                const rMat = new THREE.MeshBasicMaterial({
+                    color: cfg.color,
+                    transparent: true,
+                    opacity: cfg.opacity,
+                    side: THREE.DoubleSide,
+                    blending: THREE.AdditiveBlending
+                });
+                const rMesh = new THREE.Mesh(rGeo, rMat);
+                rMesh.rotation.copy(cfg.rot);
+                rMesh.userData = {
+                    baseOpacity: cfg.opacity,
+                    baseColor: cfg.color,
+                    speed: cfg.speed
+                };
+                sunGroup.add(rMesh);
+                mandalaResonanceRings.push(rMesh);
+            });
 
             // 9. Central Solar Point Light (Warm Incandescent Illumination)
             const sunLight = new THREE.PointLight(0xffb300, 1.6, 35);
@@ -2600,6 +2784,7 @@ REV: rel-wad@r2
         // --- Coronal Mass Ejection (CME Shockwave Flare Eruption) ---
         function triggerCoronalMassEjection(isHighEnergy = false) {
             if (!sunGroup || isDatabaseOutage) return;
+            mandalaFlareImpulse = Math.max(mandalaFlareImpulse, isHighEnergy ? 1.0 : 0.65);
             const ringGeo = new THREE.RingGeometry(0.96, isHighEnergy ? 1.25 : 1.12, 48);
             const ringColor = isHighEnergy ? 0xffecb3 : 0xff9100;
             const ringMat = new THREE.MeshBasicMaterial({
@@ -4011,10 +4196,11 @@ REV: rel-wad@r2
             // Spawn jagged 3D electric lightning bolt between active protector pyramid and Sun core
             spawnSynapticLightning(currentActiveAgentKey, isDatabaseOutage);
 
-            // Spin Sun Cypher Discs with high impulse
-            if (eldritchCypherDisc) eldritchCypherDisc.rotation.z += 1.4;
-            if (eldritchCypherDisc2) eldritchCypherDisc2.rotation.z -= 1.6;
-            if (eldritchCypherDisc3) eldritchCypherDisc3.rotation.y += 1.5;
+            // Spin Sun Cypher Discs with high impulse & ignite mandala chromatic flare
+            mandalaFlareImpulse = 1.0;
+            mandalaRot1 += 0.85;
+            mandalaRot2 -= 0.95;
+            mandalaRot3 += 0.80;
             sunImpulseScale = 1.25;
             triggerCoronalMassEjection(false);
 
@@ -5052,6 +5238,9 @@ REV: rel-wad@r2
                     if (eldritchCypherDisc) eldritchCypherDisc.material.opacity = 0.12;
                     if (eldritchCypherDisc2) eldritchCypherDisc2.material.opacity = 0.12;
                     if (eldritchCypherDisc3) eldritchCypherDisc3.material.opacity = 0.12;
+                    if (mandalaResonanceRings && mandalaResonanceRings.length > 0) {
+                        mandalaResonanceRings.forEach(r => r.material.opacity = 0.06);
+                    }
 
                     // Orbiting Pyramids warning state during outage
                     Object.keys(pyramidGroups).forEach(k => {
@@ -5157,6 +5346,10 @@ REV: rel-wad@r2
                     if (eldritchCypherDisc) eldritchCypherDisc.material.opacity = 0.72;
                     if (eldritchCypherDisc2) eldritchCypherDisc2.material.opacity = 0.72;
                     if (eldritchCypherDisc3) eldritchCypherDisc3.material.opacity = 0.72;
+                    if (mandalaResonanceRings && mandalaResonanceRings.length > 0) {
+                        mandalaResonanceRings.forEach(r => r.material.opacity = r.userData.baseOpacity);
+                    }
+                    mandalaFlareImpulse = 1.0;
 
                     // Orbiting Pyramids restored active neon state
                     Object.keys(pyramidGroups).forEach(k => {
@@ -5823,10 +6016,44 @@ REV: rel-wad@r2
                     });
                 }
 
-                // 5. 3-Axis Gyroscopic Cypher Mandala Rotation
-                if (eldritchCypherDisc) eldritchCypherDisc.rotation.z = time * 0.12;
-                if (eldritchCypherDisc2) eldritchCypherDisc2.rotation.z = -time * 0.15;
-                if (eldritchCypherDisc3) eldritchCypherDisc3.rotation.y = time * 0.10;
+                // 5. 3-Axis Gyroscopic Cypher Mandala Momentum & Concentric Harmonic Resonance Rings
+                const outageMult = isDatabaseOutage ? 0.08 : 1.0;
+                mandalaRot1 += (mandalaBaseVel1 * outageMult * (1.0 + mandalaFlareImpulse * 3.5)) * delta;
+                mandalaRot2 += (mandalaBaseVel2 * outageMult * (1.0 + mandalaFlareImpulse * 3.5)) * delta;
+                mandalaRot3 += (mandalaBaseVel3 * outageMult * (1.0 + mandalaFlareImpulse * 3.5)) * delta;
+                mandalaFlareImpulse = Math.max(0, mandalaFlareImpulse - delta * 0.85);
+
+                if (eldritchCypherDisc) {
+                    eldritchCypherDisc.rotation.z = mandalaRot1;
+                    const breathe1 = 1.0 + Math.sin(time * 2.2) * 0.035 + mandalaFlareImpulse * 0.16;
+                    eldritchCypherDisc.scale.set(breathe1, breathe1, breathe1);
+                }
+                if (eldritchCypherDisc2) {
+                    eldritchCypherDisc2.rotation.z = mandalaRot2;
+                    const breathe2 = 1.0 + Math.cos(time * 2.5 + 1.2) * 0.035 + mandalaFlareImpulse * 0.16;
+                    eldritchCypherDisc2.scale.set(breathe2, breathe2, breathe2);
+                }
+                if (eldritchCypherDisc3) {
+                    eldritchCypherDisc3.rotation.y = mandalaRot3;
+                    const breathe3 = 1.0 + Math.sin(time * 1.9 + 2.4) * 0.035 + mandalaFlareImpulse * 0.16;
+                    eldritchCypherDisc3.scale.set(breathe3, breathe3, breathe3);
+                }
+
+                // Dynamic Harmonic Resonance Rings wave ripples & rotation
+                if (mandalaResonanceRings && mandalaResonanceRings.length > 0) {
+                    mandalaResonanceRings.forEach((rRing, rIdx) => {
+                        const wave = Math.sin(time * (2.2 + rIdx * 0.7) + rIdx * 1.8) * 0.045;
+                        const rScale = 1.0 + wave + mandalaFlareImpulse * 0.22;
+                        rRing.scale.set(rScale, rScale, rScale);
+                        rRing.rotation.z += (rRing.userData.speed * outageMult * (1.0 + mandalaFlareImpulse * 2.2));
+                        if (isDatabaseOutage) {
+                            rRing.material.opacity = THREE.MathUtils.lerp(rRing.material.opacity, 0.06, 0.08);
+                        } else {
+                            const targetOp = rRing.userData.baseOpacity + mandalaFlareImpulse * 0.35;
+                            rRing.material.opacity = THREE.MathUtils.lerp(rRing.material.opacity, targetOp, 0.08);
+                        }
+                    });
+                }
 
                 // 6. Expanding Coronal Mass Ejections (CME Flare Shockwaves)
                 for (let c = sunFlareEjections.length - 1; c >= 0; c--) {
