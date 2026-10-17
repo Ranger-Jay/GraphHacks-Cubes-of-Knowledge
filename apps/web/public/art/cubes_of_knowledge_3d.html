@@ -758,6 +758,10 @@ REV: rel-wad@r2
         let starFieldFar = null, starFieldMid = null, starFieldNear = null;
         let starLayers = [];
         let cubeGroup, wireframeCube, wireframeCubeAura = null, cornerBeacons = [], innerTesseract, cubePlanes = [], redEvidenceNodes = [];
+        let purpleFrameGroup = null, purpleStruts = [], purpleCornerBeacons = [], purplePanels = [];
+        let activeTravellingRuns = [], activeOrbSparks = [], sharedSparkTexture = null;
+        let nextTravellingOrbLaunchTime = performance.now() + 1500;
+        let purpleFaceConfigs = [];
         let redGraphGroup = null, redNodes = [], relationshipLines = null, showNodeNames = false, nodeLabels = [];
         let sunGroup, sunSphere, innerSun, sunCoronaRing, sunCoronaRing2, sunTorusLoop, eldritchCypherDisc, eldritchCypherDisc2, eldritchCypherDisc3;
         let sunPlasmaShroud = null, sunProminences = [], sunFlareEjections = [], sunMantleBaseVertices = null;
@@ -1176,7 +1180,7 @@ REV: rel-wad@r2
                 audioFile: "audio/ava_greeting.mp3",
                 voicePitch: 1.15,
                 voiceRate: 1.05,
-                orbitRadius: 2.42,
+                orbitRadius: 2.35,
                 orbitSpeed: 0.45,
                 orbitTilt: { x: -0.52, y: 0.32, z: -0.42 },
                 activeTasks: "1 + 2 Cross-Lane Synapses",
@@ -1194,7 +1198,7 @@ REV: rel-wad@r2
                 audioFile: "audio/guz_greeting.mp3",
                 voicePitch: 0.75,
                 voiceRate: 0.90,
-                orbitRadius: 2.80,
+                orbitRadius: 2.65,
                 orbitSpeed: 0.36,
                 orbitTilt: { x: 0.25, y: -0.58, z: 0.32 },
                 activeTasks: "1 + 5 Invariant Validations",
@@ -1464,17 +1468,8 @@ REV: rel-wad@r2
                 cornerBeacons.push(beacon);
             });
 
-            // Inner Tesseract Sanctuary Frame (enclosing the 3 internal pyramid orbits)
-            const innerGeo = new THREE.BoxGeometry(size * 0.84, size * 0.84, size * 0.84);
-            const innerWireGeo = new THREE.WireframeGeometry(innerGeo);
-            const innerMat = new THREE.LineBasicMaterial({
-                color: 0x7c4dff,
-                transparent: true,
-                opacity: 0.28,
-                blending: THREE.AdditiveBlending
-            });
-            innerTesseract = new THREE.LineSegments(innerWireGeo, innerMat);
-            cubeGroup.add(innerTesseract);
+            // Inner Purple Containment Frame (Thick Volumetric Neon Struts, Corner Beacons & Containment Panels)
+            buildPurpleContainmentFrame(size);
 
             // Glass Panes that unfold outward on zoom-in
             const planeGeo = new THREE.PlaneGeometry(size, size);
@@ -1567,6 +1562,539 @@ REV: rel-wad@r2
                 synapticTendrils.push(tLine);
             });
         }
+
+        // --- 2c. Purple Containment Frame & Travelling Light-Balls (Orocue Kinematics) ---
+        function createSparkTexture() {
+            const canvas = document.createElement('canvas');
+            canvas.width = 128;
+            canvas.height = 128;
+            const ctx = canvas.getContext('2d');
+            const cx = 64, cy = 64;
+
+            ctx.clearRect(0, 0, 128, 128);
+
+            // 1. Central radiant core glow
+            const radGrad = ctx.createRadialGradient(cx, cy, 0, cx, cy, 34);
+            radGrad.addColorStop(0.0, 'rgba(255, 255, 255, 1.0)');
+            radGrad.addColorStop(0.25, 'rgba(255, 240, 190, 0.95)');
+            radGrad.addColorStop(0.55, 'rgba(224, 130, 255, 0.75)');
+            radGrad.addColorStop(0.85, 'rgba(147, 51, 234, 0.35)');
+            radGrad.addColorStop(1.0, 'rgba(147, 51, 234, 0.0)');
+            ctx.fillStyle = radGrad;
+            ctx.beginPath();
+            ctx.arc(cx, cy, 34, 0, Math.PI * 2);
+            ctx.fill();
+
+            // 2. Horizontal thin spark blade (Orocue ::before)
+            const hGrad = ctx.createLinearGradient(0, cy, 128, cy);
+            hGrad.addColorStop(0.0, 'rgba(255, 255, 255, 0.0)');
+            hGrad.addColorStop(0.2, 'rgba(255, 235, 160, 0.65)');
+            hGrad.addColorStop(0.5, 'rgba(255, 255, 255, 1.0)');
+            hGrad.addColorStop(0.8, 'rgba(255, 235, 160, 0.65)');
+            hGrad.addColorStop(1.0, 'rgba(255, 255, 255, 0.0)');
+            ctx.fillStyle = hGrad;
+            ctx.fillRect(6, cy - 2, 116, 4);
+
+            // 3. Vertical thin spark blade (Orocue ::after)
+            const vGrad = ctx.createLinearGradient(cx, 0, cx, 128);
+            vGrad.addColorStop(0.0, 'rgba(255, 255, 255, 0.0)');
+            vGrad.addColorStop(0.2, 'rgba(255, 235, 160, 0.65)');
+            vGrad.addColorStop(0.5, 'rgba(255, 255, 255, 1.0)');
+            vGrad.addColorStop(0.8, 'rgba(255, 235, 160, 0.65)');
+            vGrad.addColorStop(1.0, 'rgba(255, 255, 255, 0.0)');
+            ctx.fillStyle = vGrad;
+            ctx.fillRect(cx - 2, 6, 4, 116);
+
+            // 4. Subtle 45-degree diagonal glints
+            ctx.save();
+            ctx.translate(cx, cy);
+            ctx.rotate(Math.PI / 4);
+            const dGrad = ctx.createLinearGradient(-42, 0, 42, 0);
+            dGrad.addColorStop(0.0, 'rgba(255, 255, 255, 0.0)');
+            dGrad.addColorStop(0.5, 'rgba(255, 255, 255, 0.85)');
+            dGrad.addColorStop(1.0, 'rgba(255, 255, 255, 0.0)');
+            ctx.fillStyle = dGrad;
+            ctx.fillRect(-38, -1.2, 76, 2.4);
+            ctx.fillRect(-1.2, -38, 2.4, 76);
+            ctx.restore();
+
+            return new THREE.CanvasTexture(canvas);
+        }
+
+        function buildPurpleContainmentFrame(outerSize) {
+            purpleFrameGroup = new THREE.Group();
+            cubeGroup.add(purpleFrameGroup);
+
+            // Dimensions: outer blue cube is outerSize (6.8), halfSize is 3.4.
+            // Inner purple frame is 5.60, halfSize is 2.80.
+            const pSize = 5.60;
+            const pHalf = pSize / 2; // 2.80
+
+            purpleStruts = [];
+            purpleCornerBeacons = [];
+            purplePanels = [];
+
+            // 1. 12 Volumetric Neon Cylindrical Struts (amethyst purple glow, radius 0.045)
+            const strutGeo = new THREE.CylinderGeometry(0.045, 0.045, pSize, 12);
+            const strutMat = new THREE.MeshBasicMaterial({
+                color: 0xc084fc, // Bright neon lavender/amethyst
+                transparent: true,
+                opacity: 0.92,
+                blending: THREE.AdditiveBlending
+            });
+
+            // 4 X-parallel struts
+            const xStrutConfigs = [
+                [0, -pHalf, -pHalf],
+                [0, pHalf, -pHalf],
+                [0, -pHalf, pHalf],
+                [0, pHalf, pHalf]
+            ];
+            xStrutConfigs.forEach(pos => {
+                const strut = new THREE.Mesh(strutGeo, strutMat.clone());
+                strut.rotation.z = Math.PI / 2;
+                strut.position.set(...pos);
+                purpleFrameGroup.add(strut);
+                purpleStruts.push(strut);
+            });
+
+            // 4 Y-parallel struts
+            const yStrutConfigs = [
+                [-pHalf, 0, -pHalf],
+                [pHalf, 0, -pHalf],
+                [-pHalf, 0, pHalf],
+                [pHalf, 0, pHalf]
+            ];
+            yStrutConfigs.forEach(pos => {
+                const strut = new THREE.Mesh(strutGeo, strutMat.clone());
+                strut.position.set(...pos);
+                purpleFrameGroup.add(strut);
+                purpleStruts.push(strut);
+            });
+
+            // 4 Z-parallel struts
+            const zStrutConfigs = [
+                [-pHalf, -pHalf, 0],
+                [pHalf, -pHalf, 0],
+                [-pHalf, pHalf, 0],
+                [pHalf, pHalf, 0]
+            ];
+            zStrutConfigs.forEach(pos => {
+                const strut = new THREE.Mesh(strutGeo, strutMat.clone());
+                strut.rotation.x = Math.PI / 2;
+                strut.position.set(...pos);
+                purpleFrameGroup.add(strut);
+                purpleStruts.push(strut);
+            });
+
+            // 2. 8 Corner Junction Glow Beacons (luminous soft lavender beads at vertices)
+            const beaconGeo = new THREE.SphereGeometry(0.13, 16, 16);
+            const beaconMat = new THREE.MeshBasicMaterial({
+                color: 0xdda0dd,
+                transparent: true,
+                opacity: 0.96,
+                blending: THREE.AdditiveBlending
+            });
+            const cornerPositions = [
+                [-pHalf, -pHalf, -pHalf], [pHalf, -pHalf, -pHalf],
+                [-pHalf, pHalf, -pHalf],  [pHalf, pHalf, -pHalf],
+                [-pHalf, -pHalf, pHalf],  [pHalf, -pHalf, pHalf],
+                [-pHalf, pHalf, pHalf],   [pHalf, pHalf, pHalf]
+            ];
+            cornerPositions.forEach(pos => {
+                const beacon = new THREE.Mesh(beaconGeo, beaconMat.clone());
+                beacon.position.set(...pos);
+                purpleFrameGroup.add(beacon);
+                purpleCornerBeacons.push(beacon);
+            });
+
+            // 3. Volumetric Neon Wireframe Aura (scale 1.012 for double-pass outer radiant glow)
+            const boxGeo = new THREE.BoxGeometry(pSize, pSize, pSize);
+            const wireGeo = new THREE.WireframeGeometry(boxGeo);
+            const wireMat = new THREE.LineBasicMaterial({
+                color: 0x9333ea,
+                transparent: true,
+                opacity: 0.45,
+                blending: THREE.AdditiveBlending
+            });
+            const purpleWireAura = new THREE.LineSegments(wireGeo, wireMat);
+            purpleWireAura.scale.set(1.012, 1.012, 1.012);
+            purpleFrameGroup.add(purpleWireAura);
+            innerTesseract = purpleWireAura; // Preserves backwards compatibility
+
+            // 4. Six Translucent Containment Panels (tinted forcefield chamber walls)
+            const panelGeo = new THREE.PlaneGeometry(pSize, pSize);
+            const panelMat = new THREE.MeshBasicMaterial({
+                color: 0x8b5cf6,
+                transparent: true,
+                opacity: 0.055,
+                side: THREE.DoubleSide,
+                depthWrite: false,
+                blending: THREE.AdditiveBlending
+            });
+
+            const panelConfigs = [
+                { pos: [0, 0, pHalf], rot: [0, 0, 0] },
+                { pos: [0, 0, -pHalf], rot: [0, Math.PI, 0] },
+                { pos: [-pHalf, 0, 0], rot: [0, -Math.PI / 2, 0] },
+                { pos: [pHalf, 0, 0], rot: [0, Math.PI / 2, 0] },
+                { pos: [0, pHalf, 0], rot: [-Math.PI / 2, 0, 0] },
+                { pos: [0, -pHalf, 0], rot: [Math.PI / 2, 0, 0] }
+            ];
+            panelConfigs.forEach(cfg => {
+                const panel = new THREE.Mesh(panelGeo, panelMat.clone());
+                panel.position.set(...cfg.pos);
+                panel.rotation.set(...cfg.rot);
+                purpleFrameGroup.add(panel);
+                purplePanels.push(panel);
+            });
+
+            // 5. Build 6-Face Perimeter Coordinates for Travelling Light-Balls
+            purpleFaceConfigs = [
+                {
+                    name: 'front',
+                    normal: new THREE.Vector3(0, 0, 1),
+                    corners: [
+                        new THREE.Vector3(-pHalf, pHalf, pHalf),  // C0: Top-Left
+                        new THREE.Vector3(pHalf, pHalf, pHalf),   // C1: Top-Right
+                        new THREE.Vector3(pHalf, -pHalf, pHalf),  // C2: Bottom-Right
+                        new THREE.Vector3(-pHalf, -pHalf, pHalf)  // C3: Bottom-Left (Collision target!)
+                    ]
+                },
+                {
+                    name: 'back',
+                    normal: new THREE.Vector3(0, 0, -1),
+                    corners: [
+                        new THREE.Vector3(pHalf, pHalf, -pHalf),  // C0
+                        new THREE.Vector3(-pHalf, pHalf, -pHalf), // C1
+                        new THREE.Vector3(-pHalf, -pHalf, -pHalf),// C2
+                        new THREE.Vector3(pHalf, -pHalf, -pHalf)  // C3
+                    ]
+                },
+                {
+                    name: 'left',
+                    normal: new THREE.Vector3(-1, 0, 0),
+                    corners: [
+                        new THREE.Vector3(-pHalf, pHalf, -pHalf), // C0
+                        new THREE.Vector3(-pHalf, pHalf, pHalf),  // C1
+                        new THREE.Vector3(-pHalf, -pHalf, pHalf), // C2
+                        new THREE.Vector3(-pHalf, -pHalf, -pHalf) // C3
+                    ]
+                },
+                {
+                    name: 'right',
+                    normal: new THREE.Vector3(1, 0, 0),
+                    corners: [
+                        new THREE.Vector3(pHalf, pHalf, pHalf),   // C0
+                        new THREE.Vector3(pHalf, pHalf, -pHalf),  // C1
+                        new THREE.Vector3(pHalf, -pHalf, -pHalf), // C2
+                        new THREE.Vector3(pHalf, -pHalf, pHalf)   // C3
+                    ]
+                },
+                {
+                    name: 'top',
+                    normal: new THREE.Vector3(0, 1, 0),
+                    corners: [
+                        new THREE.Vector3(-pHalf, pHalf, -pHalf), // C0
+                        new THREE.Vector3(pHalf, pHalf, -pHalf),  // C1
+                        new THREE.Vector3(pHalf, pHalf, pHalf),   // C2
+                        new THREE.Vector3(-pHalf, pHalf, pHalf)   // C3
+                    ]
+                },
+                {
+                    name: 'bottom',
+                    normal: new THREE.Vector3(0, -1, 0),
+                    corners: [
+                        new THREE.Vector3(-pHalf, -pHalf, pHalf),  // C0
+                        new THREE.Vector3(pHalf, -pHalf, pHalf),   // C1
+                        new THREE.Vector3(pHalf, -pHalf, -pHalf),  // C2
+                        new THREE.Vector3(-pHalf, -pHalf, -pHalf)  // C3
+                    ]
+                }
+            ];
+
+            sharedSparkTexture = createSparkTexture();
+        }
+
+        function launchTravellingOrbs(forcedFaceIdx) {
+            if (!purpleFrameGroup || purpleFaceConfigs.length === 0) return;
+
+            const activeFaces = activeTravellingRuns.map(r => r.faceIndex);
+            let candidateIndices = [];
+            for (let i = 0; i < purpleFaceConfigs.length; i++) {
+                if (!activeFaces.includes(i)) candidateIndices.push(i);
+            }
+            if (candidateIndices.length === 0) return;
+
+            const faceIdx = (typeof forcedFaceIdx === 'number' && forcedFaceIdx >= 0 && forcedFaceIdx < purpleFaceConfigs.length)
+                ? forcedFaceIdx
+                : candidateIndices[Math.floor(Math.random() * candidateIndices.length)];
+
+            const faceCfg = purpleFaceConfigs[faceIdx];
+            const runGroup = new THREE.Group();
+
+            // Slow Orb (Gold/Amber core with violet corona)
+            const slowOrbGeo = new THREE.SphereGeometry(0.08, 12, 12);
+            const slowOrbMat = new THREE.MeshBasicMaterial({
+                color: 0xffe082,
+                transparent: true,
+                opacity: 0.0,
+                blending: THREE.AdditiveBlending
+            });
+            const slowOrbMesh = new THREE.Mesh(slowOrbGeo, slowOrbMat);
+
+            const slowHaloGeo = new THREE.SphereGeometry(0.18, 8, 8);
+            const slowHaloMat = new THREE.MeshBasicMaterial({
+                color: 0xe040fb,
+                transparent: true,
+                opacity: 0.0,
+                blending: THREE.AdditiveBlending
+            });
+            const slowHaloMesh = new THREE.Mesh(slowHaloGeo, slowHaloMat);
+            slowOrbMesh.add(slowHaloMesh);
+            runGroup.add(slowOrbMesh);
+
+            // Fast Orb (Pure Diamond Brilliant White with Cyber Amethyst corona)
+            const fastOrbGeo = new THREE.SphereGeometry(0.08, 12, 12);
+            const fastOrbMat = new THREE.MeshBasicMaterial({
+                color: 0xffffff,
+                transparent: true,
+                opacity: 0.0,
+                blending: THREE.AdditiveBlending
+            });
+            const fastOrbMesh = new THREE.Mesh(fastOrbGeo, fastOrbMat);
+
+            const fastHaloGeo = new THREE.SphereGeometry(0.18, 8, 8);
+            const fastHaloMat = new THREE.MeshBasicMaterial({
+                color: 0x7c4dff,
+                transparent: true,
+                opacity: 0.0,
+                blending: THREE.AdditiveBlending
+            });
+            const fastHaloMesh = new THREE.Mesh(fastHaloGeo, fastHaloMat);
+            fastOrbMesh.add(fastHaloMesh);
+            runGroup.add(fastOrbMesh);
+
+            slowOrbMesh.position.copy(faceCfg.corners[0]);
+            fastOrbMesh.position.copy(faceCfg.corners[0]);
+
+            purpleFrameGroup.add(runGroup);
+
+            activeTravellingRuns.push({
+                faceIndex: faceIdx,
+                startTime: performance.now(),
+                duration: 2600, // 2.6s, exact match to Orocue .orb.run { animation-duration: 2.6s; }
+                corners: faceCfg.corners,
+                normal: faceCfg.normal,
+                group: runGroup,
+                slowOrbMesh: slowOrbMesh,
+                slowOrbMat: slowOrbMat,
+                slowHaloMat: slowHaloMat,
+                fastOrbMesh: fastOrbMesh,
+                fastOrbMat: fastOrbMat,
+                fastHaloMat: fastHaloMat,
+                seed: Math.random() * 20
+            });
+        }
+
+        function spawnOrbCollisionSpark(cornerPos, normal) {
+            if (!purpleFrameGroup) return;
+
+            const sparkGroup = new THREE.Group();
+            sparkGroup.position.copy(cornerPos);
+            sparkGroup.position.addScaledVector(normal, 0.03); // Slight outward offset to float on corner
+
+            // 1. Cross Starburst Quad Billboard
+            const crossGeo = new THREE.PlaneGeometry(1.6, 1.6);
+            const crossMat = new THREE.MeshBasicMaterial({
+                map: sharedSparkTexture,
+                transparent: true,
+                opacity: 0.0,
+                blending: THREE.AdditiveBlending,
+                side: THREE.DoubleSide,
+                depthWrite: false
+            });
+            const crossMesh = new THREE.Mesh(crossGeo, crossMat);
+            crossMesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), normal);
+            sparkGroup.add(crossMesh);
+
+            // 2. Eight Radial Micro-Spark Particles
+            const sparkCount = 8;
+            const sparkPositions = new Float32Array(sparkCount * 3);
+            const sparkVelocities = [];
+            const basisU = new THREE.Vector3();
+            const basisV = new THREE.Vector3();
+            if (Math.abs(normal.z) > 0.8) {
+                basisU.set(1, 0, 0);
+                basisV.set(0, 1, 0);
+            } else if (Math.abs(normal.x) > 0.8) {
+                basisU.set(0, 0, 1);
+                basisV.set(0, 1, 0);
+            } else {
+                basisU.set(1, 0, 0);
+                basisV.set(0, 0, 1);
+            }
+
+            for (let k = 0; k < sparkCount; k++) {
+                const k3 = k * 3;
+                sparkPositions[k3] = 0;
+                sparkPositions[k3 + 1] = 0;
+                sparkPositions[k3 + 2] = 0;
+
+                const ang = (k / sparkCount) * Math.PI * 2;
+                const spd = 0.55 + Math.random() * 0.65;
+                const vel = new THREE.Vector3()
+                    .addScaledVector(basisU, Math.cos(ang) * spd)
+                    .addScaledVector(basisV, Math.sin(ang) * spd)
+                    .addScaledVector(normal, 0.15 + Math.random() * 0.35);
+                sparkVelocities.push(vel);
+            }
+
+            const sparkPtsGeo = new THREE.BufferGeometry();
+            sparkPtsGeo.setAttribute('position', new THREE.BufferAttribute(sparkPositions, 3));
+            const sparkPtsMat = new THREE.PointsMaterial({
+                size: 0.30,
+                map: sharedSparkTexture,
+                transparent: true,
+                opacity: 0.95,
+                blending: THREE.AdditiveBlending,
+                depthWrite: false
+            });
+            const sparkPtsMesh = new THREE.Points(sparkPtsGeo, sparkPtsMat);
+            sparkGroup.add(sparkPtsMesh);
+
+            purpleFrameGroup.add(sparkGroup);
+
+            // Glassy harmonic audio chime micro-pop
+            if (CosmicAudio && CosmicAudio.playStardustChime) {
+                CosmicAudio.playStardustChime(0, 1.85);
+            }
+
+            activeOrbSparks.push({
+                startTime: performance.now(),
+                duration: 620, // 0.62s matching Orocue @keyframes sparkPop .62s
+                group: sparkGroup,
+                crossMesh: crossMesh,
+                crossMat: crossMat,
+                sparkPtsMesh: sparkPtsMesh,
+                sparkPtsMat: sparkPtsMat,
+                sparkPtsGeo: sparkPtsGeo,
+                sparkPositions: sparkPositions,
+                sparkVelocities: sparkVelocities
+            });
+        }
+
+        function updateTravellingOrbs(now) {
+            if (!purpleFrameGroup) return;
+
+            // 1. Scheduler: launch periodic travelling orb runs
+            if (!reducedMotion && activeTravellingRuns.length < 2 && now > nextTravellingOrbLaunchTime) {
+                launchTravellingOrbs();
+                nextTravellingOrbLaunchTime = now + 3500 + Math.random() * 2500; // 3.5s to 6.0s intervals
+            }
+
+            // 2. Update active travelling runs
+            for (let i = activeTravellingRuns.length - 1; i >= 0; i--) {
+                const run = activeTravellingRuns[i];
+                const elapsed = now - run.startTime;
+                const u = elapsed / run.duration;
+
+                if (u < 1.0) {
+                    // Opacity curve matching Orocue:
+                    // 0% -> opacity 0; 8% -> opacity 1; 92% -> opacity 1; 100% -> pop
+                    let orbOp = 1.0;
+                    if (u < 0.08) orbOp = u / 0.08;
+                    else if (u > 0.96) orbOp = Math.max(0.6, 1.0 - (u - 0.96) / 0.04);
+
+                    const twinkle = 0.90 + 0.10 * Math.sin(now * 0.02 + run.seed);
+                    run.slowOrbMat.opacity = orbOp * twinkle;
+                    run.slowHaloMat.opacity = orbOp * 0.65 * twinkle;
+                    run.fastOrbMat.opacity = orbOp * twinkle;
+                    run.fastHaloMat.opacity = orbOp * 0.70 * twinkle;
+
+                    // Slow Orb: walks C0 -> C3 (1 edge)
+                    run.slowOrbMesh.position.lerpVectors(run.corners[0], run.corners[3], u);
+
+                    // Fast Orb: laps C0 -> C1 -> C2 -> C3 (3 edges at 3x speed)
+                    if (u < (1 / 3)) {
+                        const subU = u * 3;
+                        run.fastOrbMesh.position.lerpVectors(run.corners[0], run.corners[1], subU);
+                    } else if (u < (2 / 3)) {
+                        const subU = (u - 1 / 3) * 3;
+                        run.fastOrbMesh.position.lerpVectors(run.corners[1], run.corners[2], subU);
+                    } else {
+                        const subU = (u - 2 / 3) * 3;
+                        run.fastOrbMesh.position.lerpVectors(run.corners[2], run.corners[3], subU);
+                    }
+                } else {
+                    // Reached target corner C3 simultaneously! Trigger Orocue Spark Pop!
+                    spawnOrbCollisionSpark(run.corners[3], run.normal);
+
+                    // Cleanup run meshes
+                    purpleFrameGroup.remove(run.group);
+                    if (run.slowOrbMesh.geometry) run.slowOrbMesh.geometry.dispose();
+                    if (run.slowOrbMat) run.slowOrbMat.dispose();
+                    if (run.slowHaloMat) run.slowHaloMat.dispose();
+                    if (run.fastOrbMesh.geometry) run.fastOrbMesh.geometry.dispose();
+                    if (run.fastOrbMat) run.fastOrbMat.dispose();
+                    if (run.fastHaloMat) run.fastHaloMat.dispose();
+                    activeTravellingRuns.splice(i, 1);
+                }
+            }
+
+            // 3. Update active spark collision explosions
+            for (let j = activeOrbSparks.length - 1; j >= 0; j--) {
+                const spark = activeOrbSparks[j];
+                const elapsed = now - spark.startTime;
+                const p = elapsed / spark.duration;
+
+                if (p <= 1.0) {
+                    // Orocue Keyframes:
+                    // 0%: opacity 0, scale 0.3, rotate 0deg
+                    // 35%: opacity 1, scale 1.25, rotate 35deg
+                    // 100%: opacity 0, scale 1.9, rotate 80deg
+                    let curScale, curRot, curOp;
+                    if (p < 0.35) {
+                        const subP = p / 0.35;
+                        curScale = 0.3 + (1.25 - 0.3) * subP;
+                        curRot = (35 * Math.PI / 180) * subP;
+                        curOp = subP;
+                    } else {
+                        const subP = (p - 0.35) / 0.65;
+                        curScale = 1.25 + (1.9 - 1.25) * subP;
+                        curRot = (35 * Math.PI / 180) + (45 * Math.PI / 180) * subP;
+                        curOp = Math.max(0, 1.0 - subP);
+                    }
+
+                    spark.crossMesh.scale.set(curScale, curScale, curScale);
+                    spark.crossMesh.rotation.z = curRot;
+                    spark.crossMat.opacity = curOp;
+                    spark.sparkPtsMat.opacity = curOp * 0.95;
+
+                    // Update radial micro-sparks
+                    const pos = spark.sparkPositions;
+                    for (let k = 0; k < 8; k++) {
+                        const k3 = k * 3;
+                        const vel = spark.sparkVelocities[k];
+                        pos[k3] += vel.x * 0.016;
+                        pos[k3 + 1] += vel.y * 0.016;
+                        pos[k3 + 2] += vel.z * 0.016;
+                        vel.multiplyScalar(0.92);
+                    }
+                    spark.sparkPtsGeo.attributes.position.needsUpdate = true;
+                } else {
+                    // Spark finished, cleanup
+                    purpleFrameGroup.remove(spark.group);
+                    if (spark.crossMesh.geometry) spark.crossMesh.geometry.dispose();
+                    if (spark.crossMat) spark.crossMat.dispose();
+                    if (spark.sparkPtsMesh.geometry) spark.sparkPtsMesh.geometry.dispose();
+                    if (spark.sparkPtsMat) spark.sparkPtsMat.dispose();
+                    activeOrbSparks.splice(j, 1);
+                }
+            }
+        }
+
+        window.triggerTravellingOrbs = launchTravellingOrbs;
 
         // --- 2b. The Red Node Graph (Random Shape, Counter-Rotating at 50% Speed) ---
         function buildRedNodeGraph() {
@@ -4395,6 +4923,9 @@ REV: rel-wad@r2
                     if (wireframeCubeAura) wireframeCubeAura.material.color.setHex(0x400010);
                     if (cornerBeacons) cornerBeacons.forEach(b => b.material.color.setHex(0x550000));
                     if (innerTesseract) innerTesseract.material.color.setHex(0x2a1040);
+                    if (purpleStruts) purpleStruts.forEach(s => s.material.color.setHex(0x3a123f));
+                    if (purpleCornerBeacons) purpleCornerBeacons.forEach(b => b.material.color.setHex(0x551144));
+                    if (purplePanels) purplePanels.forEach(p => p.material.opacity = 0.02);
                     if (redNodes) redNodes.forEach(n => n.material.color.setHex(0x550011));
                     if (relationshipLines) {
                         relationshipLines.material.color.setHex(0x330008);
@@ -4487,7 +5018,10 @@ REV: rel-wad@r2
                     if (wireframeCube) wireframeCube.material.color.setHex(0x00e5ff);
                     if (wireframeCubeAura) wireframeCubeAura.material.color.setHex(0x0088ff);
                     if (cornerBeacons) cornerBeacons.forEach(b => b.material.color.setHex(0x00ffff));
-                    if (innerTesseract) innerTesseract.material.color.setHex(0x7c4dff);
+                    if (innerTesseract) innerTesseract.material.color.setHex(0x9333ea);
+                    if (purpleStruts) purpleStruts.forEach(s => s.material.color.setHex(0xc084fc));
+                    if (purpleCornerBeacons) purpleCornerBeacons.forEach(b => b.material.color.setHex(0xdda0dd));
+                    if (purplePanels) purplePanels.forEach(p => p.material.opacity = 0.055);
                     if (redNodes) redNodes.forEach(n => n.material.color.setHex(0xff1744));
                     if (relationshipLines) {
                         relationshipLines.material.color.setHex(0xff2244);
@@ -5290,6 +5824,9 @@ REV: rel-wad@r2
             const dt = Math.min(0.05, (now - lastFrameTime) * 0.001);
             lastFrameTime = now;
             updateIdeaVerseComet(dt);
+
+            // Purple Inner Containment Frame - Travelling Light-Balls & Spark Collisions (Orocue Kinematics)
+            updateTravellingOrbs(now);
 
             renderer.render(scene, camera);
         }
