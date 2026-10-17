@@ -1,7 +1,11 @@
-# Space Visualizer v039 Specification: 200% Lattice Wireframe Glow & Aperture Containment
+# Space Visualizer v039 Specification: Unified Engine Roadmap
 
 - **Branch**: `gem/space-visualizer-v039`
-- **Release Versions**: `v039.00` (Implementation), `v039.01` (Documentation & Architecture)
+- **Release Versions**: 
+  - `v039.00` (Item 1: 200% Lattice Glow & Aperture Implementation)
+  - `v039.01` (Item 1: Lattice Architecture Documentation & Tags)
+  - `v039.02` (Item 2: Counter-Rotating Red Node Graph & Relationship Inspection)
+  - `v039.03` (Item 2: Red Graph Architecture Documentation & Tags)
 - **Primary Source**: `apps/web/public/art/cubes_of_knowledge_3d.html`
 - **Studio Mirrors**: `Gem's Art Studio/cubes_of_knowledge_3d.html`
 
@@ -9,91 +13,86 @@
 
 ## 1. Executive Summary & Objective
 
-In this iteration (Item 1 of the unified 3D visualizer roadmap), we merged the acclaimed **200% Lattice Wireframe Glow** and **8 Corner Beacon Spheres** into the rich interactive foundation of `cubes_of_knowledge_3d.html`. This combines the breathtaking radiant depth of the visualizer wireframe with the complete suite of interactive capabilities (the Synaptic Query Terminal, procedural Web Audio synth, real-time canvas face rig, and sliding aperture containment field).
+The `v039` series unifies the visual excellence and tactile depth of the zero-g visualizer with the rich interactive capabilities of `cubes_of_knowledge_3d.html` (the Synaptic Query Terminal, procedural Web Audio synth, real-time 2D canvas face rig, and sliding aperture containment field). Each milestone is landed incrementally with paired implementation and documentation commits.
 
 ---
 
-## 2. Architectural Components
+## 2. Item 1: The Cube & Aperture (v039.00 / v039.01)
 
 ### 2.1 Dual-Pass 200% Lattice Wireframe Glow
-The standard single-pass wireframe has been replaced with a dual-pass chromatic additive lattice:
 1. **Primary Structural Line Lattice (`wireframeCube`)**:
    - Geometry: `THREE.WireframeGeometry(THREE.BoxGeometry(size, size, size))`
-   - Material: `THREE.LineBasicMaterial`
-   - Color: Electric Cyan (`0x00e5ff`)
-   - Opacity: `0.98`
-   - Linewidth: `3`
-   - Blending: `THREE.AdditiveBlending`
+   - Material: Electric Cyan (`0x00e5ff`), opacity `0.98`, linewidth `3`, additive blending.
 2. **Secondary Chromatic Aura Halo (`wireframeCubeAura`)**:
-   - Geometry: Shared `THREE.WireframeGeometry`
-   - Material: `THREE.LineBasicMaterial`
-   - Color: Chromatic Deep Cyan/Blue (`0x0088ff`)
-   - Opacity: `0.80`
-   - Linewidth: `1`
-   - Scale: Uniform expansion at `(1.012, 1.012, 1.012)`
-   - Blending: `THREE.AdditiveBlending`
-
-This two-tier additive structure produces the distinctive volumetric bloom and radiant intensity observed at 200% lattice wireframe glow, creating optical depth without requiring heavy post-processing passes.
+   - Geometry: Shared wireframe geometry scaled to `(1.012, 1.012, 1.012)`.
+   - Material: Deep Chromatic Cyan (`0x0088ff`), opacity `0.80`, linewidth `1`, additive blending.
 
 ### 2.2 Corner Beacon Spheres
-At all 8 geometric vertices of the company cube (`[±halfSize, ±halfSize, ±halfSize]`), radiant beacon spheres are anchored to `cubeGroup`:
-- Geometry: `THREE.SphereGeometry(0.18, 16, 16)`
-- Material: `THREE.MeshBasicMaterial` with `color: 0x00ffff`, `transparent: true`, `opacity: 0.95`, `blending: THREE.AdditiveBlending`
-- Dynamic Pulsing: In the `animate()` loop, each beacon pulses with a staggered phase offset:
-  ```javascript
-  cornerBeacons.forEach((b, i) => {
-      b.scale.setScalar(1.0 + Math.sin(time * 3.5 + i) * 0.14);
-  });
-  ```
+- 8 radiant aqua spheres (`0x00ffff`, radius 0.18, additive blending) placed at all cube vertices `[±halfSize, ±halfSize, ±halfSize]`.
+- Pulsing dynamically with staggered sinusoidal phase offsets in the animation loop.
 
 ### 2.3 Sliding Aperture Containment Field
-Retained from the core sanctuary architecture, 6 translucent crystalline glass panels form the faces of the cube (`PlaneGeometry(size, size)`):
-- Material: `0x00e5ff`, `opacity: 0.035`, `side: THREE.DoubleSide`, `depthWrite: false`.
-- Outward Normal Vector Translation: On camera zoom (via double-click or scroll wheel into the cube), each plane smoothly translates along its outward normal direction vector `openDir`:
-  ```javascript
-  const openAmount = Math.max(0, Math.min(1, (10.0 - camera.position.z) / 6.0));
-  cubePlanes.forEach(p => {
-      if (p.userData && p.userData.initialPos && p.userData.openDir) {
-          const offset = p.userData.openDir.clone().multiplyScalar(openAmount * 2.2);
-          p.position.copy(p.userData.initialPos).add(offset);
-          p.material.opacity = 0.04 + (1 - openAmount) * 0.04;
-      }
-  });
-  ```
+- 6 translucent crystalline glass panels (`PlaneGeometry(size, size)`, `0x00e5ff`, opacity 0.035, double-sided, `depthWrite: false`).
+- Smoothly translate outward along their respective face normal vectors (`openDir * openAmount * 2.2`) on camera zoom.
 
-### 2.4 Outage Simulation & State Degradation
-The outage toggle listener (`outage-toggle-btn`) cleanly degrades and restores the 200% lattice glow:
-- **Outage Active**:
-  - `wireframeCube` turns blood crimson (`0x8a1020`)
-  - `wireframeCubeAura` turns deep ember (`0x400010`)
-  - `cornerBeacons` dim to dark maroon (`0x550000`)
-- **Restored State**:
-  - `wireframeCube` returns to electric cyan (`0x00e5ff`)
-  - `wireframeCubeAura` returns to chromatic cyan (`0x0088ff`)
-  - `cornerBeacons` return to brilliant aqua (`0x00ffff`)
+### 2.4 HUD Integration
+- Top-right header badge: `LATTICE GLOW: 200% LOCKED` with electric cyan animated pulse indicator.
 
-### 2.5 HUD Status Integration
-A dedicated glowing badge was added to the top-right HUD overlay:
-```html
-<div class="flex items-center space-x-2 text-xs font-mono px-3 py-1.5 rounded-xl hud-glass border border-cyan-400/50 shadow-[0_0_15px_rgba(0,229,255,0.35)]">
-    <span class="w-2.5 h-2.5 rounded-full bg-cyan-400 animate-pulse shadow-[0_0_10px_#00e5ff]"></span>
-    <span class="text-cyan-300 font-bold uppercase tracking-wider">LATTICE GLOW:</span>
-    <span class="px-2 py-0.5 rounded bg-cyan-950/90 text-cyan-200 border border-cyan-500 font-mono font-bold text-[10px] shadow-[0_0_12px_#00e5ff]">200% LOCKED</span>
-</div>
+---
+
+## 3. Item 2: The Red Node Graph (v039.02 / v039.03)
+
+### 3.1 50% Counter-Rotation Physics
+To produce the captivating visual parallax requested, the red node graph is decoupled from `cubeGroup` by anchoring directly to `scene` in its own group (`redGraphGroup`):
+```javascript
+if (redGraphGroup && cubeGroup && !reducedMotion) {
+    redGraphGroup.rotation.y = -0.5 * cubeGroup.rotation.y;
+    redGraphGroup.rotation.x = -0.5 * cubeGroup.rotation.x;
+    redGraphGroup.rotation.z = -0.5 * cubeGroup.rotation.z;
+}
 ```
+The internal constellation continuously and smoothly rotates in the exact opposite direction to the company cube at 50% speed.
+
+### 3.2 Organic 3D Topology
+- **28 Organic Nodes**: Positioned randomly within a spherical volume (radii `0.95` to `2.35`), avoiding the central Sun core (radius `0.85`).
+- **Material**: `THREE.MeshBasicMaterial({ color: 0xff1744, transparent: true, opacity: 0.92, blending: THREE.AdditiveBlending })`.
+- **Relationship Edges (`relationshipLines`)**: Formed between any two nodes with a Euclidean distance `< 1.35`, rendered with additive glowing lines (`0xff2244`, opacity `0.45`). Each node stores connected neighbors in `userData.neighbors`.
+
+### 3.3 Interactive Selection & Relationship Graphing
+Clicking on any red node invokes `selectRedNode(node)`:
+1. **Target Node**: Transforms to brilliant pure white (`0xffffff`) and expands to `2.0x` scale.
+2. **Connected Neighbors**: Transform to radiant gold (`0xffea00`) and expand to `1.5x` scale.
+3. **Unconnected Nodes**: Remain neutral red (`0xff1744`) at `1.0x` scale.
+4. **Relationship Lines**: Brighten from `0.45` to `0.95` opacity.
+5. **Acoustic Feedback**: Triggers a stardust chime from `CosmicAudio`.
+6. **Metadata Tile Card (`#node-info-modal`)**: Pops up at bottom-left detailing:
+   - Node ID and FalkorDB Shard assignment
+   - Cypher label (e.g. `:RECORD_EVIDENCE_7`)
+   - Domain cluster (Operations, Neural Reasoning, or Clearance)
+   - Active connected edges count
+   - Verification cryptographic SHA hash
+
+### 3.4 Node Names Billboard Toggle
+Each node carries an attached billboard canvas sprite with high-resolution typography (`NODE #X`):
+- Visibility is controlled by a dedicated HUD toggle button: `NODE NAMES: ON / OFF`.
+- Toggling immediately reveals or hides all 28 node label sprites.
+
+### 3.5 Fail-Closed Outage Simulation
+- **Outage Active**: Red nodes dim to deep maroon (`0x550011`), and relationship edges dim to `0x330008` at `0.15` opacity.
+- **Outage Restored**: Full radiant electric red (`0xff1744`) and edges (`0xff2244` at `0.45`) return instantly.
 
 ---
 
-## 3. Preservation of Baseline Features
+## 4. Preservation of Foundation Features
 
-All features from the prior iteration remain intact:
-1. **Synaptic Query Terminal**: Interactive NLP cypher interface with real-time prompt chips and response log.
-2. **Procedural Web Audio Synth**: Ambient sub-bass drone and stardust chimes linked to pointer velocity.
-3. **Face Rig Engine**: Multi-expression 2D canvas rig supporting micro-saccades, blinking, speech-driven jaw articulation, and dashboard-proximity smile response.
-4. **Deep-Space 3-Layer Parallax**: Foreground stardust with high parallax, mid-field starlight, and pinpoint distant celestial backdrop.
+All interactive systems remain fully functional:
+1. **Synaptic Query Terminal**: NLP cypher queries, quick chips, and live logs.
+2. **2D Canvas Face Rig**: Real-time pupil tracking, natural blinking, jaw drop articulation, and proximity smiles.
+3. **Procedural Web Audio**: Continuous sub-bass drone and pointer-velocity stardust chimes.
+4. **Deep-Space 3-Layer Parallax**: Opposing cursor parallax across near, mid, and far starfields.
 
 ---
 
-## 4. Next Step on the Roadmap
+## 5. Next Step on the Roadmap
 
-- **Item 2: The Red Node Graph**: Random topology inside the cube, counter-rotating at 50% speed in the opposite direction of cube rotation, with click-to-inspect relationship panels.
+- **Item 3: Ideaverse Comets**: Passing glowing celestial comets, approaching the camera at an angle away from the cube, hover-to-slow, click-to-intercept, and modal inspection / ingestion.
