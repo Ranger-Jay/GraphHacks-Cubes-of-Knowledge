@@ -6,6 +6,8 @@
   - `v039.01` (Item 1: Lattice Architecture Documentation & Tags)
   - `v039.02` (Item 2: Counter-Rotating Red Node Graph & Relationship Inspection)
   - `v039.03` (Item 2: Red Graph Architecture Documentation & Tags)
+  - `v039.04` (Item 3: Deep-Space Comets, Intercept Modal & Cube Ingestion)
+  - `v039.05` (Item 3: Comet Architecture Documentation & Tags)
 - **Primary Source**: `apps/web/public/art/cubes_of_knowledge_3d.html`
 - **Studio Mirrors**: `Gem's Art Studio/cubes_of_knowledge_3d.html`
 
@@ -77,22 +79,43 @@ Each node carries an attached billboard canvas sprite with high-resolution typog
 - Visibility is controlled by a dedicated HUD toggle button: `NODE NAMES: ON / OFF`.
 - Toggling immediately reveals or hides all 28 node label sprites.
 
-### 3.5 Fail-Closed Outage Simulation
-- **Outage Active**: Red nodes dim to deep maroon (`0x550011`), and relationship edges dim to `0x330008` at `0.15` opacity.
-- **Outage Restored**: Full radiant electric red (`0xff1744`) and edges (`0xff2244` at `0.45`) return instantly.
+---
+
+## 4. Item 3: The Ideaverse Comets (v039.04 / v039.05)
+
+### 4.1 Deep-Space Trajectory & Physics
+Ideaverse comets exist independently from the internal orbiting agent pyramids:
+1. **Spawning Coordinates**: Generated in far deep space ($Z = -95$ to $-140$, $X \in [-27, 27]$, $Y \in [-20, 20]$).
+2. **Trajectory Vector**: Heads towards the camera passing at $Z = +32$, angled outwards away from the central cube origin.
+3. **Speed & Alignment**: Smooth celestial glide at velocity $0.38$ to $0.60$. The comet's quaternion dynamically aligns its tail backwards along the flight vector:
+   ```javascript
+   cometGroup.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), dir);
+   ```
+
+### 4.2 Multi-Tier Visual Mesh
+- **Nucleus**: Two-tier core consisting of an outer translucent violet glow (`0xdfb4ff`, radius 0.28, additive blending) and an inner brilliant diamond core (`0xffffff`, radius 0.12).
+- **Stardust Particle Tail**: 36-point tapering vertex-colored stardust line trailing backwards along local $-Z$, smoothly grading from electric cyan (`#00e5ff`) at the head to cyber purple (`#9955ff`) at the tail tip.
+- **Hit Detection Volume**: Invisible bounding sphere (radius 1.4) enabling effortless, responsive pointer raycasting during rapid celestial movement.
+
+### 4.3 Click Interception & Energy Ingestion
+1. **Interception**: Clicking an active comet pauses its movement and displays the `#comet-info-modal` tile card.
+2. **Metadata Surface**: Shows Idea ID, Title, Source Pipeline, Deep Space Origin coordinates, Target Idea File, SHA hash, and Verification state.
+3. **Cube Ingestion Stream**: Clicking **"✨ Ingest into Company Cube"** launches a glowing cyan energy pulse streaking from the comet directly into the cube center `(0, 0, 0)`.
+   - On impact: Triggers the procedural sub-bass shockwave boom (`playShockwaveBoom`), triggers a Sun expansion pulse (`sunImpulseScale = 1.45`), and retires the comet from deep space.
+4. **Vanishing Condition**: If not clicked before its lifespan expires ($> 320$ frames) or upon crossing beyond the camera ($Z > 35$), the comet safely departs into the infinite void.
 
 ---
 
-## 4. Preservation of Foundation Features
+## 5. Preservation of Foundation Features
 
 All interactive systems remain fully functional:
 1. **Synaptic Query Terminal**: NLP cypher queries, quick chips, and live logs.
 2. **2D Canvas Face Rig**: Real-time pupil tracking, natural blinking, jaw drop articulation, and proximity smiles.
-3. **Procedural Web Audio**: Continuous sub-bass drone and pointer-velocity stardust chimes.
+3. **Procedural Web Audio**: Continuous sub-bass drone, shockwave boom, and pointer-velocity stardust chimes.
 4. **Deep-Space 3-Layer Parallax**: Opposing cursor parallax across near, mid, and far starfields.
 
 ---
 
-## 5. Next Step on the Roadmap
+## 6. Next Step on the Roadmap
 
-- **Item 3: Ideaverse Comets**: Passing glowing celestial comets, approaching the camera at an angle away from the cube, hover-to-slow, click-to-intercept, and modal inspection / ingestion.
+- **Item 4: The Fiery Sun Core**: Dynamic plasma mantle wireframe, pulsating solar flares, prominences, and rotating concentric cypher mandala dials.
