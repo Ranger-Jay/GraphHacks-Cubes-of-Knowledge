@@ -85,6 +85,10 @@ Limits. This is a dev convenience, not an auth design: anyone who can reach the 
 
 Combined-head browser proof is pending. The status component now uses the shipped real probe; both `CONNECTION_FAILED` and `QUERY_FAILED` indicate graph unavailability. Hosted FalkorDB, production sessions and browser deployment remain unproven.
 
+Optional v038 local owner rehearsal adds a separate, disabled-by-default IdeaVerse alias while
+the ordinary `/api` path stays reader-only. Setup, request guards and held integration gates
+are in [owner-rehearsal transport](docs/owner-rehearsal-v038.md). This slice does not bind the studio UI.
+
 Web unit tests: `npm run test:web`; included in `npm run verify` along with the API, scene, bootstrap and harness suites.
 
 The database and provider credentials remain server-side. Model execution defaults to disabled and has no provider key. No private team records or production diaries belong in this public repository.
