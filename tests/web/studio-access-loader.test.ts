@@ -13,7 +13,7 @@ function deferred<T>() { let resolve!: (v: T) => void; let reject!: (e: unknown)
 
 /** A fetcher scripted per URL: each call consumes the next scripted reply for that URL. */
 function scripted(replies: Record<string, Array<() => Promise<Response>>>) {
-  const calls: Array<{ url: string; init?: RequestInit }> = [];
+  const calls: Array<{ url: string; init: RequestInit | undefined }> = [];
   const fetcher: Fetcher = async (input, init) => {
     calls.push({ url: input, init });
     const next = replies[input]?.shift();
@@ -51,11 +51,13 @@ test('fetch shape: credential-free GET, no-store, exact alias URL, no body', asy
   const { fetcher, calls } = scripted({ [OWNER_ALIAS_ACCESS_URL]: [once(200, ownerBody)] });
   assert.equal(await resolveSessionAccess(fetcher), 'OWNER');
   assert.equal(calls.length, 1);
-  assert.equal(calls[0].url, OWNER_ALIAS_ACCESS_URL);
-  assert.equal(calls[0].init?.method, 'GET');
-  assert.equal(calls[0].init?.credentials, 'omit');
-  assert.equal(calls[0].init?.cache, 'no-store');
-  assert.equal(calls[0].init?.body, undefined);
+  const first = calls[0];
+  assert.ok(first);
+  assert.equal(first.url, OWNER_ALIAS_ACCESS_URL);
+  assert.equal(first.init?.method, 'GET');
+  assert.equal(first.init?.credentials, 'omit');
+  assert.equal(first.init?.cache, 'no-store');
+  assert.equal(first.init?.body, undefined);
 });
 
 test('alias answers are authoritative: OWNER enables, READER reads only', async () => {
