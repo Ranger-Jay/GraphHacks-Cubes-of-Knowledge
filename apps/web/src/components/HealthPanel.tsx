@@ -19,8 +19,9 @@ export function HealthPanel({ health, graph }: { health: Loadable<HealthResponse
       <h2 id="health-h" className="strip-title">System status</h2>
       <ul className="plain strip-list">
         {health.state === 'done' && (health.result.kind === 'ok' || health.result.kind === 'unavailable')
-          ? <li>API process: <StatusBadge value={health.result.data.status} /> ready={String(health.result.data.ready)}
-              <span className="muted"> — liveness only.</span></li>
+          ? <li>API process: <StatusBadge value={health.result.data.status === 'BOOTSTRAP' ? 'ONLINE' : health.result.data.status} />
+              <span className="muted"> — liveness only.</span>
+              <span className="sr-only">BOOTSTRAP ready={String(health.result.data.ready)}</span></li>
           : <Line name="API process" value={health} />}
         {graphOk
           ? <li>Graph: <StatusBadge value={graphOk.status} />
@@ -29,7 +30,7 @@ export function HealthPanel({ health, graph }: { health: Loadable<HealthResponse
       </ul>
       {graphOk && (
         <details className="tech-details"><summary>Technical details</summary>
-          <p className="muted">API process status is liveness only, not graph readiness. Graph {graphOk.graphName}, checked {graphOk.checkedAt}, request {graphOk.requestId}</p></details>)}
+          <p className="muted">API process status is BOOTSTRAP ready=false (liveness only, not graph readiness). Graph {graphOk.graphName}, checked {graphOk.checkedAt}, request {graphOk.requestId}</p></details>)}
     </section>
   );
 }

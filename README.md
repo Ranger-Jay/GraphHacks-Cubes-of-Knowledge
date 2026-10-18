@@ -7,6 +7,8 @@ Built with FalkorDB, React and Three.js for the **Graph Hacks Company Brain** tr
 > **Can the current cut of Warnings After Dark ship?**  
 > **GAP:** *Basement Hum* is cleared only for Cut v3. The current Cut v4 needs a new license. *Night Drive* is licensed for Cut v4. Follow each result back to its source excerpt.
 
+![Cubes of Knowledge 3D workspace overview with Company Brain and disconnected comparison cube](docs/evidence/v054/overview_two_cubes.png)
+
 ## The demo
 
 | Experience | What it demonstrates |
