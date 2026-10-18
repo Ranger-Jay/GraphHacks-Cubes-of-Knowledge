@@ -105,6 +105,11 @@ export class IdeaStudioController {
     const was = this.env;
     if (was.phase === phase && was.access === env.access) return;
     const leftReady = was.phase === 'READY' && phase !== 'READY';
+    // Owner access lost while staying READY (v049): a capability is not a one-way latch. An in-flight import
+    // or read-back started under OWNER must not complete as Added after the loss. Abandon the import
+    // sessions exactly as leaving READY does, so their late completions are discarded and the attempts stay
+    // unresolved. Pool/detail reads are reader data and stay valid, so their sequences are untouched.
+    const lostOwner = was.phase === 'READY' && phase === 'READY' && was.access === 'OWNER' && env.access !== 'OWNER';
     this.env = { phase, access: env.access };
     if (was.access !== env.access) this.deniedLocal = false;
     if (leftReady) {
@@ -112,6 +117,8 @@ export class IdeaStudioController {
       this.poolSeq++; this.openSeq++;
       for (const id of this.sessions.keys()) this.dispatch(id, { type: 'abandon' });
       this.pool = EMPTY_POOL;
+    } else if (lostOwner) {
+      for (const id of this.sessions.keys()) this.dispatch(id, { type: 'abandon' });
     }
     this.emit();
     if (phase === 'READY' && was.phase !== 'READY') void this.refreshPool();
