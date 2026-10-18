@@ -8,12 +8,13 @@ import { StatusArea } from './components/StatusArea';
 import { currentAnalysis, deriveScenePhase, nextRecovery, toRuntimeContext, type RecoveryState } from './sceneState';
 import { nextRoute, parseRoute, type Route } from './route';
 import { StudioPanel, type StudioBinding } from './studio/StudioPanel';
+import { TalkPanel } from './components/TalkPanel';
 export type { StudioBinding } from './studio/StudioPanel';
 
 /** Seeded demo release (graph seed: Release rel-wad, tenant t-wad). */
 export const SEEDED_RELEASE_ID = 'rel-wad';
 
-export const IDENTITY = 'Cubes of Knowledge: A company brain built on FalkorDB, with traceable decisions and persistent agent memory.';
+export const IDENTITY = 'Cubes of Knowledge: A source-linked studio evidence workspace built on FalkorDB.';
 
 export function Shell({ route, health, graph, analysis, Scene, reducedMotion, selected, onSelect, onRequery, recovered = false, generation, studio }: {
   route: Route; health: Loadable<HealthResponse>; graph: Loadable<GraphStatusResponse>;
@@ -46,7 +47,8 @@ export function Shell({ route, health, graph, analysis, Scene, reducedMotion, se
               <div className="side-col">
                 <StatusArea phase={phase ?? 'CHECKING'} releaseId={route.releaseId} analysis={analysis} recovered={recovered} />
                 <AnalysisView releaseId={route.releaseId} result={analysis} phase={phase} />
-                {studio && <StudioPanel controller={studio.controller} phase={phase} {...(studio.access ? { access: studio.access } : {})} />}
+                {current?.status === 'AVAILABLE' && <TalkPanel key={`${generation ?? 0}:${current.releaseId}:${current.revision}`} analysis={current} />}
+                {studio && <StudioPanel controller={studio.controller} phase={phase} {...(studio.access ? { access: studio.access } : {})} {...(studio.accessStore ? { accessStore: studio.accessStore } : {})} />}
               </div>
             </div>)}
           {route.name === 'not_found' && (

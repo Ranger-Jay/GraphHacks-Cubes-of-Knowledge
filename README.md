@@ -1,16 +1,16 @@
 # Cubes of Knowledge
 
-**A company brain built on FalkorDB, with traceable decisions and persistent agent memory.**
+**A source-linked studio evidence workspace built on FalkorDB.**
 
-Canonical product description; implementation status and acceptance gates are recorded below.
+Implementation status and acceptance gates are recorded below.
 
 A Graph Hacks entry exploring a fictional studio's current-cut licensing, evidence, authorized actions, and recoverable agent state through FalkorDB.
 
 ## Status
 
-Partial integration review candidate v034.00, pending independent exact-head review. It combines the reviewed IdeaVerse API, real 100-file manifest, graph/profile hardening, fixture layout, single-card client slice (unbound), import transport contract and approved outage text. It is not the completed import/comet browser journey. See [partial candidate manifest](docs/integration-v034.md) for exact inputs, reproduction commands and held gates. The earlier [v015 manifest](docs/integration-v015.md) remains historical evidence.
+The accepted fallback is [PR #60](https://github.com/Ranger-Jay/GraphHacks-Cubes-of-Knowledge/pull/60) (`adacbe736f886c234f4a9ad60383d7d2f8c25578`, v050 composition). This v055 branch is an early combined review candidate with repaired server-capability binding, optional text explanations and local read-aloud, and reproducible IdeaVerse setup. It requires independent exact-head combined verification; it is not a released, completed product. See the [v055 composition manifest](docs/integration-v055.md) for source pins, resolutions and held gates. Earlier integration manifests remain historical evidence.
 
-The implemented path is a scoped, source-linked release analysis through a real graph adapter, server-configured sessions, and the local web proxy. Approval writes remain disabled; agent tools, durable agent handoff, real model execution, hosted runtime and deployment are not included in this candidate. The tagline describes the product goal; it is not proof that every capability is complete.
+The implemented path includes scoped, source-linked release analysis and studio/IdeaVerse inspection through a real graph adapter, server-configured sessions, the local web proxy and mounted studio shell. Add is gated by a fresh server capability; only the explicitly opted-in local owner rehearsal can enable it through the proxy. Its actual combined import/read-back journey remains a verification gate. Optional model explanations default to disabled; no live provider execution is yet proved. Browser read-aloud uses local device voices separately from recorded WAVs. Approval writes, durable agent handoff, persistent agent memory, hosted runtime and deployment remain unproven or outside this candidate.
 
 ## Required demonstration
 
@@ -24,10 +24,12 @@ The implemented path is a scoped, source-linked release analysis through a real 
 
 Node.js **22.12+ or 24** (24 recommended; .nvmrc), npm workspaces, TypeScript, official FalkorDB client, React/Vite and Three.js. Exact package versions and integrity hashes are in package-lock.json. Dependencies were resolved from the registry during kickoff; do not change the shared lockfile without coordination.
 
+The checkout below targets the pending v055 integration branch, not the accepted #60 fallback (which does not have `seed-ideaverse`).
+
 ```sh
 git clone https://github.com/Ranger-Jay/GraphHacks-Cubes-of-Knowledge.git
 cd GraphHacks-Cubes-of-Knowledge
-git switch buddy/combined-v015
+git switch buddy/combined-owner-talker-v055
 npm ci
 cp .env.example .env
 ```
@@ -56,10 +58,13 @@ On a **new disposable local graph**, set `GRAPH_EVIDENCE_KEY`, `GRAPH_WITNESS_DI
 
 ```sh
 node --env-file-if-exists=.env --import tsx packages/graph/src/cli.ts seed --init-witness
+node --env-file-if-exists=.env --import tsx packages/graph/src/cli.ts seed-ideaverse
 node --env-file-if-exists=.env --import tsx packages/graph/src/cli.ts analyze rel-wad
 ```
 
-The base seed should return current-cut `GAP`, with stale v3 evidence for Basement Hum and current evidence for Night Drive. Do not initialize, reset or seed an existing/shared graph to follow these instructions. See [seed/witness operator procedures](graph/seed/README.md) for later runs and recovery.
+The IdeaVerse command should print `{"seedVersion":"wad-ideaverse@1","tenantId":"t-wad","ideas":100,"workspaceRevision":0,"edges":100}` on a fresh graph. It loads and verifies the checked-in manifest and all file hashes; nothing is imported into the cube. It takes an optional tenant id (default `t-wad`, matching `API_TENANT_ID`) and no witness/reset flags. The command uses the configured graph connection; keep it pointed at this disposable loopback setup. It does not initialize the licensing witness or establish clearance. For the local studio crew and profile fixtures, also run `seed-studio` and `seed-agent-profiles` through the same CLI; their display metadata does not establish agent execution or memory.
+
+The base release analysis should return current-cut `GAP`, with stale v3 evidence for Basement Hum and current evidence for Night Drive. Do not initialize, reset or seed an existing/shared graph to follow these instructions. See [seed/witness operator procedures](graph/seed/README.md) for later runs and recovery.
 
 In two separate terminals:
 
