@@ -5,7 +5,7 @@ import type { IdeaStudioController } from './studioController';
 import { addBlockedReason, type StudioAccess } from './studioGuard';
 
 /** What the shell binds. Absent = nothing is mounted and nothing can import (the production default today). */
-export interface StudioBinding { controller: IdeaStudioController; access?: StudioAccess }
+export interface StudioBinding { controller: IdeaStudioController; access?: StudioAccess; subscribeAdded?: (listener: (ideaId: string) => void) => () => void }
 
 export const POOL_WAITING_COPY = 'Ideas can be inspected when the cube is ready.';
 export const POOL_UNAVAILABLE_COPY = 'Could not read the ideas right now.';

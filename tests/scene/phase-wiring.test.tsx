@@ -7,6 +7,7 @@ import type { SceneData, ScenePhase } from '@cubes/contracts';
 import { CompanyCubeScene } from '../../apps/web/src/scene/index';
 import { AGENT_CONFIGS, PHRASE_GREETING, PHRASE_HELP, PHRASE_AFFIRMATIVE, PHRASE_NEGATIVE, TASK_START_CYCLE, GRAPH_OUTAGE_NOTICES, normalSpeechAllowed } from '../../apps/web/src/scene/dialogue';
 import { setAudioMuted, speakAuthorizedPhrase } from '../../apps/web/src/scene/audio';
+import { AUDIO_CLIPS } from '../../apps/web/src/scene/audioClips';
 
 // Worst case on purpose: AVAILABLE data with nodes is passed in every phase. Only READY may draw or enable anything from it.
 const stale: SceneData = {
@@ -53,28 +54,35 @@ test('wiring: only GRAPH_UNAVAILABLE is drawn as an outage (denied, missing, che
   assert.ok(scene({ phase: 'GRAPH_UNAVAILABLE' }).includes('damaged-cube'));
 });
 
-test('speech: ordinary phrases are spoken only in READY; GRAPH_UNAVAILABLE speaks only its approved notice', () => {
-  const spoken: string[] = [];
-  const w = globalThis as unknown as { window?: unknown; SpeechSynthesisUtterance?: unknown };
-  const prev = { window: w.window, utt: w.SpeechSynthesisUtterance };
-  w.SpeechSynthesisUtterance = class { text: string; pitch = 1; rate = 1; constructor(t: string) { this.text = t; } };
-  w.window = { speechSynthesis: { cancel() {}, getVoices: () => [], speak: (u: { text: string }) => { spoken.push(u.text); } } };
+test('recorded ordinary clips play only in READY; approved outage clips play only in GRAPH_UNAVAILABLE', () => {
+  const played: string[] = [];
+  const globals = globalThis as unknown as { Audio?: unknown };
+  const previous = globals.Audio;
+  globals.Audio = class {
+    onended: (() => void) | null = null; onerror: (() => void) | null = null; currentTime = 0;
+    constructor(readonly src: string) {}
+    play() { played.push(this.src); return Promise.resolve(); }
+    pause() {}
+  };
   setAudioMuted(false);
   try {
-    const ordinary = [PHRASE_GREETING.phrase, PHRASE_HELP.phrase, PHRASE_AFFIRMATIVE.phrase, PHRASE_NEGATIVE.phrase, ...TASK_START_CYCLE.map(p => p.phrase)];
+    const ordinary = AUDIO_CLIPS.filter(c => c.agent === 'ava' && c.kind === 'ordinary');
+    const outage = AUDIO_CLIPS.find(c => c.agent === 'ava' && c.kind === 'outage')!;
     for (const phase of PHASES) {
-      spoken.length = 0;
-      for (const phrase of ordinary) speakAuthorizedPhrase(phrase, AGENT_CONFIGS.ava, phase);
-      assert.equal(spoken.length, phase === 'READY' ? ordinary.length : 0, `ordinary speech count in ${phase}`);
+      played.length = 0;
+      for (const clip of ordinary) speakAuthorizedPhrase(clip.transcript, AGENT_CONFIGS.ava, phase);
+      assert.equal(played.length, phase === 'READY' ? ordinary.length : 0, `ordinary WAV count in ${phase}`);
       assert.equal(normalSpeechAllowed(phase), phase === 'READY');
+      played.length = 0;
+      speakAuthorizedPhrase(outage.transcript, AGENT_CONFIGS.ava, phase);
+      assert.equal(played.length, phase === 'GRAPH_UNAVAILABLE' ? 1 : 0, `outage WAV count in ${phase}`);
     }
-    spoken.length = 0;
-    for (const phase of PHASES) speakAuthorizedPhrase(GRAPH_OUTAGE_NOTICES.ava, AGENT_CONFIGS.ava, phase);
-    assert.equal(spoken.length, 2, 'approved notice is spoken in READY (allowed) and GRAPH_UNAVAILABLE only');
+    played.length = 0;
+    speakAuthorizedPhrase('Invented unrecorded answer', AGENT_CONFIGS.ava, 'READY');
+    assert.equal(played.length, 0, 'no synthesis fallback for an unrecorded phrase');
   } finally {
     setAudioMuted(true);
-    w.window = prev.window; w.SpeechSynthesisUtterance = prev.utt;
-    if (prev.window === undefined) delete w.window;
+    if (previous === undefined) delete globals.Audio; else globals.Audio = previous;
   }
 });
 
