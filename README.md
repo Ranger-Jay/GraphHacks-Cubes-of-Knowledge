@@ -8,9 +8,9 @@ A Graph Hacks entry exploring a fictional studio's current-cut licensing, eviden
 
 ## Status
 
-The accepted baseline is [PR #60](https://github.com/Ranger-Jay/GraphHacks-Cubes-of-Knowledge/pull/60) (`adacbe736f886c234f4a9ad60383d7d2f8c25578`, v050 composition). This v051 branch is a pending reproducible-setup delta above that baseline: it exposes the existing verified 100-file IdeaVerse seed through the operator CLI and corrects setup/identity copy. It requires independent exact-head review; it is not a released, completed product. See the [v050 composition manifest](docs/integration-v050.md) for accepted inputs and held gates. Earlier integration manifests remain historical evidence.
+The accepted fallback is [PR #60](https://github.com/Ranger-Jay/GraphHacks-Cubes-of-Knowledge/pull/60) (`adacbe736f886c234f4a9ad60383d7d2f8c25578`, v050 composition). This v055 branch is an early combined review candidate with repaired server-capability binding, optional text explanations and local read-aloud, and reproducible IdeaVerse setup. It requires independent exact-head combined verification; it is not a released, completed product. See the [v055 composition manifest](docs/integration-v055.md) for source pins, resolutions and held gates. Earlier integration manifests remain historical evidence.
 
-The implemented path includes scoped, source-linked release analysis and studio/IdeaVerse inspection through a real graph adapter, server-configured sessions, the local web proxy and mounted studio shell. The browser Add action remains disabled in this baseline. Approval writes, durable agent handoff, persistent agent memory, real model execution, hosted runtime and deployment remain unproven or outside this candidate.
+The implemented path includes scoped, source-linked release analysis and studio/IdeaVerse inspection through a real graph adapter, server-configured sessions, the local web proxy and mounted studio shell. Add is gated by a fresh server capability; only the explicitly opted-in local owner rehearsal can enable it through the proxy. Its actual combined import/read-back journey remains a verification gate. Optional model explanations default to disabled; no live provider execution is yet proved. Browser read-aloud uses local device voices separately from recorded WAVs. Approval writes, durable agent handoff, persistent agent memory, hosted runtime and deployment remain unproven or outside this candidate.
 
 ## Required demonstration
 
@@ -24,12 +24,12 @@ The implemented path includes scoped, source-linked release analysis and studio/
 
 Node.js **22.12+ or 24** (24 recommended; .nvmrc), npm workspaces, TypeScript, official FalkorDB client, React/Vite and Three.js. Exact package versions and integrity hashes are in package-lock.json. Dependencies were resolved from the registry during kickoff; do not change the shared lockfile without coordination.
 
-The checkout below targets the pending v051 topic branch once published for review, not the accepted #60 checkout (which does not yet have `seed-ideaverse`).
+The checkout below targets the pending v055 integration branch, not the accepted #60 fallback (which does not have `seed-ideaverse`).
 
 ```sh
 git clone https://github.com/Ranger-Jay/GraphHacks-Cubes-of-Knowledge.git
 cd GraphHacks-Cubes-of-Knowledge
-git switch buddy/reproducible-seed-v051
+git switch buddy/combined-owner-talker-v055
 npm ci
 cp .env.example .env
 ```

@@ -11,6 +11,8 @@ review candidate, not a release. Accepted #60 remains frozen as a fallback.
 | Mounted renderer/access foundation #60 | `adacbe736f886c234f4a9ad60383d7d2f8c25578` | Ancestor, unchanged |
 | Text-model wiring #61 | `ec1fae2d58919ce1b0bb44e907ecc3f88a6f8fd0` | Parent; offline/browser GO, live provider blocked |
 | Repaired studio capability binding v049 | `193c68f6457d2cfd828acf6696c11e5eaa1e23b6` | Twelve v049 commits replayed; earlier v048 replays excluded because #60 already contains that endpoint/transport |
+| Browser read-aloud #62 | `021f942ef20d575a494136bcbe872dfde9d73f02` | Three commits replayed after independent bounded code/test GO |
+| Reproducible IdeaVerse setup #63 | `d4dd021a9fd00e984d0cf44d38f11af5542721ee` | Three commits replayed after independent CLI/setup component GO |
 
 The component v049 GO resolves stale OWNER on panel unmount/remount, terminal
 disposal and StrictMode. It does not itself establish the combined import path.
@@ -28,6 +30,16 @@ v049 repair commits replayed cleanly. The lockfile is the reviewed v049 lock,
 including exact jsdom 26.1.0 and @types/jsdom 27.0.0 development dependencies.
 No runtime dependency, root version or script change was introduced by composition.
 
+The speech delta replayed cleanly after its bounded independent GO. A new composition
+regression runs the actual Shell/TalkPanel React effects in JSDOM, covering explicit
+read-aloud, no speech on answer arrival, mute reset, late-answer discard after outage
+and new-generation cancellation. Network and speech are synthetic doubles; this is
+not native voice, audible output or live provider proof.
+
+The CLI/setup slice replayed cleanly. README status and checkout were then reconciled
+to this integration branch; its obsolete Add-disabled-baseline wording was replaced
+with the actual owner-rehearsal capability gate and held combined verification.
+
 ## Actual scope
 
 - A current authorized READY analysis permits graph/source inspection and a
@@ -40,12 +52,14 @@ No runtime dependency, root version or script change was introduced by compositi
 - Model explanations default to unavailable. Provider secrets remain server-side;
   recorded WAV previews are separate from model execution and generated prose.
 - Existing recorded voice mute/phase/recovery behavior remains present.
+- An explicit Read aloud control can speak the current explanation through a selected
+  local device voice, with shared mute and WAV ownership; no remote TTS is added.
 
-Not included here: v053 browser read-aloud (#62), v051 reproducible IdeaVerse CLI,
-v054 approved-art preservation work, persistent agent memory, hosted connectivity,
-production sessions or deployment. The existing IdeaVerse seeding function still
-needs the separately reviewed CLI slice before README-only fresh setup populates
-the 100 ideas. Do not claim that this head fixes that packaging gap.
+The reviewed `seed-ideaverse` CLI now makes the existing 100-file pool reproducible
+from the documented disposable local setup; it does not initialize or alter the
+licensing witness or import the ideas. Current combined browser reproduction is
+still required. Not included: v054 approved-art preservation work, persistent agent
+memory, hosted connectivity, production sessions or deployment.
 
 ## Verification and remaining gates
 
