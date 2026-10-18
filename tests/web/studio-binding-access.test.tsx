@@ -9,10 +9,10 @@ import { makeStudio, openIdea, phaseOf, ready, settleAll, deferred } from './stu
 
 /**
  * v049 access-to-UI binding: the server capability flows store -> controller env -> panel Add state.
- * The panel's React effects (subscribe + setEnv on store change, refresh/clear on phase, dispose on unmount)
- * cannot run under this repo's SSR-only test setup (no DOM), so each test drives exactly the calls those
- * effects perform — store.subscribe(apply) + setEnv — and then renders the real panel. The effect code itself
- * is covered by review, not by an effect-running test.
+ * These tests render with renderToStaticMarkup (SSR, no DOM, no effects), so each test drives exactly the
+ * calls the panel's effects perform — store.subscribe(apply) + setEnv — and then renders the real panel.
+ * The effects themselves now run for real in tests/web/studio-access-lifecycle.test.tsx (JSDOM +
+ * createRoot + act), including unmount/remount and StrictMode replay.
  */
 
 const ownerBody = { access: 'OWNER', canReadIdeas: true, canImportIdeas: true };
