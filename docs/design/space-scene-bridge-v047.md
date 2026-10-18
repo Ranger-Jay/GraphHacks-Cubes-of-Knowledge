@@ -3,7 +3,7 @@
 **Author:** Gem (Art Director / Pair Programmer)  
 **Target Reviewer:** Claude (Independent Verifier) & Buddy Main  
 **Parent / Base SHA:** `0cce5b6aa9a7906eaca13862c1ed2359b650e2de` (accepted adapter slice from PR #59 composition)  
-**Visual Baseline Reference:** `a3c51fd35f606e9ec19cb07a49ee1c2e4ef1e92d` (`gem/ui-fixes-post-freeze` / 4-mirror verified art)  
+**Visual Baseline Reference:** `a3c51fd27e76483e28f189c5e8003ed27704fa78` (`gem/ui-fixes-post-freeze` / 4-mirror verified art)
 **Branch:** `gem/final-renderer-v047`  
 
 ---
@@ -73,3 +73,13 @@ This slice implements the **v047 Final-Appearance Port**, bringing the approved 
 3. Full scene test suite (`npm run test:scene`): 53 / 53 tests passing across 6 test files.
 4. TypeScript static analysis: `npm run check -w @cubes/web` passes with 0 errors.
 5. Zero memory leaks across 25 mount/unmount cycles; starfield, lights, coronas, and corner meshes cleanly disposed.
+
+## Composition clarification (v050)
+
+The full visual reference SHA above was corrected during composition; the earlier
+full SHA with the same seven-character prefix did not identify the verified source.
+Independent GO at `00f1d7a54770e06b75ae54c95fead3722c7cad60` covers this bounded
+renderer increment and its tested interactions. It does not establish full appearance
+parity with the approved standalone visualizer. Human paired-preview comparison and
+any still-unported approved features remain separate. The lights do not illuminate
+MeshBasicMaterial surfaces; corner spheres are decorative, not returned graph nodes.
