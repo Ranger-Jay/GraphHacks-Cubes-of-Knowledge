@@ -1,101 +1,93 @@
 # Cubes of Knowledge
 
-**A company brain built on FalkorDB, with traceable decisions and persistent agent memory.**
+**A company brain that shows its evidence—and stops answering when its graph is unavailable.**
 
-Canonical product description; implementation status and acceptance gates are recorded below.
+Built with FalkorDB, React and Three.js for the **Graph Hacks Company Brain** track. WAD Studios, its people, music licenses and idea files are fictional, synthetic demo data.
 
-A Graph Hacks entry exploring a fictional studio's current-cut licensing, evidence, authorized actions, and recoverable agent state through FalkorDB.
+> **Can the current cut of Warnings After Dark ship?**  
+> **GAP:** *Basement Hum* is cleared only for Cut v3. The current Cut v4 needs a new license. *Night Drive* is licensed for Cut v4. Follow each result back to its source excerpt.
 
-## Status
+![Cubes of Knowledge 3D workspace overview with Company Brain and disconnected comparison cube](docs/evidence/v054/overview_two_cubes.png)
 
-Typed workspace/configuration bootstrap v003.002. No working graph integration, authorization flow, agent execution, deployment, or prize qualification is claimed yet. The scenario uses synthetic data from Warnings After Dark Studios. The development API exposes liveness and an honest unavailable graph status; the browser renders a scaffold notice.
+## The demo
 
-## Required demonstration
+| Experience | What it demonstrates |
+| --- | --- |
+| **Company Cube** | A 3D workspace with a solar core, Roy/Ava/Guz agent representations and comet-like idea files. Evidence paths come from returned graph relationships. Decorative geometry is not proof. |
+| **Inspect a source** | Follow release → current cut → track → version-scoped license → source reference. Open the original excerpt, source path, Unicode code-point offsets and hash display. |
+| **Lose the graph** | Real graph failure clears current proof and blocks protected actions. Restart and re-query to recover fresh results from the graph. |
+| **Disconnected comparison cube** | A separate, permanently unconfigured cube: “No database connected.” It cannot query, import, or borrow the main cube's results. |
+| **IdeaVerse** | A checked-in pool of 100 synthetic idea files. Local owner rehearsal can import an idea; “Added” requires a server receipt and a fresh graph read-back. Uncertain outcomes remain unconfirmed. |
+| **Optional explanation** | A low-cost OpenRouter text model explains scoped graph evidence. Citation ids are checked; the model cannot grant access, change clearance or approve a release. Disabled by default. |
+| **Voices** | Recorded ElevenLabs agent clips plus separate optional browser read-aloud. Audio starts muted. Outage and recovery clips follow guarded graph states. |
 
-- Follow current release → cut → track → license/version → source evidence.
-- Distinguish stale clearance, unresolved evidence, denied actions, and database unavailability.
-- Enforce Kanny's owner permissions and Serena's limited access on the server.
-- Persist an authorized agent handoff and recover it in a fresh session.
-- Stop and reconnect the real graph database; never substitute a simulated successful answer.
+## Architecture
 
-## Stack and setup
+```mermaid
+flowchart TD
+  B["Browser: React and Three.js"] --> P["Local Vite proxy"]
+  P --> A["Node API: scoped sessions and named queries"]
+  A --> G[("FalkorDB")]
+  A --> W["Separate durable evidence witness"]
+  A -. "Optional scoped explanation" .-> M["OpenRouter text model"]
+```
 
-Node.js **22.12+ or 24** (24 recommended; .nvmrc), npm workspaces, TypeScript, official FalkorDB client, React/Vite and Three.js. Exact package versions and integrity hashes are in package-lock.json. Dependencies were resolved from the registry during kickoff; do not change the shared lockfile without coordination.
+Graph and model credentials stay server-side. The default local proxy uses a reader session; owner rehearsal is explicitly enabled and loopback-only. Displayed persona or access tags do not authorize requests.
+
+## Run locally
+
+Requires **Node 22.12+** (24 recommended), npm, and a reachable FalkorDB instance.
 
 ```sh
 git clone https://github.com/Ranger-Jay/GraphHacks-Cubes-of-Knowledge.git
 cd GraphHacks-Cubes-of-Knowledge
+git switch gem/visual-preservation-v054
 npm ci
 cp .env.example .env
-npm run verify
 ```
 
-On PowerShell, use `Copy-Item .env.example .env` instead of cp. Environment values are local; never commit .env. API scripts load the root .env using Node's native env-file support.
+PowerShell: use `Copy-Item .env.example .env`.
 
-Start local Docker on a host where Docker is actually installed:
+Continue with the [complete setup reference](docs/local-setup.md): start your database, configure private signing/session values, initialize a **new disposable graph and witness**, seed the IdeaVerse pool, and start the API/web terminals. Preserve the witness and graph across restarts; do not initialize an existing shared graph.
 
-```sh
-npm run graph:up
-```
+Open **http://127.0.0.1:5173/#/releases/rel-wad**. Use this origin for optional Explain. For local owner import, follow the [owner-rehearsal setup](docs/owner-rehearsal-v038.md). For a provider key, follow the [Talker configuration and budget policy](docs/talker-v052.md).
 
-Database: 127.0.0.1:6379. FalkorDB Browser: http://127.0.0.1:3001. This is a loopback-only, unauthenticated development configuration with a named /data volume and AOF. It has **not** been runtime-verified in the bootstrap host. Record a verified image digest and restart proof through technical issue #2. Docker image defaults to latest until that verification lands. `.env` client credentials do not enable server auth automatically; see [runtime baseline](infra/falkordb/README.md).
+**Runtime scope:** independent execution used pinned FalkorDBLite 0.10.0 and real Chromium. Docker configuration is included but has not been runtime-verified by that evidence. The entrant also reported successful Cloud graph/API reads from a local machine. A public hosted application is not established. A static frontend upload alone does not supply the API/session proxy.
 
-In two separate terminals:
+## Verification and limits
 
-```sh
-npm run dev:api
-```
+The independently reviewed code is **`fd71b7bcc94c417b3d3677fcb79d647cc9306ea8`**. Later packaging changes are documentation only and require a diff review.
 
-```sh
-npm run dev:web
-```
+- **302/302** verification tests and **108/108** real-graph cases passed in Claude's review.
+- **49/49** owner-rehearsal journey checks passed, including import/read-back, access loss, reader denial and real database stop/restart.
+- Cora independently reproduced the filming journey in real headless Chrome, including keyboard navigation, source highlighting and comparison-cube isolation.
+- One real capped `mistralai/mistral-nemo` completion and one browser Explain answer were reported from the entrant's host. Claude checked the metadata and answer for consistency; he did not independently execute the provider call.
+- **Not implemented:** persistent agent memory, agent handoff across sessions, approval writes or production login/session issuance. Server session kinds are owner/reader/agent; persona profile tags do not implement five permission levels.
+- Remaining limits include final human visual parity review, other browsers, and native audio behavior outside the entrant's listening checks. Known minor console, clipping and labeling findings are recorded; a headless pass does not establish audible playback.
 
-Web: http://127.0.0.1:5173. API: http://127.0.0.1:8787. Vite proxies /api locally; no graph credentials go to the web app. /api/health returns BOOTSTRAP with ready=false; /api/graph/status returns HTTP 503 UNAVAILABLE / NOT_IMPLEMENTED until a real query adapter lands. Other product routes are not implemented. Vite preview serves static files only; it does not supply a production API/proxy.
+See the [submission and evidence reference](docs/submission.md) for exact review links and the short recording journey. `/api/health` deliberately returns `BOOTSTRAP, ready=false` as process-liveness metadata; actual graph readiness comes from `/api/graph/status`.
 
-The database and provider credentials remain server-side. Model execution defaults to disabled and has no provider key. No private team records or production diaries belong in this public repository.
+## Documentation
 
-## Verification and integration
+[Documentation index](docs/README.md) · [Local setup](docs/local-setup.md) · [Graph schema](graph/schema/README.md) · [Seed data](graph/seed/README.md) · [Named queries](graph/queries/README.md) · [Engineering rules](AGENTS.md)
 
-```sh
-npm run check
-npm test
-npm run build
-```
+## Credits and AI assistance
 
-`npm run verify` combines those bootstrap gates. The scaffold test starts a real local HTTP process and checks that liveness does not claim graph readiness and protected product routes do not silently succeed. These checks do not prove a graph-backed agent or UI. GitHub CI runs the same gates on Node 22 and 24.
+**Jay (Ranger-Jay)** directed the product and art, paired on implementation, selected and checked the voices, tested the experience, and owns the final release and submission.
 
-`npm run test:integration` deliberately exits nonzero until the real graph integration suite is implemented. Do not substitute a unit mock or a skipped green test for that gate. Record exact-SHA graph, authorization, persistence, browser and model-call evidence in independent reviews. Install failures and unavailable hosts remain explicit blockers.
+AI assistance was used throughout development:
 
-## Repository layout
-
-| Path | Purpose |
+| Tool or collaborator | Contribution |
 | --- | --- |
-| apps/api | Node/TypeScript API; authorization, approvals and audit events |
-| apps/web | React/Vite application; scene module isolated under src/scene |
-| packages/contracts | Shared evidence, status, approval, handoff and scene transport types |
-| packages/graph | Official-client adapter implementation lane; empty placeholder until implemented |
-| graph/schema, graph/seed, graph/queries | Synthetic schema/data, source provenance and named Cypher |
-| agents/tools, agents/memory | Bounded real tool execution and authorized durable handoff |
-| infra/falkordb | Local Docker configuration and runtime verification |
-| tests | Bootstrap and lane-owned acceptance suites |
-| docs/verification | Independent evidence reports |
+| **OpenAI ChatGPT/Codex — Buddy** | Coordination, application integration, contracts, API/UI engineering, documentation and verification support. |
+| **Anthropic Claude** | Early graph/schema/query/fixture work and independent later engineering, real-browser and real-graph verification. |
+| **Google Gemini — Gem** | Visual development, scene renderer/adapter, comparison cube and documentation. Final parity with the approved artwork remains a human visual decision. |
+| **Meta Muse Spark — Boons** | Engineering/testing support, review coordination and demo-video assembly. |
+| **Grok-based collaborators — Mara and Cora** | Engineering, documentation and independent verification across their assigned lanes. |
+| **Leonardo** | AI-assisted visual asset work, disclosed by the entrant. Concept artwork is distinguished from recorded application footage. |
+| **ElevenLabs** | Synthetic agent voice clips. Jay selected settings, generated and repeatedly listened to the 29-file set. Browser read-aloud is a separate device-voice feature. |
+| **OpenRouter / Mistral Nemo** | Optional runtime text explanation over scoped graph evidence. |
 
-Some owned implementation directories are created by their first feature rather than padded with empty files. Read [AGENTS.md](AGENTS.md) and [shared contract v1](docs/contracts.md) before implementation. Technical issues [#1](https://github.com/Ranger-Jay/GraphHacks-Cubes-of-Knowledge/issues/1)–[#5](https://github.com/Ranger-Jay/GraphHacks-Cubes-of-Knowledge/issues/5) define the first deliverables.
+AI review does not replace human responsibility for the submission. No distribution license has been selected for this repository; dependencies and supplied assets retain their applicable terms.
 
-## Data model and Cypher status
-
-Planned: Studio/Release → current Cut → used Track → version-scoped License/Approval → immutable source reference and authorized human; separately scoped Agent, Memory and Handoff state. **Actual schema, seed and runnable query catalog are pending issue #1**; this paragraph is not an executed model. Every asserted answer must cite its source and actual returned graph path. Missing scope/coverage stays UNKNOWN.
-
-## Engineering discipline
-
-One major feature per commit. Feature versions use v001.00, v002.00, etc.; follow-up fixes, tests, and documentation use decimal revisions such as v002.001. Coordinate version allocation before committing. Preserve feature commits; do not squash independent changes.
-
-Public issues and pull requests contain technical work in one unified project voice. Team planning happens outside this repository. Author-created code requires independent review; human release approval remains required.
-
-## Contest and assistance
-
-Built after the permitted Graph Hacks start, October 14, 2026 at 14:31 America/New_York. Intended tracks: Company Brain, Agent Memory and Coordination, and Agents That Act on Connected Data; qualification remains subject to working evidence.
-
-AI assistance is used. OpenAI ChatGPT/Codex assisted with this initial workspace, shared contracts, documentation and bootstrap checks. Other assistance is recorded as contributions land; the roster alone is not evidence of authored code. The human entrant is responsible for meaningful contribution, understanding, testing, and final submission. No independent review or human verification is implied by the builder's passing checks. The project has not selected a distribution license; third-party dependencies retain their own licenses.
-
-Official references: [Graph Hacks](https://www.wemakedevs.org/hackathons/falkordb), [rules](https://www.wemakedevs.org/hackathons/falkordb/rules), [FalkorDB docs](https://docs.falkordb.com/).
+[Graph Hacks](https://www.wemakedevs.org/hackathons/falkordb) · [Rules](https://www.wemakedevs.org/hackathons/falkordb/rules) · [FalkorDB documentation](https://docs.falkordb.com/)

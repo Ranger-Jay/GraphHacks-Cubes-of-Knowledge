@@ -1,0 +1,1 @@
+A fictional look-development artist writes a scanline displacement shader that makes projected Evidence Cube briefings jitter whenever a subway train passes underneath.

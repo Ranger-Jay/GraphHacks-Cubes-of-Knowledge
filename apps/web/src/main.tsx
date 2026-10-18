@@ -1,11 +1,10 @@
 import { createRoot } from 'react-dom/client';
+import { App } from './App';
+import { MountedSpaceScene } from './MountedSpaceScene';
+import { createMountedStudio } from './studio/mountedStudio';
+import './styles.css';
 
 const container = document.getElementById('root');
 if (!container) throw new Error('Missing root element');
-createRoot(container).render(
-  <main>
-    <h1>Cubes of Knowledge</h1>
-    <p>Development scaffold. The Company Cube, graph analysis, authentication and agent flows are not implemented yet.</p>
-    <p>No clearance, authorization or graph availability is asserted by this page.</p>
-  </main>
-);
+const studio = createMountedStudio();
+createRoot(container).render(<App Scene={MountedSpaceScene} studio={studio} />);

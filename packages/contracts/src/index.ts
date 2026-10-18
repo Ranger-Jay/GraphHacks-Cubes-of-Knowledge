@@ -59,6 +59,13 @@ export interface UnavailableAnalysis {
   proposedActions: [];
 }
 export type AnalysisResponse = AvailableAnalysis | UnavailableAnalysis;
+/** Generated explanation is separate from authoritative graph facts and recorded voice clips. */
+export interface TalkResponse {
+  status: 'AVAILABLE'; requestId: string; persona: AgentId;
+  releaseId: string; cutId: string; revision: string; clearance: ClearanceStatus;
+  explanation: string; sourceRefIds: string[]; model: string; providerRequestId: string;
+  usage: { promptTokens: number; completionTokens: number; totalTokens: number };
+}
 export interface ApprovalRequest {
   releaseId: string;
   cutId: string;
@@ -77,6 +84,8 @@ export interface ApprovalResponse {
 }
 export interface Handoff {
   id: string;
+  /** Release whose evidence/revision this handoff concerns; server-authorized. */
+  releaseId: string;
   fromAgentId: AgentId;
   toAgentId: AgentId;
   objective: string;
@@ -86,6 +95,8 @@ export interface Handoff {
   createdAt: string;
 }
 export interface HandoffRequest {
+  /** Required scope, checked against the authenticated tenant and release. */
+  releaseId: string;
   toAgentId: AgentId;
   objective: string;
   proposedNextStep: string;
@@ -103,3 +114,20 @@ export interface ApiError {
 }
 /** Scene boundary: only current API-returned evidence; decoration kept separate. */
 export interface SceneData { status: AnalysisResponse['status']; nodes: GraphNode[]; edges: GraphEdge[]; selectedNodeId: string | null; }
+
+/** Presentation state kept separate from evidence transport and process liveness.
+ * READY requires a successful current authorized analysis and real graph probe.
+ * Unavailable evidence alone must never assert that the database is disconnected.
+ * This context grants no identity, permissions, task execution or mutation authority.
+ */
+export type ScenePhase =
+  | 'CHECKING'
+  | 'READY'
+  | 'GRAPH_UNAVAILABLE'
+  | 'ACCESS_DENIED'
+  | 'NOT_FOUND'
+  | 'UNAVAILABLE';
+export interface SceneRuntimeContext { phase: ScenePhase; }
+export { SPACE_SCENE_PROTOCOL } from './space-scene.js';
+export type { SpaceSceneSnapshot, SpaceSceneEvent, SpaceSceneHandlers, SpaceSceneDispatchResult } from './space-scene.js';
+export type { IdeaImportReceipt, IdeaImportRequest, IdeaverseIdeaView, IdeaverseUnavailableReason, IdeaverseOverviewResponse, IdeaImportConflict, IdeaImportRejection, IdeaImportConfirmed, IdeaImportUnconfirmed, IdeaImportResponse, IdeaImportStatusResponse, IdeaverseIdeaDetailResponse } from './ideaverse.js';

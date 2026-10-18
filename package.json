@@ -1,6 +1,6 @@
 {
   "name": "graphhacks-cubes-of-knowledge",
-  "version": "3.2.0",
+  "version": "15.4.0",
   "private": true,
   "type": "module",
   "engines": {
@@ -13,18 +13,24 @@
   "scripts": {
     "check": "npm run check --workspaces --if-present",
     "build": "npm run build -w @cubes/contracts && npm run build -w @cubes/graph && npm run build -w @cubes/api && npm run build -w @cubes/web",
-    "test": "npm run build -w @cubes/api && node --test tests/bootstrap/*.test.mjs",
-    "test:integration": "node scripts/integration-required.mjs",
+    "test": "npm run build -w @cubes/api && node scripts/test-suites.mjs unit",
+    "test:integration": "npm run test:graph",
     "dev:api": "node --env-file-if-exists=.env --import tsx apps/api/src/server.ts",
     "dev:web": "npm run dev -w @cubes/web",
     "graph:up": "docker compose -f infra/falkordb/compose.yaml up -d",
     "graph:down": "docker compose -f infra/falkordb/compose.yaml stop",
     "graph:logs": "docker compose -f infra/falkordb/compose.yaml logs --tail 50",
-    "verify": "npm run check && npm test && npm run build"
+    "verify": "npm run check && npm test && npm run build",
+    "test:api": "node scripts/test-suites.mjs api",
+    "test:web": "node scripts/test-suites.mjs web",
+    "test:scene": "node scripts/test-suites.mjs scene",
+    "test:graph": "node scripts/test-suites.mjs graph"
   },
   "devDependencies": {
-    "typescript": "7.0.2",
+    "@types/jsdom": "27.0.0",
+    "@types/node": "26.6.5",
+    "jsdom": "26.1.0",
     "tsx": "4.23.15",
-    "@types/node": "26.6.5"
+    "typescript": "7.0.2"
   }
 }

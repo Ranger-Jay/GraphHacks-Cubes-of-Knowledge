@@ -1,0 +1,31 @@
+{
+  "version": "access-roles@1",
+  "note": "The five display roles and their INTENDED capability boundaries, from the owner's clarification in #48 (2026-10-15, 10:21 PM ET). These are capability sets, not a numeric ladder. Every capability here is intended, not implemented: nothing in this fixture grants access, and current OWNER/READER/AGENT session enforcement is unchanged until a reviewed migration implements the taxonomy.",
+  "capabilities": [
+    { "id": "cap-own-workspace", "description": "Owns the cube/workspace." },
+    { "id": "cap-assign-roles", "description": "Assigns roles." },
+    { "id": "cap-final-approval", "description": "Final authority for designated approvals." },
+    { "id": "cap-manage-studio-content", "description": "Manages approved studio content within the assigned workspace." },
+    { "id": "cap-configure-agents", "description": "Manages agent configuration within the assigned workspace." },
+    { "id": "cap-configure-cube-settings", "description": "Manages cube settings within the assigned workspace." },
+    { "id": "cap-import-approved-ideas", "description": "Imports approved ideas." },
+    { "id": "cap-run-permitted-workflows", "description": "Runs explicitly permitted workflows." },
+    { "id": "cap-read-permitted-records", "description": "Reads permitted records." },
+    { "id": "cap-follow-citations", "description": "Follows citations." },
+    { "id": "cap-inspect-cube", "description": "Inspects the cube." },
+    { "id": "cap-read-audit-evidence", "description": "Reads permitted audit evidence and test results." },
+    { "id": "cap-run-approved-checks", "description": "May run explicitly approved checks in disposable test environments." }
+  ],
+  "roles": [
+    { "id": "role-owner", "name": "Owner", "intendedScope": "Owns the cube/workspace and assigns roles; final authority for designated approvals.",
+      "capabilities": ["cap-own-workspace", "cap-assign-roles", "cap-final-approval"], "cannot": [] },
+    { "id": "role-administrator", "name": "Administrator", "intendedScope": "Manages approved studio content, agent configuration and cube settings within the assigned workspace.",
+      "capabilities": ["cap-manage-studio-content", "cap-configure-agents", "cap-configure-cube-settings"], "cannot": [] },
+    { "id": "role-operator", "name": "Operator", "intendedScope": "Imports approved ideas and runs explicitly permitted workflows; cannot assign roles or change policy.",
+      "capabilities": ["cap-import-approved-ideas", "cap-run-permitted-workflows"], "cannot": ["Assign roles", "Change policy"] },
+    { "id": "role-reader", "name": "Reader", "intendedScope": "Reads permitted records, follows citations and inspects the cube; no content writes.",
+      "capabilities": ["cap-read-permitted-records", "cap-follow-citations", "cap-inspect-cube"], "cannot": ["Write content"] },
+    { "id": "role-ci-auditor", "name": "CI Auditor", "intendedScope": "Reads permitted audit evidence and test results; may run explicitly approved checks in disposable test environments, with no studio-content writes or role management.",
+      "capabilities": ["cap-read-audit-evidence", "cap-run-approved-checks"], "cannot": ["Write studio content", "Manage roles"] }
+  ]
+}
