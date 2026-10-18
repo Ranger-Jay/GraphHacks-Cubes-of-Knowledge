@@ -121,4 +121,6 @@ export type ScenePhase =
   | 'NOT_FOUND'
   | 'UNAVAILABLE';
 export interface SceneRuntimeContext { phase: ScenePhase; }
+export { SPACE_SCENE_PROTOCOL } from './space-scene.js';
+export type { SpaceSceneSnapshot, SpaceSceneEvent, SpaceSceneHandlers, SpaceSceneDispatchResult } from './space-scene.js';
 export type { IdeaImportReceipt, IdeaImportRequest, IdeaverseIdeaView, IdeaverseUnavailableReason, IdeaverseOverviewResponse, IdeaImportConflict, IdeaImportRejection, IdeaImportConfirmed, IdeaImportUnconfirmed, IdeaImportResponse, IdeaImportStatusResponse, IdeaverseIdeaDetailResponse } from './ideaverse.js';
