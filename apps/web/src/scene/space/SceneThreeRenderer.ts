@@ -24,7 +24,13 @@ export class SceneThreeRenderer {
   private sunSphere: THREE.Mesh | null = null;
   private innerSun: THREE.Mesh | null = null;
   private sunHitSphere: THREE.Mesh | null = null;
+  private coronaRing1: THREE.Mesh | null = null;
+  private coronaRing2: THREE.Mesh | null = null;
   private wireframeCube: THREE.LineSegments | null = null;
+  private cornerSpheres: THREE.Mesh[] = [];
+  private starfield: THREE.Points | null = null;
+  private sunLight: THREE.PointLight | null = null;
+  private ambientLight: THREE.AmbientLight | null = null;
   private nodesGroup: THREE.Group | null = null;
   private edgesMesh: THREE.LineSegments | null = null;
   private pyramidsGroup: THREE.Group | null = null;
@@ -88,7 +94,10 @@ export class SceneThreeRenderer {
       this.container.appendChild(this.canvas);
 
       // Build 3D Objects
+      this.buildLighting();
+      this.buildStarfield();
       this.buildCompanyCube();
+      this.buildCornerSpheres();
       this.buildSunCore();
       this.buildAgentPyramids();
 
@@ -113,6 +122,62 @@ export class SceneThreeRenderer {
     }
   }
 
+  private buildLighting(): void {
+    if (!this.scene) return;
+    this.ambientLight = new THREE.AmbientLight(0x0f172a, 0.8);
+    this.scene.add(this.ambientLight);
+
+    this.sunLight = new THREE.PointLight(0xffb300, 2.2, 25);
+    this.sunLight.position.set(0, 0, 0);
+    this.scene.add(this.sunLight);
+  }
+
+  private buildStarfield(): void {
+    if (!this.scene) return;
+    const starGeo = new THREE.BufferGeometry();
+    const starCount = 1800;
+    const starPositions = new Float32Array(starCount * 3);
+    const starColors = new Float32Array(starCount * 3);
+
+    for (let i = 0; i < starCount; i++) {
+      const i3 = i * 3;
+      const r = 25 + Math.random() * 55;
+      const theta = Math.random() * Math.PI * 2;
+      const phi = Math.acos(2 * Math.random() - 1);
+
+      starPositions[i3] = r * Math.sin(phi) * Math.cos(theta);
+      starPositions[i3 + 1] = r * Math.sin(phi) * Math.sin(theta);
+      starPositions[i3 + 2] = r * Math.cos(phi);
+
+      const c = Math.random();
+      if (c > 0.8) {
+        starColors[i3] = 0.0;
+        starColors[i3 + 1] = 0.9;
+        starColors[i3 + 2] = 1.0;
+      } else if (c > 0.6) {
+        starColors[i3] = 1.0;
+        starColors[i3 + 1] = 0.75;
+        starColors[i3 + 2] = 0.2;
+      } else {
+        starColors[i3] = 0.85;
+        starColors[i3 + 1] = 0.9;
+        starColors[i3 + 2] = 1.0;
+      }
+    }
+
+    starGeo.setAttribute('position', new THREE.BufferAttribute(starPositions, 3));
+    starGeo.setAttribute('color', new THREE.BufferAttribute(starColors, 3));
+
+    const starMat = new THREE.PointsMaterial({
+      size: 0.18,
+      vertexColors: true,
+      transparent: true,
+      opacity: 0.85,
+    });
+    this.starfield = new THREE.Points(starGeo, starMat);
+    this.scene.add(this.starfield);
+  }
+
   private buildCompanyCube(): void {
     if (!this.scene) return;
     this.cubeGroup = new THREE.Group();
@@ -128,6 +193,30 @@ export class SceneThreeRenderer {
     });
     this.wireframeCube = new THREE.LineSegments(wireGeo, wireMat);
     this.cubeGroup.add(this.wireframeCube);
+  }
+
+  private buildCornerSpheres(): void {
+    if (!this.cubeGroup) return;
+    const size = 6.4;
+    const half = size / 2;
+    const coords = [-half, half];
+    const geo = new THREE.SphereGeometry(0.24, 16, 16);
+    const mat = new THREE.MeshBasicMaterial({
+      color: 0xff1744,
+      transparent: true,
+      opacity: 0.95,
+    });
+
+    coords.forEach((x) => {
+      coords.forEach((y) => {
+        coords.forEach((z) => {
+          const sphere = new THREE.Mesh(geo, mat);
+          sphere.position.set(x, y, z);
+          this.cubeGroup?.add(sphere);
+          this.cornerSpheres.push(sphere);
+        });
+      });
+    });
   }
 
   private buildSunCore(): void {
@@ -158,7 +247,27 @@ export class SceneThreeRenderer {
     this.innerSun.userData = { isSunCore: true };
     this.sunGroup.add(this.innerSun);
 
-    // 3. Dedicated Transparent Hit Sphere for Reliable Interception
+    // 3. Counter-Rotating Corona Rings
+    const ringGeo1 = new THREE.TorusGeometry(1.22, 0.015, 12, 48);
+    const ringMat1 = new THREE.MeshBasicMaterial({
+      color: 0xffb300,
+      transparent: true,
+      opacity: 0.7,
+    });
+    this.coronaRing1 = new THREE.Mesh(ringGeo1, ringMat1);
+    this.sunGroup.add(this.coronaRing1);
+
+    const ringGeo2 = new THREE.TorusGeometry(1.38, 0.012, 12, 48);
+    const ringMat2 = new THREE.MeshBasicMaterial({
+      color: 0xffd54f,
+      transparent: true,
+      opacity: 0.55,
+    });
+    this.coronaRing2 = new THREE.Mesh(ringGeo2, ringMat2);
+    this.coronaRing2.rotation.x = Math.PI / 3;
+    this.sunGroup.add(this.coronaRing2);
+
+    // 4. Dedicated Transparent Hit Sphere for Reliable Interception
     const hitGeo = new THREE.SphereGeometry(1.85, 20, 20);
     const hitMat = new THREE.MeshBasicMaterial({
       transparent: true,
@@ -183,18 +292,47 @@ export class SceneThreeRenderer {
     ];
 
     agents.forEach((ag) => {
-      const geo = new THREE.ConeGeometry(0.45, 0.9, 4);
-      const mat = new THREE.MeshBasicMaterial({
+      const group = new THREE.Group();
+
+      // Solid core
+      const coreGeo = new THREE.ConeGeometry(0.42, 0.85, 4);
+      const coreMat = new THREE.MeshBasicMaterial({
+        color: ag.color,
+        transparent: true,
+        opacity: 0.75,
+      });
+      const coreMesh = new THREE.Mesh(coreGeo, coreMat);
+      coreMesh.userData = { isPyramid: true, agentId: ag.id };
+      group.add(coreMesh);
+
+      // Wireframe outer glyph shell
+      const wireGeo = new THREE.ConeGeometry(0.52, 1.0, 4);
+      const wireMat = new THREE.MeshBasicMaterial({
         color: ag.color,
         wireframe: true,
         transparent: true,
-        opacity: 0.9,
+        opacity: 0.95,
       });
-      const mesh = new THREE.Mesh(geo, mat);
+      const wireMesh = new THREE.Mesh(wireGeo, wireMat);
+      wireMesh.userData = { isPyramid: true, agentId: ag.id };
+      group.add(wireMesh);
+
+      // Orbit ring
+      const ringGeo = new THREE.TorusGeometry(0.62, 0.015, 8, 32);
+      const ringMat = new THREE.MeshBasicMaterial({
+        color: ag.color,
+        transparent: true,
+        opacity: 0.5,
+      });
+      const ringMesh = new THREE.Mesh(ringGeo, ringMat);
+      ringMesh.rotation.x = Math.PI / 2;
+      ringMesh.userData = { isPyramid: true, agentId: ag.id };
+      group.add(ringMesh);
+
       const r = 5.2;
-      mesh.position.set(Math.cos(ag.angle) * r, 0, Math.sin(ag.angle) * r);
-      mesh.userData = { isPyramid: true, agentId: ag.id, baseAngle: ag.angle };
-      this.pyramidsGroup?.add(mesh);
+      group.position.set(Math.cos(ag.angle) * r, 0, Math.sin(ag.angle) * r);
+      group.userData = { isPyramid: true, agentId: ag.id, baseAngle: ag.angle };
+      this.pyramidsGroup?.add(group);
     });
   }
 
@@ -205,23 +343,44 @@ export class SceneThreeRenderer {
     const isReady = snapshot.runtime.phase === 'READY' && snapshot.data.status === 'AVAILABLE';
     const isOutage = snapshot.runtime.phase === 'GRAPH_UNAVAILABLE';
 
-    // 1. Update Sun & Cube appearance based on Phase
+    // 1. Update Sun, Corner Nodes, Corona Rings & Cube appearance based on Phase
     if (this.wireframeCube && this.sunSphere && this.innerSun) {
       if (isOutage) {
         // Cold dwarf collapse / Crimson Outage warning
         (this.wireframeCube.material as THREE.LineBasicMaterial).color.setHex(0xe11d48);
         (this.sunSphere.material as THREE.MeshBasicMaterial).color.setHex(0x334155);
         (this.innerSun.material as THREE.MeshBasicMaterial).color.setHex(0x1e293b);
+        if (this.coronaRing1) (this.coronaRing1.material as THREE.MeshBasicMaterial).color.setHex(0x334155);
+        if (this.coronaRing2) (this.coronaRing2.material as THREE.MeshBasicMaterial).color.setHex(0x1e293b);
+        if (this.sunLight) this.sunLight.intensity = 0.2;
+        this.cornerSpheres.forEach((s) => {
+          (s.material as THREE.MeshBasicMaterial).color.setHex(0xe11d48);
+          (s.material as THREE.MeshBasicMaterial).opacity = 0.45;
+        });
       } else if (!isReady) {
         // Checking / Blocked non-ready
         (this.wireframeCube.material as THREE.LineBasicMaterial).color.setHex(0x64748b);
         (this.sunSphere.material as THREE.MeshBasicMaterial).color.setHex(0xd97706);
         (this.innerSun.material as THREE.MeshBasicMaterial).color.setHex(0x78350f);
+        if (this.coronaRing1) (this.coronaRing1.material as THREE.MeshBasicMaterial).color.setHex(0xd97706);
+        if (this.coronaRing2) (this.coronaRing2.material as THREE.MeshBasicMaterial).color.setHex(0x78350f);
+        if (this.sunLight) this.sunLight.intensity = 0.8;
+        this.cornerSpheres.forEach((s) => {
+          (s.material as THREE.MeshBasicMaterial).color.setHex(0x64748b);
+          (s.material as THREE.MeshBasicMaterial).opacity = 0.7;
+        });
       } else {
         // Active Fusion & Electric Cyan
         (this.wireframeCube.material as THREE.LineBasicMaterial).color.setHex(0x00e5ff);
         (this.sunSphere.material as THREE.MeshBasicMaterial).color.setHex(0xffb300);
         (this.innerSun.material as THREE.MeshBasicMaterial).color.setHex(0xffd54f);
+        if (this.coronaRing1) (this.coronaRing1.material as THREE.MeshBasicMaterial).color.setHex(0xffb300);
+        if (this.coronaRing2) (this.coronaRing2.material as THREE.MeshBasicMaterial).color.setHex(0xffd54f);
+        if (this.sunLight) this.sunLight.intensity = 2.2;
+        this.cornerSpheres.forEach((s) => {
+          (s.material as THREE.MeshBasicMaterial).color.setHex(0xff1744);
+          (s.material as THREE.MeshBasicMaterial).opacity = 0.95;
+        });
       }
     }
 
@@ -385,10 +544,20 @@ export class SceneThreeRenderer {
           this.cubeGroup.rotation.x += delta * 0.06;
         }
 
-        // Sun Breathing
+        // Sun Breathing & Corona Rings Rotation
         if (this.innerSun) {
           const s = 1.0 + Math.sin(elapsed * 2.5) * 0.04;
           this.innerSun.scale.set(s, s, s);
+        }
+        if (this.coronaRing1) {
+          this.coronaRing1.rotation.z += delta * 0.35;
+        }
+        if (this.coronaRing2) {
+          this.coronaRing2.rotation.y += delta * 0.28;
+          this.coronaRing2.rotation.z -= delta * 0.18;
+        }
+        if (this.starfield) {
+          this.starfield.rotation.y += delta * 0.012;
         }
       }
 
@@ -627,7 +796,12 @@ export class SceneThreeRenderer {
 
   private disposeObject(obj: THREE.Object3D): void {
     obj.traverse((child) => {
-      if (child instanceof THREE.Mesh || child instanceof THREE.LineSegments || child instanceof THREE.Line) {
+      if (
+        child instanceof THREE.Mesh ||
+        child instanceof THREE.LineSegments ||
+        child instanceof THREE.Line ||
+        child instanceof THREE.Points
+      ) {
         if (child.geometry) child.geometry.dispose();
         if (child.material) {
           if (Array.isArray(child.material)) {
@@ -676,7 +850,18 @@ export class SceneThreeRenderer {
     this.camera = null;
     this.cubeGroup = null;
     this.sunGroup = null;
+    this.sunSphere = null;
+    this.innerSun = null;
+    this.sunHitSphere = null;
+    this.coronaRing1 = null;
+    this.coronaRing2 = null;
+    this.wireframeCube = null;
+    this.cornerSpheres = [];
+    this.starfield = null;
+    this.sunLight = null;
+    this.ambientLight = null;
     this.nodesGroup = null;
+    this.edgesMesh = null;
     this.pyramidsGroup = null;
     this.cometsGroup = null;
   }
