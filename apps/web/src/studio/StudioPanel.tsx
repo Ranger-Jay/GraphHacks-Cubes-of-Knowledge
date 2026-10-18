@@ -26,8 +26,11 @@ export const POOL_EMPTY_COPY = 'No ideas are waiting.';
  *
  * With an access store (v049), the panel is the join point between the server capability and the controller: it
  * subscribes to the store, reports the store's live access to the controller, re-resolves on READY, clears the
- * stale capability when leaving READY (re-query included), and disposes the store on unmount so a delayed OWNER
- * can never land after the panel is gone. Without a store, the static `access` prop is the whole story.
+ * stale capability when leaving READY (re-query included), and CLEARS the store on unmount so a delayed OWNER
+ * can never land after the panel is gone. The store outlives the panel (the binding is created once in
+ * main.tsx), so unmount must NOT dispose it: dispose() is permanent teardown, and a disposed store never
+ * re-resolves. Clear keeps the store reusable, so a later mount performs a fresh GET. Without a store, the
+ * static `access` prop is the whole story.
  */
 const NO_SUBSCRIBE = () => () => {};
 export function StudioPanel({ controller, phase, access = 'UNKNOWN', accessStore }: { controller: IdeaStudioController; phase: ScenePhase | null; access?: StudioAccess; accessStore?: AccessStore }) {
@@ -45,8 +48,9 @@ export function StudioPanel({ controller, phase, access = 'UNKNOWN', accessStore
     else accessStore.clear();
   }, [accessStore, phase]);
   // Leaving the release view (unmount) must not leave the controller believing the cube is READY, and must
-  // not let a delayed access response land after the panel is gone.
-  useEffect(() => () => { controller.setEnv({ phase: 'CHECKING', access: 'UNKNOWN' }); accessStore?.dispose(); }, [controller, accessStore]);
+  // not let a delayed access response land after the panel is gone. CLEAR, do not dispose: the store
+  // outlives this panel, and the next mount must re-resolve with a fresh GET (dispose is permanent).
+  useEffect(() => () => { controller.setEnv({ phase: 'CHECKING', access: 'UNKNOWN' }); accessStore?.clear(); }, [controller, accessStore]);
   const ready = phase === 'READY' && snap.env.phase === 'READY';
   const open = snap.open;
   // Either the controller's guard or THIS render's phase may block; both must allow.

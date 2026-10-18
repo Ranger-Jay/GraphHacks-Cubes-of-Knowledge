@@ -77,9 +77,19 @@ export interface AccessStore {
   getSnapshot: () => StudioAccess;
   /** Re-resolve from the server. Concurrent calls share one in-flight request. */
   refresh: () => Promise<StudioAccess>;
-  /** Forget the capability (phase change / re-query): stale OWNER is gone and old responses are invalidated. */
+  /**
+   * Forget the capability (phase change / re-query / panel unmount): stale OWNER is gone and old
+   * responses are invalidated. REUSABLE: the store stays usable, so a later mount re-resolves with a
+   * fresh GET. Never revives a disposed store (a disposed snapshot stays UNKNOWN).
+   */
   clear: () => void;
-  /** Forget the capability and refuse all later writes: delayed responses after unmount are discarded. */
+  /**
+   * Forget the capability and refuse all later writes: delayed responses after teardown are discarded.
+   * PERMANENT teardown (discard the binding, not a route leave): resets the cached capability to
+   * UNKNOWN first, so a disposed store never exposes a stale OWNER, and refresh() after disposal
+   * performs no fetch. A panel unmount must call clear(), not dispose(), because the store outlives
+   * the panel and the next mount must re-resolve.
+   */
   dispose: () => void;
 }
 
@@ -116,6 +126,8 @@ export function createAccessStore(fetcher: Fetcher = (input, init) => fetch(inpu
       // Drop the dedupe marker so the next refresh starts a fresh request; the old response is still
       // discarded by the generation guard. Without this, a phase bounce would leave access stuck UNKNOWN.
       inflight = null;
+      // Reusable: a clear never revives a disposed store, but a disposed snapshot is already UNKNOWN
+      // (dispose resets it), so there is nothing to forget here.
       if (disposed || current === 'UNKNOWN') return;
       current = 'UNKNOWN';
       emit();
@@ -123,6 +135,11 @@ export function createAccessStore(fetcher: Fetcher = (input, init) => fetch(inpu
     dispose: () => {
       disposed = true;
       generation++;
+      inflight = null;
+      // Permanent teardown resets the cached capability FIRST: a disposed store must never expose a
+      // stale OWNER to a later mount. Still-subscribed readers are told (UNKNOWN) before they are dropped.
+      current = 'UNKNOWN';
+      emit();
       listeners.clear();
     },
   };
