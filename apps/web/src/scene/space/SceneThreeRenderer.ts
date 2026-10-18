@@ -39,12 +39,17 @@ export class SceneThreeRenderer {
   private cubeGroup: THREE.Group | null = null;
   private sunGroup: THREE.Group | null = null;
   private sunSphere: THREE.Mesh | null = null;
+  private sunPlasmaShroud: THREE.Mesh | null = null;
   private innerSun: THREE.Mesh | null = null;
   private sunHitSphere: THREE.Mesh | null = null;
   private coronaRing1: THREE.Mesh | null = null;
   private coronaRing2: THREE.Mesh | null = null;
+  private torusProminence: THREE.Mesh | null = null;
   private wireframeCube: THREE.LineSegments | null = null;
+  private wireframeCubeAura: THREE.LineSegments | null = null;
+  private purpleFrameGroup: THREE.Group | null = null;
   private cornerSpheres: THREE.Mesh[] = [];
+  private electronBeads: Array<{ mesh: THREE.Mesh; orbitRadius: number; baseAngle: number; speed: number; tilt: THREE.Euler }> = [];
   private starfield: THREE.Points | null = null;
   private sunLight: THREE.PointLight | null = null;
   private ambientLight: THREE.AmbientLight | null = null;
@@ -106,6 +111,7 @@ export class SceneThreeRenderer {
 
     try {
       this.scene = new THREE.Scene();
+      this.scene.fog = new THREE.FogExp2(0x010207, 0.022);
       const width = this.container.clientWidth || 800;
       const height = this.container.clientHeight || 600;
 
@@ -221,14 +227,114 @@ export class SceneThreeRenderer {
     const size = 6.4;
     const boxGeo = new THREE.BoxGeometry(size, size, size);
     const wireGeo = new THREE.WireframeGeometry(boxGeo);
+
+    // Primary intense electric cyan wireframe with additive glow
     const wireMat = new THREE.LineBasicMaterial({
       color: 0x00e5ff,
       transparent: true,
-      opacity: 0.85,
+      opacity: 0.95,
+      blending: THREE.AdditiveBlending,
     });
     this.wireframeCube = new THREE.LineSegments(wireGeo, wireMat);
     this.wireframeCube.userData = { isMainCube: true };
     this.cubeGroup.add(this.wireframeCube);
+
+    // Secondary chromatic halo wireframe (1.012 scale for radiant glow volume)
+    const wireMatAura = new THREE.LineBasicMaterial({
+      color: 0x0088ff,
+      transparent: true,
+      opacity: 0.75,
+      blending: THREE.AdditiveBlending,
+    });
+    this.wireframeCubeAura = new THREE.LineSegments(wireGeo, wireMatAura);
+    this.wireframeCubeAura.scale.set(1.012, 1.012, 1.012);
+    this.wireframeCubeAura.userData = { isMainCube: true };
+    this.cubeGroup.add(this.wireframeCubeAura);
+
+    // Inner Purple Containment Frame (Neon lavender cylindrical struts & vertex nodes)
+    this.buildPurpleContainmentFrame(size);
+  }
+
+  private buildPurpleContainmentFrame(outerSize: number): void {
+    if (!this.cubeGroup) return;
+    this.purpleFrameGroup = new THREE.Group();
+    this.purpleFrameGroup.userData = { isMainCube: true };
+    this.cubeGroup.add(this.purpleFrameGroup);
+
+    const pSize = outerSize * 0.82; // ~5.25 inside 6.4
+    const pHalf = pSize / 2;
+
+    const strutGeo = new THREE.CylinderGeometry(0.038, 0.038, pSize, 8);
+    const strutMat = new THREE.MeshBasicMaterial({
+      color: 0xc084fc, // Bright neon lavender/amethyst
+      transparent: true,
+      opacity: 0.88,
+      blending: THREE.AdditiveBlending,
+    });
+
+    // 4 X-parallel struts
+    const xConfigs: Array<[number, number, number]> = [
+      [0, -pHalf, -pHalf],
+      [0, pHalf, -pHalf],
+      [0, -pHalf, pHalf],
+      [0, pHalf, pHalf],
+    ];
+    xConfigs.forEach(([x, y, z]) => {
+      const strut = new THREE.Mesh(strutGeo, strutMat);
+      strut.rotation.z = Math.PI / 2;
+      strut.position.set(x, y, z);
+      strut.userData = { isMainCube: true };
+      this.purpleFrameGroup?.add(strut);
+    });
+
+    // 4 Y-parallel struts
+    const yConfigs: Array<[number, number, number]> = [
+      [-pHalf, 0, -pHalf],
+      [pHalf, 0, -pHalf],
+      [-pHalf, 0, pHalf],
+      [pHalf, 0, pHalf],
+    ];
+    yConfigs.forEach(([x, y, z]) => {
+      const strut = new THREE.Mesh(strutGeo, strutMat);
+      strut.position.set(x, y, z);
+      strut.userData = { isMainCube: true };
+      this.purpleFrameGroup?.add(strut);
+    });
+
+    // 4 Z-parallel struts
+    const zConfigs: Array<[number, number, number]> = [
+      [-pHalf, -pHalf, 0],
+      [pHalf, -pHalf, 0],
+      [-pHalf, pHalf, 0],
+      [pHalf, pHalf, 0],
+    ];
+    zConfigs.forEach(([x, y, z]) => {
+      const strut = new THREE.Mesh(strutGeo, strutMat);
+      strut.rotation.x = Math.PI / 2;
+      strut.position.set(x, y, z);
+      strut.userData = { isMainCube: true };
+      this.purpleFrameGroup?.add(strut);
+    });
+
+    // 8 Purple Inner Corner Beacons
+    const beaconGeo = new THREE.SphereGeometry(0.12, 12, 12);
+    const beaconMat = new THREE.MeshBasicMaterial({
+      color: 0xd8b4fe,
+      transparent: true,
+      opacity: 0.95,
+      blending: THREE.AdditiveBlending,
+    });
+    const bCoords = [-pHalf, pHalf];
+    bCoords.forEach((x) => {
+      bCoords.forEach((y) => {
+        bCoords.forEach((z) => {
+          const beacon = new THREE.Mesh(beaconGeo, beaconMat);
+          beacon.position.set(x, y, z);
+          beacon.userData = { isMainCube: true };
+          this.purpleFrameGroup?.add(beacon);
+        });
+      });
+    });
   }
 
   private buildCornerSpheres(): void {
@@ -236,11 +342,12 @@ export class SceneThreeRenderer {
     const size = 6.4;
     const half = size / 2;
     const coords = [-half, half];
-    const geo = new THREE.SphereGeometry(0.24, 16, 16);
+    const geo = new THREE.SphereGeometry(0.18, 16, 16);
     const mat = new THREE.MeshBasicMaterial({
-      color: 0xff1744,
+      color: 0x00ffff,
       transparent: true,
       opacity: 0.95,
+      blending: THREE.AdditiveBlending,
     });
 
     coords.forEach((x) => {
@@ -262,52 +369,88 @@ export class SceneThreeRenderer {
     this.sunGroup.userData = { isMainCube: true, isSunCore: true };
     this.cubeGroup.add(this.sunGroup);
 
-    // 1. Mantle
-    const sunGeo = new THREE.SphereGeometry(0.95, 24, 24);
+    // 1. Dynamic Turbulent Plasma Mantle Wireframe
+    const sunGeo = new THREE.SphereGeometry(0.96, 32, 32);
     const sunMat = new THREE.MeshBasicMaterial({
       color: 0xffb300,
       wireframe: true,
       transparent: true,
-      opacity: 0.85,
+      opacity: 0.88,
+      blending: THREE.AdditiveBlending,
     });
     this.sunSphere = new THREE.Mesh(sunGeo, sunMat);
     this.sunSphere.userData = { isMainCube: true, isSunCore: true };
     this.sunGroup.add(this.sunSphere);
 
-    // 2. Fusion Core
-    const innerGeo = new THREE.SphereGeometry(0.68, 20, 20);
+    // 2. Secondary Inner Plasma Shroud (Dense multi-faceted incandescent combustion cage)
+    const shroudGeo = new THREE.IcosahedronGeometry(0.84, 2);
+    const shroudMat = new THREE.MeshBasicMaterial({
+      color: 0xff6d00,
+      wireframe: true,
+      transparent: true,
+      opacity: 0.65,
+      blending: THREE.AdditiveBlending,
+    });
+    this.sunPlasmaShroud = new THREE.Mesh(shroudGeo, shroudMat);
+    this.sunPlasmaShroud.userData = { isMainCube: true, isSunCore: true };
+    this.sunGroup.add(this.sunPlasmaShroud);
+
+    // 3. Inner Radiant Fusion Core
+    const innerGeo = new THREE.SphereGeometry(0.68, 24, 24);
     const innerMat = new THREE.MeshBasicMaterial({
       color: 0xffd54f,
       transparent: true,
-      opacity: 0.92,
+      opacity: 0.95,
+      blending: THREE.AdditiveBlending,
     });
     this.innerSun = new THREE.Mesh(innerGeo, innerMat);
     this.innerSun.userData = { isMainCube: true, isSunCore: true };
     this.sunGroup.add(this.innerSun);
 
-    // 3. Counter-Rotating Corona Rings
-    const ringGeo1 = new THREE.TorusGeometry(1.22, 0.015, 12, 48);
+    // 4. Primary Coronal Ring (Tilted Golden Halo)
+    const ringGeo1 = new THREE.RingGeometry(1.08, 1.58, 48);
     const ringMat1 = new THREE.MeshBasicMaterial({
       color: 0xffb300,
       transparent: true,
-      opacity: 0.7,
+      opacity: 0.45,
+      side: THREE.DoubleSide,
+      blending: THREE.AdditiveBlending,
     });
     this.coronaRing1 = new THREE.Mesh(ringGeo1, ringMat1);
-    this.coronaRing1.userData = { isMainCube: true };
+    this.coronaRing1.rotation.x = Math.PI / 3;
+    this.coronaRing1.userData = { isMainCube: true, isSunCore: true };
     this.sunGroup.add(this.coronaRing1);
 
-    const ringGeo2 = new THREE.TorusGeometry(1.38, 0.012, 12, 48);
+    // 5. Secondary Coronal Ring (Orthogonal Fiery Orange Halo)
+    const ringGeo2 = new THREE.RingGeometry(1.15, 1.72, 48);
     const ringMat2 = new THREE.MeshBasicMaterial({
-      color: 0xffd54f,
+      color: 0xff6d00,
       transparent: true,
-      opacity: 0.55,
+      opacity: 0.35,
+      side: THREE.DoubleSide,
+      blending: THREE.AdditiveBlending,
     });
     this.coronaRing2 = new THREE.Mesh(ringGeo2, ringMat2);
-    this.coronaRing2.rotation.x = Math.PI / 3;
-    this.coronaRing2.userData = { isMainCube: true };
+    this.coronaRing2.rotation.x = -Math.PI / 3;
+    this.coronaRing2.rotation.y = Math.PI / 6;
+    this.coronaRing2.userData = { isMainCube: true, isSunCore: true };
     this.sunGroup.add(this.coronaRing2);
 
-    // 4. Dedicated Transparent Hit Sphere for Reliable Interception
+    // 6. Torus Magnetic Prominence Loop
+    const torusGeo = new THREE.TorusGeometry(1.22, 0.032, 12, 48);
+    const torusMat = new THREE.MeshBasicMaterial({
+      color: 0xffe082,
+      transparent: true,
+      opacity: 0.65,
+      blending: THREE.AdditiveBlending,
+    });
+    this.torusProminence = new THREE.Mesh(torusGeo, torusMat);
+    this.torusProminence.rotation.x = Math.PI / 4;
+    this.torusProminence.rotation.y = Math.PI / 5;
+    this.torusProminence.userData = { isMainCube: true, isSunCore: true };
+    this.sunGroup.add(this.torusProminence);
+
+    // 7. Dedicated Transparent Hit Sphere for Reliable Interception
     const hitGeo = new THREE.SphereGeometry(1.85, 20, 20);
     const hitMat = new THREE.MeshBasicMaterial({
       transparent: true,
@@ -324,14 +467,69 @@ export class SceneThreeRenderer {
     if (!this.scene) return;
     this.pyramidsGroup = new THREE.Group();
     this.scene.add(this.pyramidsGroup);
+    this.electronBeads = [];
 
-    const agents: Array<{ id: AgentId; color: number; angle: number }> = [
-      { id: 'roy', color: 0xffb300, angle: 0 },
-      { id: 'ava', color: 0x9333ea, angle: (Math.PI * 2) / 3 },
-      { id: 'guz', color: 0x10b981, angle: (Math.PI * 4) / 3 },
+    const agents: Array<{
+      id: AgentId;
+      color: number;
+      angle: number;
+      orbitRadius: number;
+      orbitTilt: { x: number; y: number; z: number };
+    }> = [
+      { id: 'roy', color: 0xffb300, angle: 0, orbitRadius: 4.8, orbitTilt: { x: 0.25, y: 0.15, z: 0.3 } },
+      { id: 'ava', color: 0xa855f7, angle: (Math.PI * 2) / 3, orbitRadius: 5.1, orbitTilt: { x: -0.3, y: 0.25, z: -0.2 } },
+      { id: 'guz', color: 0x10b981, angle: (Math.PI * 4) / 3, orbitRadius: 4.9, orbitTilt: { x: 0.2, y: -0.2, z: 0.35 } },
     ];
 
     agents.forEach((ag) => {
+      // 1. Tilted electrical orbit track
+      const curvePts: THREE.Vector3[] = [];
+      const segments = 64;
+      const tiltEuler = new THREE.Euler(ag.orbitTilt.x, ag.orbitTilt.y, ag.orbitTilt.z);
+      for (let i = 0; i <= segments; i++) {
+        const theta = (i / segments) * Math.PI * 2;
+        const p = new THREE.Vector3(
+          Math.cos(theta) * ag.orbitRadius,
+          0,
+          Math.sin(theta) * ag.orbitRadius
+        );
+        p.applyEuler(tiltEuler);
+        curvePts.push(p);
+      }
+      const orbitGeo = new THREE.BufferGeometry().setFromPoints(curvePts);
+      const orbitMat = new THREE.LineBasicMaterial({
+        color: 0x40c4ff,
+        transparent: true,
+        opacity: 0.55,
+        blending: THREE.AdditiveBlending,
+      });
+      const orbitLine = new THREE.Line(orbitGeo, orbitMat);
+      orbitLine.userData = { isMainCube: true };
+      this.pyramidsGroup?.add(orbitLine);
+
+      // 2. Traveling Electron Energy Beads on this orbit track
+      const beadOffsets = [0, (Math.PI * 2) / 3, (Math.PI * 4) / 3];
+      beadOffsets.forEach((offset) => {
+        const beadGeo = new THREE.SphereGeometry(0.065, 8, 8);
+        const beadMat = new THREE.MeshBasicMaterial({
+          color: 0xe0f7ff,
+          transparent: true,
+          opacity: 0.90,
+          blending: THREE.AdditiveBlending,
+        });
+        const beadMesh = new THREE.Mesh(beadGeo, beadMat);
+        beadMesh.userData = { isMainCube: true };
+        this.pyramidsGroup?.add(beadMesh);
+        this.electronBeads.push({
+          mesh: beadMesh,
+          orbitRadius: ag.orbitRadius,
+          baseAngle: offset,
+          speed: 0.65,
+          tilt: tiltEuler,
+        });
+      });
+
+      // 3. Agent Pyramid Hero
       const group = new THREE.Group();
 
       // Solid core
@@ -339,7 +537,8 @@ export class SceneThreeRenderer {
       const coreMat = new THREE.MeshBasicMaterial({
         color: ag.color,
         transparent: true,
-        opacity: 0.75,
+        opacity: 0.82,
+        blending: THREE.AdditiveBlending,
       });
       const coreMesh = new THREE.Mesh(coreGeo, coreMat);
       coreMesh.userData = { isMainCube: true, isPyramid: true, agentId: ag.id };
@@ -352,17 +551,19 @@ export class SceneThreeRenderer {
         wireframe: true,
         transparent: true,
         opacity: 0.95,
+        blending: THREE.AdditiveBlending,
       });
       const wireMesh = new THREE.Mesh(wireGeo, wireMat);
       wireMesh.userData = { isMainCube: true, isPyramid: true, agentId: ag.id };
       group.add(wireMesh);
 
-      // Orbit ring
+      // Orbit ring around the pyramid
       const ringGeo = new THREE.TorusGeometry(0.62, 0.015, 8, 32);
       const ringMat = new THREE.MeshBasicMaterial({
         color: ag.color,
         transparent: true,
-        opacity: 0.5,
+        opacity: 0.65,
+        blending: THREE.AdditiveBlending,
       });
       const ringMesh = new THREE.Mesh(ringGeo, ringMat);
       ringMesh.rotation.x = Math.PI / 2;
@@ -763,6 +964,10 @@ export class SceneThreeRenderer {
           const s = 1.0 + Math.sin(elapsed * 2.5) * 0.04;
           this.innerSun.scale.set(s, s, s);
         }
+        if (this.sunPlasmaShroud) {
+          this.sunPlasmaShroud.rotation.y -= delta * 0.38;
+          this.sunPlasmaShroud.rotation.x += delta * 0.18;
+        }
         if (this.coronaRing1) {
           this.coronaRing1.rotation.z += delta * 0.35;
         }
@@ -770,12 +975,26 @@ export class SceneThreeRenderer {
           this.coronaRing2.rotation.y += delta * 0.28;
           this.coronaRing2.rotation.z -= delta * 0.18;
         }
+        if (this.torusProminence) {
+          this.torusProminence.rotation.z += delta * 0.32;
+        }
         if (this.disconnectedCoronaRing1) {
           this.disconnectedCoronaRing1.rotation.z += delta * 0.25;
         }
         if (this.disconnectedCoronaRing2) {
           this.disconnectedCoronaRing2.rotation.y -= delta * 0.20;
         }
+        // Animate Traveling Electron Beads along Agent Orbits
+        this.electronBeads.forEach((bead) => {
+          bead.baseAngle += delta * bead.speed;
+          const p = new THREE.Vector3(
+            Math.cos(bead.baseAngle) * bead.orbitRadius,
+            0,
+            Math.sin(bead.baseAngle) * bead.orbitRadius
+          );
+          p.applyEuler(bead.tilt);
+          bead.mesh.position.copy(p);
+        });
         if (this.starfield) {
           this.starfield.rotation.y += delta * 0.012;
         }
@@ -1159,12 +1378,17 @@ export class SceneThreeRenderer {
     this.cubeGroup = null;
     this.sunGroup = null;
     this.sunSphere = null;
+    this.sunPlasmaShroud = null;
     this.innerSun = null;
     this.sunHitSphere = null;
     this.coronaRing1 = null;
     this.coronaRing2 = null;
+    this.torusProminence = null;
     this.wireframeCube = null;
+    this.wireframeCubeAura = null;
+    this.purpleFrameGroup = null;
     this.cornerSpheres = [];
+    this.electronBeads = [];
     this.starfield = null;
     this.sunLight = null;
     this.ambientLight = null;
