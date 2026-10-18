@@ -562,8 +562,8 @@
                 <span>GUZ [3]</span>
             </button>
 
-            <button id="btn-human-dock" type="button" onclick="openHumanModal()" class="interactive pointer-events-auto px-2.5 py-1 rounded-xl bg-amber-950/70 border border-amber-500/70 text-amber-300 hover:bg-amber-900 focus:outline-none focus:ring-2 focus:ring-amber-400 text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer" title="Inspect Human Executive Governance (Kanny & Serena) [H]">
-                <span class="w-2 h-2 rounded-full bg-amber-400 shadow-[0_0_6px_#ffb300]"></span>
+            <button id="btn-human-dock" type="button" onclick="openHumanModal()" class="interactive pointer-events-auto px-2.5 py-1 rounded-xl bg-cyan-950/80 border border-cyan-500/60 text-cyan-300 hover:bg-cyan-900 hover:border-cyan-400 focus:outline-none focus:ring-2 focus:ring-cyan-400 text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer" title="Inspect Human Executive Governance (Kanny & Serena) [H]">
+                <span class="w-2 h-2 rounded-full bg-cyan-400 shadow-[0_0_6px_#00e5ff]"></span>
                 <span>HUMAN [H]</span>
             </button>
 
@@ -797,12 +797,12 @@ REV: rel-wad@r2
                 </div>
 
                 <!-- Human Executive Homage Pill -->
-                <div class="p-2 rounded-xl hud-glass border border-amber-500/30 flex items-center justify-between">
+                <div class="p-2 rounded-xl hud-glass border border-cyan-500/30 flex items-center justify-between">
                     <div>
-                        <div class="text-[9px] font-mono text-amber-400 font-semibold">HUMAN EXECUTIVE HOMAGE</div>
+                        <div class="text-[9px] font-mono text-cyan-400 font-semibold">HUMAN EXECUTIVE HOMAGE</div>
                         <div class="text-xs font-bold text-white">Kanny & Serena Pill</div>
                     </div>
-                    <button id="btn-human-pill" onclick="openHumanModal()" class="interactive text-xs font-mono px-2.5 py-1 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-400/40 font-bold transition-all cursor-pointer">
+                    <button id="btn-human-pill" type="button" onclick="openHumanModal()" class="interactive text-xs font-mono px-2.5 py-1 rounded-lg bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-300 border border-cyan-400/40 font-bold transition-all cursor-pointer">
                         VIEW ROLES
                     </button>
                 </div>
@@ -1097,8 +1097,8 @@ REV: rel-wad@r2
     </div>
 
     <!-- IdeaVerse Intercepted Comet Modal (Item 3) -->
-    <div id="comet-info-modal" onclick="if(event.target===this)closeCometModal()" class="fixed inset-0 z-[60] hidden flex items-center justify-center p-4 bg-black/75 backdrop-blur-md transition-opacity duration-300">
-        <div class="relative w-96 max-w-[90vw] bg-slate-950/95 backdrop-blur-2xl border border-purple-500/80 rounded-3xl p-6 shadow-[0_0_60px_rgba(179,136,255,0.45)] flex flex-col gap-4 interactive">
+    <div id="comet-info-modal" onclick="if(event.target===this)closeCometModal()" class="fixed inset-0 z-[70] hidden flex items-center justify-center p-4 bg-black/80 backdrop-blur-md transition-opacity duration-300">
+        <div class="relative w-96 max-w-[90vw] bg-slate-950/95 backdrop-blur-2xl border border-purple-500/80 rounded-3xl p-6 shadow-[0_0_60px_rgba(179,136,255,0.45)] flex flex-col gap-4 interactive pointer-events-auto">
             <div class="flex justify-between items-center border-b border-purple-950/80 pb-3">
                 <div class="flex items-center gap-3">
                     <div class="w-4 h-4 rounded-full bg-purple-400 animate-pulse shadow-[0_0_15px_#b388ff]"></div>
@@ -1107,37 +1107,41 @@ REV: rel-wad@r2
                         <h2 id="comet-title" class="text-sm font-black text-white">IDEA-042: Autonomous Verification Engine</h2>
                     </div>
                 </div>
-                <button id="close-comet-modal-btn" onclick="closeCometModal()" class="interactive text-slate-300 hover:text-white font-mono text-xs px-3 py-1.5 rounded-lg border border-slate-700/80 hover:border-purple-400 bg-slate-900/90 shadow transition-all cursor-pointer">✕ CLOSE or ESC</button>
+                <button id="close-comet-modal-btn" type="button" onclick="event.stopPropagation(); closeCometModal();" class="interactive pointer-events-auto text-purple-200 hover:text-white font-mono text-xs px-3.5 py-1.5 rounded-xl border border-purple-400/80 hover:border-purple-200 bg-purple-950/90 hover:bg-purple-600 focus:bg-purple-600 focus:ring-2 focus:ring-purple-300 shadow hover:shadow-[0_0_22px_rgba(179,136,255,0.95)] hover:scale-105 active:scale-95 transition-all duration-200 cursor-pointer flex items-center gap-1.5 font-bold tracking-wide" title="Close Comet Interception Modal [ESC]">
+                    <span>✕</span>
+                    <span>CLOSE or ESC</span>
+                </button>
             </div>
-        <div class="flex flex-col gap-2 text-xs text-slate-300 font-mono">
-            <div class="flex justify-between">
-                <span class="text-slate-400">Source Track:</span>
-                <span id="comet-category" class="text-cyan-300 font-semibold">FalkorDB Graph Pipeline</span>
+            <div class="flex flex-col gap-2 text-xs text-slate-300 font-mono">
+                <div class="flex justify-between">
+                    <span class="text-slate-400">Source Track:</span>
+                    <span id="comet-category" class="text-cyan-300 font-semibold">FalkorDB Graph Pipeline</span>
+                </div>
+                <div class="flex justify-between">
+                    <span class="text-slate-400">Origin / Trajectory:</span>
+                    <span id="comet-origin" class="text-slate-300">Deep IdeaVerse (-84, 42, -110)</span>
+                </div>
+                <div class="flex justify-between">
+                    <span class="text-slate-400">Target File:</span>
+                    <span id="comet-filename-target" class="text-amber-300 font-semibold">GRAPH_SKETCH.md</span>
+                </div>
+                <div class="flex justify-between">
+                    <span class="text-slate-400">Cryptographic SHA:</span>
+                    <span id="comet-hash" class="text-purple-300 text-[10px] truncate max-w-[180px]">f6f9934d24a4fdc328307...</span>
+                </div>
+                <div class="flex justify-between">
+                    <span class="text-slate-400">Status:</span>
+                    <span class="px-2 py-0.5 rounded bg-emerald-950 text-emerald-300 border border-emerald-700 font-bold text-[10px]">VERIFIED RECEIPT</span>
+                </div>
             </div>
-            <div class="flex justify-between">
-                <span class="text-slate-400">Origin / Trajectory:</span>
-                <span id="comet-origin" class="text-slate-300">Deep IdeaVerse (-84, 42, -110)</span>
+            <div class="flex gap-2.5 pt-2 font-mono">
+                <button id="btn-import-idea" type="button" onclick="event.stopPropagation(); importCometToCube();" class="interactive pointer-events-auto flex-1 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs shadow-lg hover:shadow-[0_0_20px_rgba(179,136,255,0.7)] hover:scale-[1.02] active:scale-95 transition flex items-center justify-center gap-1.5 cursor-pointer">
+                    <span>✨ Ingest into Company Cube</span>
+                </button>
+                <button type="button" onclick="event.stopPropagation(); closeCometModal();" class="interactive pointer-events-auto px-4 py-2.5 rounded-xl bg-slate-900/90 hover:bg-slate-800 text-slate-300 hover:text-white border border-slate-700/80 hover:border-purple-400 font-semibold text-xs transition cursor-pointer">
+                    Dismiss
+                </button>
             </div>
-            <div class="flex justify-between">
-                <span class="text-slate-400">Target File:</span>
-                <span id="comet-filename-target" class="text-amber-300 font-semibold">GRAPH_SKETCH.md</span>
-            </div>
-            <div class="flex justify-between">
-                <span class="text-slate-400">Cryptographic SHA:</span>
-                <span id="comet-hash" class="text-purple-300 text-[10px] truncate max-w-[180px]">f6f9934d24a4fdc328307...</span>
-            </div>
-            <div class="flex justify-between">
-                <span class="text-slate-400">Status:</span>
-                <span class="px-2 py-0.5 rounded bg-emerald-950 text-emerald-300 border border-emerald-700 font-bold text-[10px]">VERIFIED RECEIPT</span>
-            </div>
-        </div>
-        <div class="flex gap-2.5 pt-2 font-mono">
-            <button id="btn-import-idea" onclick="importCometToCube()" class="interactive flex-1 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs shadow-lg transition flex items-center justify-center gap-1.5 cursor-pointer">
-                <span>✨ Ingest into Company Cube</span>
-            </button>
-            <button onclick="closeCometModal()" class="interactive px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold text-xs transition cursor-pointer">
-                Dismiss
-            </button>
         </div>
     </div>
 
@@ -3147,6 +3151,18 @@ REV: rel-wad@r2
             innerSun.userData = { isSunCore: true };
             sunGroup.add(innerSun);
             sunGroup.userData = { isSunCore: true };
+
+            // 3b. Dedicated Generous Solar Hit Sphere for 100% Reliable Click Interception (Item 2)
+            const sunHitGeo = new THREE.SphereGeometry(1.85, 24, 24);
+            const sunHitMat = new THREE.MeshBasicMaterial({
+                transparent: true,
+                opacity: 0.0,
+                depthWrite: false,
+                side: THREE.DoubleSide
+            });
+            const sunHitSphere = new THREE.Mesh(sunHitGeo, sunHitMat);
+            sunHitSphere.userData = { isSunCore: true };
+            sunGroup.add(sunHitSphere);
 
             // 4. Primary Coronal Ring (Tilted Golden Halo)
             const ringGeo = new THREE.RingGeometry(1.08, 1.58, 64);
@@ -6343,16 +6359,27 @@ REV: rel-wad@r2
             }
 
             if (camera && !isDragging) {
-                const hoverHits = raycaster.intersectObjects(scene.children, true);
+                raycaster.setFromCamera(mouse, camera);
                 let hitInteractive = false;
                 let hoveredKey = null;
 
-                for (let h of hoverHits) {
-                    const u = h.object.userData;
-                    if (isSunObject(h.object) || (u && (u.isPyramid || u.isRedNode || u.isEvidenceNode || u.isComet || u.isSunCore))) {
+                if (sunGroup) {
+                    const sunWorldPos = new THREE.Vector3();
+                    sunGroup.getWorldPosition(sunWorldPos);
+                    if (raycaster.ray.distanceToPoint(sunWorldPos) <= 1.85) {
                         hitInteractive = true;
-                        if (u && u.isPyramid && u.agentKey) hoveredKey = u.agentKey;
-                        break;
+                    }
+                }
+
+                if (!hitInteractive) {
+                    const hoverHits = raycaster.intersectObjects(scene.children, true);
+                    for (let h of hoverHits) {
+                        const u = h.object.userData;
+                        if (isSunObject(h.object) || (u && (u.isPyramid || u.isRedNode || u.isEvidenceNode || u.isComet || u.isSunCore))) {
+                            hitInteractive = true;
+                            if (u && u.isPyramid && u.agentKey) hoveredKey = u.agentKey;
+                            break;
+                        }
                     }
                 }
 
@@ -6400,15 +6427,31 @@ REV: rel-wad@r2
                 return;
             }
 
+            // Guarantee world matrices are updated for raycasting
+            if (cubeGroup) cubeGroup.updateMatrixWorld(true);
+            if (sunGroup) sunGroup.updateMatrixWorld(true);
+
             // Raycast for Pyramids, Comets, Red Evidence Nodes, Sun Core (for click selection on release if no drag)
             raycaster.setFromCamera(mouse, camera);
             const intersects = raycaster.intersectObjects(scene.children, true);
+
+            // Calculate distance from ray to central Sun core
+            let isRayTargetingSun = false;
+            if (sunGroup) {
+                const sunWorldPos = new THREE.Vector3();
+                sunGroup.getWorldPosition(sunWorldPos);
+                if (raycaster.ray.distanceToPoint(sunWorldPos) <= 1.85) {
+                    isRayTargetingSun = true;
+                }
+            }
 
             if (intersects.length > 0) {
                 // Priority 1: Fast moving Comets take absolute click precedence over static background nodes
                 const cometHit = intersects.find(hit => hit.object && hit.object.userData && hit.object.userData.isComet);
                 if (cometHit) {
                     pendingClickObject = cometHit.object;
+                } else if (isRayTargetingSun) {
+                    pendingClickObject = sunSphere || sunGroup;
                 } else {
                     for (let hit of intersects) {
                         const obj = hit.object;
@@ -6425,6 +6468,8 @@ REV: rel-wad@r2
                         if (sunHit) pendingClickObject = sunSphere || sunHit.object;
                     }
                 }
+            } else if (isRayTargetingSun) {
+                pendingClickObject = sunSphere || sunGroup;
             }
 
             // Left-Click Drag: ALWAYS tumble & spin Company Cube on its local axes!
@@ -6434,15 +6479,16 @@ REV: rel-wad@r2
         }
 
         function onMouseUp(event) {
+            const clientX = (event && typeof event.clientX === 'number') ? event.clientX : previousMousePosition.x;
+            const clientY = (event && typeof event.clientY === 'number') ? event.clientY : previousMousePosition.y;
+            const dragDist = Math.hypot(clientX - startMousePosition.x, clientY - startMousePosition.y);
+
             if (pendingClickObject) {
                 const obj = pendingClickObject;
                 const isCometClick = obj.userData && obj.userData.isComet;
-                const isSunClick = isSunObject(obj) || (obj.userData && obj.userData.isSunCore);
-                const clientX = (event && typeof event.clientX === 'number') ? event.clientX : previousMousePosition.x;
-                const clientY = (event && typeof event.clientY === 'number') ? event.clientY : previousMousePosition.y;
-                const dragDist = Math.hypot(clientX - startMousePosition.x, clientY - startMousePosition.y);
-                // Allow up to 18px drag tolerance for moving comets or large central sun core, 10px for stationary nodes
-                const maxDragThreshold = (isCometClick || isSunClick) ? 18 : 10;
+                const isSunClick = isSunObject(obj) || (obj.userData && obj.userData.isSunCore) || (obj === sunGroup);
+                // Allow up to 24px drag tolerance for moving comets or central sun core, 10px for stationary nodes
+                const maxDragThreshold = (isCometClick || isSunClick) ? 24 : 10;
 
                 if (dragDist <= maxDragThreshold) {
                     if (isCometClick) {
@@ -6458,6 +6504,18 @@ REV: rel-wad@r2
                             spawnSynapticLightning(key, isDatabaseOutage);
                         }
                         openAgentChamber(key);
+                    }
+                }
+            } else if (dragDist <= 20) {
+                // Fallback check on mouse up in case mousedown raycast was slightly off or missed
+                mouse.x = (clientX / window.innerWidth) * 2 - 1;
+                mouse.y = -(clientY / window.innerHeight) * 2 + 1;
+                raycaster.setFromCamera(mouse, camera);
+                if (sunGroup) {
+                    const sunWorldPos = new THREE.Vector3();
+                    sunGroup.getWorldPosition(sunWorldPos);
+                    if (raycaster.ray.distanceToPoint(sunWorldPos) <= 1.85) {
+                        openSolarCoreGraphModal();
                     }
                 }
             }
@@ -7379,7 +7437,11 @@ REV: rel-wad@r2
 
             const closeCometModalBtn = document.getElementById('close-comet-modal-btn');
             if (closeCometModalBtn) {
-                closeCometModalBtn.addEventListener('click', closeCometModal);
+                closeCometModalBtn.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    closeCometModal();
+                });
             }
             const importIdeaBtn = document.getElementById('btn-import-idea');
             if (importIdeaBtn) {
