@@ -325,7 +325,7 @@
         </div>
 
         <!-- Solar Core Fusion Status Badge (Item 4) -->
-        <div id="solar-core-badge" class="interactive flex items-center space-x-2 text-xs font-mono px-3 py-2 rounded-xl hud-glass border border-amber-500/60 shadow-[0_0_15px_rgba(255,179,0,0.3)] bg-amber-950/80 text-amber-300 hover:shadow-[0_0_20px_rgba(255,179,0,0.6)] hover:border-amber-300 hover:scale-105 active:scale-95 transition-all cursor-pointer" title="Inspect Solar Core & FalkorDB Constellation">
+        <div id="solar-core-badge" onclick="openSolarCoreGraphModal()" class="interactive flex items-center space-x-2 text-xs font-mono px-3 py-2 rounded-xl hud-glass border border-amber-500/60 shadow-[0_0_15px_rgba(255,179,0,0.3)] bg-amber-950/80 text-amber-300 hover:shadow-[0_0_20px_rgba(255,179,0,0.6)] hover:border-amber-300 hover:scale-105 active:scale-95 transition-all cursor-pointer" title="Inspect Solar Core & FalkorDB Constellation">
             <span id="solar-core-dot" class="w-2.5 h-2.5 rounded-full bg-amber-400 animate-pulse shadow-[0_0_10px_#ffb300]"></span>
             <span class="text-amber-300 font-bold uppercase tracking-wider">☀️ SOLAR CORE:</span>
             <span id="solar-core-label" class="px-2 py-0.5 rounded bg-amber-900/90 text-amber-200 border border-amber-400 font-mono font-bold text-[10px] shadow-[0_0_12px_#ffb300]">FUSION ACTIVE</span>
@@ -862,6 +862,88 @@ REV: rel-wad@r2
                 <div class="p-3 rounded-xl bg-teal-950/40 border border-teal-500/30">
                     <h4 class="font-bold text-teal-300 text-sm">Serena (Read-Mostly Executive)</h4>
                     <p class="text-slate-300 mt-1">Read-mostly executive with restricted delegated clearance. Verifies cue sheets and audit proofs without destructive write capabilities.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 2D FalkorDB Radial Constellation Graph Modal (Item 13 / v043.08) -->
+    <div id="solar-core-graph-modal" class="fixed inset-0 z-[60] flex items-center justify-center p-3 md:p-6 bg-black/85 backdrop-blur-xl opacity-0 pointer-events-none transition-opacity duration-300">
+        <div class="relative w-full max-w-4xl max-h-[92vh] hud-glass p-5 md:p-7 rounded-3xl border border-amber-500/60 shadow-[0_0_60px_rgba(255,179,0,0.35)] flex flex-col gap-4 interactive font-mono">
+            <!-- Modal Header -->
+            <div class="flex items-center justify-between border-b border-amber-500/30 pb-3">
+                <div class="flex items-center space-x-3">
+                    <span class="w-3.5 h-3.5 rounded-full bg-amber-400 animate-pulse shadow-[0_0_12px_#ffb300]"></span>
+                    <div>
+                        <div class="text-[10px] font-mono font-bold text-amber-400 uppercase tracking-widest">FALKORDB v6.8.0 • 2D GRAPH TOPOLOGY ENGINE</div>
+                        <h2 class="text-base md:text-lg font-black text-white flex items-center gap-2">
+                            <span>☀️ Solar Core &amp; Evidence Constellation</span>
+                            <span class="text-xs font-mono font-bold px-2 py-0.5 rounded bg-amber-950/80 text-amber-300 border border-amber-500/40">28 SHARDS</span>
+                        </h2>
+                    </div>
+                </div>
+                <button id="close-solar-graph-btn" onclick="closeSolarCoreGraphModal()" class="interactive text-slate-200 hover:text-amber-200 font-mono text-xs px-3 py-1.5 rounded-xl border border-slate-700/80 hover:border-amber-400 bg-slate-900/95 hover:bg-amber-950/90 shadow hover:shadow-[0_0_20px_rgba(245,158,11,0.6)] hover:scale-105 active:scale-95 transition-all duration-200 cursor-pointer flex items-center gap-1.5" title="Close Graph Modal [ESC]">
+                    <span>✕</span>
+                    <span>CLOSE or ESC</span>
+                </button>
+            </div>
+
+            <!-- Main Content Area: SVG Graph on Left, Live Shard Detail Inspector on Right -->
+            <div class="grid grid-cols-1 md:grid-cols-12 gap-4 flex-1 overflow-hidden min-h-[380px]">
+                <!-- Interactive 2D Radial Constellation SVG (Matches the 3D red balls around the sun) -->
+                <div class="md:col-span-8 relative bg-slate-950/90 rounded-2xl border border-slate-800 p-2 flex items-center justify-center overflow-hidden shadow-inner">
+                    <svg id="solar-radial-graph-svg" viewBox="0 0 600 600" class="w-full h-full max-h-[460px] select-none">
+                        <!-- Dynamic SVG content populated by renderSolarRadialGraph() -->
+                    </svg>
+                    <!-- Floating Hint Overlay -->
+                    <div class="absolute bottom-2 left-3 text-[10px] text-slate-400 font-mono pointer-events-none flex items-center gap-2">
+                        <span class="w-1.5 h-1.5 rounded-full bg-amber-400 animate-ping"></span>
+                        <span>Click any red shard or central core to inspect Cypher attributes</span>
+                    </div>
+                </div>
+
+                <!-- Inspector Card Panel -->
+                <div class="md:col-span-4 flex flex-col justify-between bg-slate-900/60 rounded-2xl border border-slate-800/80 p-4 space-y-3 overflow-y-auto max-h-[480px]">
+                    <div>
+                        <div class="flex items-center justify-between border-b border-slate-800 pb-2 mb-2">
+                            <span class="text-[11px] font-bold text-cyan-400 uppercase tracking-wider">Shard Telemetry</span>
+                            <span id="solar-graph-cluster-tag" class="text-[10px] px-2 py-0.5 rounded font-bold bg-red-950 text-red-300 border border-red-500/40">OPERATIONS</span>
+                        </div>
+                        <div class="space-y-2 text-xs">
+                            <div>
+                                <div class="text-[10px] text-slate-400 uppercase">Cypher Node Label:</div>
+                                <div id="solar-graph-node-title" class="font-bold text-white text-sm">NODE #1: FalkorDB Shard</div>
+                            </div>
+                            <div>
+                                <div class="text-[10px] text-slate-400 uppercase">Cypher Entity:</div>
+                                <code id="solar-graph-cypher-label" class="text-[11px] text-amber-300 font-mono block bg-slate-950/80 p-1.5 rounded border border-slate-800">:RECORD_EVIDENCE_1</code>
+                            </div>
+                            <div class="grid grid-cols-2 gap-2 text-[11px]">
+                                <div>
+                                    <span class="text-slate-400">Radial Shell:</span>
+                                    <div id="solar-graph-shell-dist" class="font-semibold text-cyan-300">Orbit Shell 1 (1.42 AU)</div>
+                                </div>
+                                <div>
+                                    <span class="text-slate-400">Edges Active:</span>
+                                    <div id="solar-graph-edge-count" class="font-semibold text-emerald-300">4 Relationships</div>
+                                </div>
+                            </div>
+                            <div>
+                                <div class="text-[10px] text-slate-400 uppercase">Connected Neighbors:</div>
+                                <div id="solar-graph-neighbors" class="text-[10px] text-slate-300 truncate">NODE #4, NODE #9, NODE #17, NODE #23</div>
+                            </div>
+                            <div>
+                                <div class="text-[10px] text-slate-400 uppercase">FalkorDB SHA256 Proof:</div>
+                                <div id="solar-graph-hash" class="text-[9.5px] font-mono text-purple-300 truncate bg-slate-950 p-1 rounded border border-purple-500/30">e7c3a0994f2812...</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Live Cypher Query snippet -->
+                    <div class="p-2.5 rounded-xl bg-slate-950 border border-cyan-500/30 font-mono text-[10px] space-y-1">
+                        <span class="text-cyan-400 font-bold">FALKORDB CYPHER QUERY:</span>
+                        <pre id="solar-graph-cypher-query" class="text-slate-300 whitespace-pre-wrap break-all text-[9.5px]">MATCH (s:SolarCore)-[:FUELS]->(n:RECORD_EVIDENCE {id: 1}) RETURN s, n;</pre>
+                    </div>
                 </div>
             </div>
         </div>
@@ -2705,6 +2787,320 @@ REV: rel-wad@r2
         window.selectRedNode = selectRedNode;
         window.closeNodeModal = closeNodeModal;
 
+        // --- 2c. 2D FalkorDB Radial Constellation Graph Modal (Item 13 / v043.08) ---
+        let selectedSolarNodeIdx = null;
+
+        function openSolarCoreGraphModal() {
+            const modal = document.getElementById('solar-core-graph-modal');
+            if (!modal) return;
+            if (typeof closeMatrixDrawer === 'function') closeMatrixDrawer();
+            if (typeof closeModals === 'function') closeModals();
+            renderSolarRadialGraph();
+            inspectSolarGraphNode('sun');
+            modal.classList.remove('opacity-0', 'pointer-events-none');
+            if (CosmicAudio && CosmicAudio.playStardustChime) {
+                CosmicAudio.playStardustChime(0, 0.45);
+            }
+        }
+
+        function closeSolarCoreGraphModal() {
+            const modal = document.getElementById('solar-core-graph-modal');
+            if (!modal) return;
+            modal.classList.add('opacity-0', 'pointer-events-none');
+            selectedSolarNodeIdx = null;
+        }
+
+        function renderSolarRadialGraph() {
+            const svg = document.getElementById('solar-radial-graph-svg');
+            if (!svg) return;
+
+            if (!redNodes || redNodes.length === 0) {
+                svg.innerHTML = '<text x="300" y="300" fill="#94a3b8" font-family="monospace" font-size="14" text-anchor="middle">Loading FalkorDB Topology...</text>';
+                return;
+            }
+
+            const cx = 300;
+            const cy = 300;
+            const count = redNodes.length;
+
+            // Compute 2D projected coordinates for each node based on 3D basePos
+            // Mirrors exact organic arrangement of red balls orbiting around the sun
+            const coords = [];
+            for (let i = 0; i < count; i++) {
+                const node = redNodes[i];
+                const u = node.userData || {};
+                const pos = u.basePos || node.position;
+                const r3D = Math.sqrt(pos.x * pos.x + pos.y * pos.y + pos.z * pos.z);
+                const angle = Math.atan2(pos.z, pos.x);
+                // Normalized 3D radius from [0.95, 2.35] mapped to 2D SVG canvas [85, 235]
+                const normR = Math.max(0, Math.min(1, (r3D - 0.95) / 1.40));
+                const r2D = 85 + normR * 150;
+                const elevOffset = (pos.y || 0) * 8;
+                const sx = cx + r2D * Math.cos(angle) + elevOffset * 0.3;
+                const sy = cy + r2D * Math.sin(angle) + elevOffset * 0.3;
+                coords.push({
+                    x: sx,
+                    y: sy,
+                    r2D: r2D,
+                    r3D: r3D,
+                    isIngested: !!u.isIngestedIdeaNode,
+                    id: u.id || (i + 1),
+                    cluster: u.cluster || 'OPERATIONS',
+                    label: u.label || `:RECORD_EVIDENCE_${i + 1}`
+                });
+            }
+
+            // Build SVG Markup with layered shells, rays, edges, central sun, and shard nodes
+            let svgContent = `
+                <defs>
+                    <radialGradient id="sun-radial-core" cx="50%" cy="50%" r="50%">
+                        <stop offset="0%" stop-color="#ffffff" stop-opacity="1" />
+                        <stop offset="35%" stop-color="#fbbf24" stop-opacity="1" />
+                        <stop offset="70%" stop-color="#f59e0b" stop-opacity="0.9" />
+                        <stop offset="100%" stop-color="#ea580c" stop-opacity="0.8" />
+                    </radialGradient>
+                    <radialGradient id="sun-corona-flare" cx="50%" cy="50%" r="50%">
+                        <stop offset="0%" stop-color="#fbbf24" stop-opacity="0.5" />
+                        <stop offset="60%" stop-color="#f59e0b" stop-opacity="0.2" />
+                        <stop offset="100%" stop-color="#d97706" stop-opacity="0" />
+                    </radialGradient>
+                    <filter id="solar-node-glow" x="-50%" y="-50%" width="200%" height="200%">
+                        <feGaussianBlur in="SourceGraphic" stdDeviation="3" result="blur" />
+                        <feMerge>
+                            <feMergeNode in="blur" />
+                            <feMergeNode in="SourceGraphic" />
+                        </feMerge>
+                    </filter>
+                </defs>
+
+                <!-- Background Subtle Polar Axis Guides -->
+                <line x1="300" y1="20" x2="300" y2="580" stroke="rgba(148, 163, 184, 0.08)" stroke-dasharray="2,4" />
+                <line x1="20" y1="300" x2="580" y2="300" stroke="rgba(148, 163, 184, 0.08)" stroke-dasharray="2,4" />
+
+                <!-- Concentric Radial Orbit Shells -->
+                <circle cx="300" cy="300" r="85" fill="none" stroke="rgba(245, 158, 11, 0.25)" stroke-dasharray="3,3" stroke-width="1" />
+                <circle cx="300" cy="300" r="135" fill="none" stroke="rgba(0, 229, 255, 0.18)" stroke-dasharray="4,4" stroke-width="1" />
+                <circle cx="300" cy="300" r="185" fill="none" stroke="rgba(192, 132, 252, 0.16)" stroke-dasharray="5,5" stroke-width="1" />
+                <circle cx="300" cy="300" r="235" fill="none" stroke="rgba(244, 63, 94, 0.14)" stroke-dasharray="6,6" stroke-width="1" />
+
+                <!-- Shell Legend Annotations -->
+                <text x="305" y="210" fill="rgba(245, 158, 11, 0.45)" font-size="8" font-family="monospace">INNER FUSION 1.0 AU</text>
+                <text x="305" y="160" fill="rgba(0, 229, 255, 0.4)" font-size="8" font-family="monospace">PRIMARY SHARDS 1.4 AU</text>
+                <text x="305" y="110" fill="rgba(192, 132, 252, 0.35)" font-size="8" font-family="monospace">OUTER SHARDS 1.8 AU</text>
+                <text x="305" y="60" fill="rgba(244, 63, 94, 0.3)" font-size="8" font-family="monospace">VALENCE BOUNDARY 2.3 AU</text>
+
+                <!-- Radial Solar Ray Filaments connecting Sun Core to Shards -->
+                <g id="solar-rays-layer">
+            `;
+
+            for (let i = 0; i < count; i++) {
+                const c = coords[i];
+                svgContent += `<line id="solar-ray-${i}" x1="300" y1="300" x2="${c.x.toFixed(1)}" y2="${c.y.toFixed(1)}" stroke="rgba(245, 158, 11, 0.15)" stroke-dasharray="2,3" stroke-width="1" />`;
+            }
+
+            svgContent += `</g><!-- Inter-Shard Lattice Synapse Edges (Mirrors 3D graphEdgePairs) --><g id="solar-edges-layer">`;
+
+            if (typeof graphEdgePairs !== 'undefined' && graphEdgePairs.length > 0) {
+                for (let k = 0; k < graphEdgePairs.length; k++) {
+                    const iA = graphEdgePairs[k][0];
+                    const iB = graphEdgePairs[k][1];
+                    if (coords[iA] && coords[iB]) {
+                        const pA = coords[iA];
+                        const pB = coords[iB];
+                        svgContent += `<line id="solar-edge-${iA}-${iB}" class="solar-edge solar-edge-${iA} solar-edge-${iB}" x1="${pA.x.toFixed(1)}" y1="${pA.y.toFixed(1)}" x2="${pB.x.toFixed(1)}" y2="${pB.y.toFixed(1)}" stroke="rgba(239, 68, 68, 0.5)" stroke-width="1.4" />`;
+                    }
+                }
+            } else {
+                for (let i = 0; i < count; i++) {
+                    const node = redNodes[i];
+                    const neighbors = (node.userData && node.userData.neighbors) || [];
+                    for (let nIdx of neighbors) {
+                        if (nIdx > i && coords[nIdx]) {
+                            const pA = coords[i];
+                            const pB = coords[nIdx];
+                            svgContent += `<line id="solar-edge-${i}-${nIdx}" class="solar-edge solar-edge-${i} solar-edge-${nIdx}" x1="${pA.x.toFixed(1)}" y1="${pA.y.toFixed(1)}" x2="${pB.x.toFixed(1)}" y2="${pB.y.toFixed(1)}" stroke="rgba(239, 68, 68, 0.5)" stroke-width="1.4" />`;
+                        }
+                    }
+                }
+            }
+
+            svgContent += `</g><!-- Central Solar Core Group --><g id="solar-center-core" class="cursor-pointer" onclick="inspectSolarGraphNode('sun')">
+                <circle cx="300" cy="300" r="44" fill="url(#sun-corona-flare)" class="animate-pulse" />
+                <circle cx="300" cy="300" r="32" fill="none" stroke="rgba(251, 191, 36, 0.4)" stroke-dasharray="4,2" stroke-width="1.5" />
+                <circle cx="300" cy="300" r="24" fill="url(#sun-radial-core)" stroke="#fef08a" stroke-width="2.5" filter="url(#solar-node-glow)" />
+                <text x="300" y="304" text-anchor="middle" fill="#000000" font-size="10" font-family="monospace" font-weight="900" pointer-events="none">☀️ CORE</text>
+            </g><!-- 2D Shard Nodes Layer (In the same shape as the 3D red balls) --><g id="solar-nodes-layer">`;
+
+            for (let i = 0; i < count; i++) {
+                const c = coords[i];
+                const fillColor = c.isIngested ? '#00e5ff' : '#ff1744';
+                const strokeColor = c.isIngested ? '#e0f7fa' : '#ff80ab';
+                const textColor = c.isIngested ? '#67e8f9' : '#fca5a5';
+                const tag = c.isIngested ? `IDEA #${c.id}` : `N#${c.id}`;
+
+                svgContent += `
+                    <g class="solar-node cursor-pointer group" id="solar-node-group-${i}" onclick="inspectSolarGraphNode(${i})" onmouseenter="highlightSolarGraphNode(${i}, true)" onmouseleave="highlightSolarGraphNode(${i}, false)">
+                        <circle cx="${c.x.toFixed(1)}" cy="${c.y.toFixed(1)}" r="18" fill="transparent" />
+                        <circle id="solar-node-circ-${i}" cx="${c.x.toFixed(1)}" cy="${c.y.toFixed(1)}" r="7.5" fill="${fillColor}" stroke="${strokeColor}" stroke-width="1.8" filter="url(#solar-node-glow)" class="transition-transform duration-150" />
+                        <text id="solar-node-lbl-${i}" x="${c.x.toFixed(1)}" y="${(c.y + 15).toFixed(1)}" text-anchor="middle" fill="${textColor}" font-size="8.5" font-family="monospace" font-weight="bold" pointer-events="none">${tag}</text>
+                    </g>
+                `;
+            }
+
+            svgContent += `</g>`;
+            svg.innerHTML = svgContent;
+        }
+
+        function highlightSolarGraphNode(idx, isHover) {
+            if (idx === 'sun') return;
+            const circ = document.getElementById(`solar-node-circ-${idx}`);
+            const ray = document.getElementById(`solar-ray-${idx}`);
+            const edges = document.querySelectorAll(`.solar-edge-${idx}`);
+
+            if (isHover) {
+                if (circ) {
+                    circ.setAttribute('r', '11');
+                    circ.setAttribute('stroke', '#ffffff');
+                    circ.setAttribute('stroke-width', '3');
+                }
+                if (ray) {
+                    ray.setAttribute('stroke', 'rgba(251, 191, 36, 0.9)');
+                    ray.setAttribute('stroke-width', '2');
+                }
+                edges.forEach(edge => {
+                    edge.setAttribute('stroke', '#fbbf24');
+                    edge.setAttribute('stroke-width', '2.5');
+                });
+            } else if (selectedSolarNodeIdx !== idx) {
+                const node = redNodes[idx];
+                const isIngested = node && node.userData && node.userData.isIngestedIdeaNode;
+                if (circ) {
+                    circ.setAttribute('r', '7.5');
+                    circ.setAttribute('stroke', isIngested ? '#e0f7fa' : '#ff80ab');
+                    circ.setAttribute('stroke-width', '1.8');
+                }
+                if (ray) {
+                    ray.setAttribute('stroke', 'rgba(245, 158, 11, 0.15)');
+                    ray.setAttribute('stroke-width', '1');
+                }
+                edges.forEach(edge => {
+                    edge.setAttribute('stroke', 'rgba(239, 68, 68, 0.5)');
+                    edge.setAttribute('stroke-width', '1.4');
+                });
+            }
+        }
+
+        function inspectSolarGraphNode(target) {
+            const titleEl = document.getElementById('solar-graph-node-title');
+            const clusterEl = document.getElementById('solar-graph-cluster-tag');
+            const labelEl = document.getElementById('solar-graph-cypher-label');
+            const distEl = document.getElementById('solar-graph-shell-dist');
+            const countEl = document.getElementById('solar-graph-edge-count');
+            const neighborsEl = document.getElementById('solar-graph-neighbors');
+            const hashEl = document.getElementById('solar-graph-hash');
+            const queryEl = document.getElementById('solar-graph-cypher-query');
+
+            if (selectedSolarNodeIdx !== null && selectedSolarNodeIdx !== 'sun') {
+                const prevCirc = document.getElementById(`solar-node-circ-${selectedSolarNodeIdx}`);
+                const prevNode = redNodes[selectedSolarNodeIdx];
+                const isIngested = prevNode && prevNode.userData && prevNode.userData.isIngestedIdeaNode;
+                if (prevCirc) {
+                    prevCirc.setAttribute('r', '7.5');
+                    prevCirc.setAttribute('stroke', isIngested ? '#e0f7fa' : '#ff80ab');
+                    prevCirc.setAttribute('stroke-width', '1.8');
+                }
+                const prevRay = document.getElementById(`solar-ray-${selectedSolarNodeIdx}`);
+                if (prevRay) prevRay.setAttribute('stroke', 'rgba(245, 158, 11, 0.15)');
+                const prevEdges = document.querySelectorAll(`.solar-edge-${selectedSolarNodeIdx}`);
+                prevEdges.forEach(e => {
+                    e.setAttribute('stroke', 'rgba(239, 68, 68, 0.5)');
+                    e.setAttribute('stroke-width', '1.4');
+                });
+            }
+
+            selectedSolarNodeIdx = target;
+
+            if (target === 'sun') {
+                if (titleEl) titleEl.textContent = "☀️ FALKORDB SOLAR CORE (CENTRAL NEXUS)";
+                if (clusterEl) {
+                    clusterEl.textContent = "FUSION MANTLE";
+                    clusterEl.className = "text-[10px] px-2 py-0.5 rounded font-bold bg-amber-950 text-amber-300 border border-amber-500/40";
+                }
+                if (labelEl) labelEl.textContent = ":FALKORDB_SOLAR_CORE";
+                if (distEl) distEl.textContent = "Origin 0.00 AU (Center)";
+                if (countEl) countEl.textContent = `${redNodes.length} Bound Shards`;
+                if (neighborsEl) neighborsEl.textContent = `All ${redNodes.length} Evidence & Ingested Nodes in Sacred Constellation`;
+                if (hashEl) hashEl.textContent = "falkordb_solar_genesis_shard_nexus_77b8_9f8e";
+                if (queryEl) {
+                    queryEl.textContent = "MATCH (s:SolarCore {name: 'CentralNexus'})\nMATCH (s)-[:FUELS]->(n:RECORD_EVIDENCE)\nRETURN s.name, count(n) AS orbiting_evidence_shards;";
+                }
+                if (CosmicAudio && CosmicAudio.playStardustChime) {
+                    CosmicAudio.playStardustChime(0, 0.35);
+                }
+                return;
+            }
+
+            const node = redNodes[target];
+            if (!node) return;
+            const u = node.userData || {};
+            const isIngested = !!u.isIngestedIdeaNode;
+
+            if (titleEl) titleEl.textContent = isIngested ? `✨ INGESTED IDEA #${u.id}` : `NODE #${u.id}: FalkorDB Shard`;
+            if (clusterEl) {
+                clusterEl.textContent = u.cluster || 'OPERATIONS';
+                clusterEl.className = isIngested
+                    ? "text-[10px] px-2 py-0.5 rounded font-bold bg-cyan-950 text-cyan-300 border border-cyan-500/40"
+                    : "text-[10px] px-2 py-0.5 rounded font-bold bg-red-950 text-red-300 border border-red-500/40";
+            }
+            if (labelEl) labelEl.textContent = u.label || `:RECORD_EVIDENCE_${u.id}`;
+            const pos = u.basePos || node.position;
+            const r3D = Math.sqrt(pos.x * pos.x + pos.y * pos.y + pos.z * pos.z);
+            if (distEl) distEl.textContent = `Orbit Shell (${r3D.toFixed(2)} AU)`;
+            const neighbors = u.neighbors || [];
+            if (countEl) countEl.textContent = `${neighbors.length} Relationships`;
+            if (neighborsEl) {
+                neighborsEl.textContent = neighbors.length > 0
+                    ? neighbors.map(nIdx => {
+                        const nNode = redNodes[nIdx];
+                        return 'NODE #' + ((nNode && nNode.userData && nNode.userData.id) || (nIdx + 1));
+                    }).join(', ')
+                    : 'Isolated Node (No Local Synapses)';
+            }
+            if (hashEl) hashEl.textContent = u.hash || 'e7c3a0994f2812...';
+            if (queryEl) {
+                queryEl.textContent = isIngested
+                    ? `MATCH (idea:IngestedIdea {id: ${u.id}})\nMATCH (s:SolarCore)-[:ILLUMINATES]->(idea)\nRETURN idea.summary, idea.cluster;`
+                    : `MATCH (s:SolarCore)-[:FUELS]->(n:RECORD_EVIDENCE {id: ${u.id}})\nOPTIONAL MATCH (n)-[r:SYNAPSE]-(m)\nRETURN n, collect(m.id) AS active_synapses;`;
+            }
+
+            const curCirc = document.getElementById(`solar-node-circ-${target}`);
+            if (curCirc) {
+                curCirc.setAttribute('r', '11');
+                curCirc.setAttribute('stroke', '#ffffff');
+                curCirc.setAttribute('stroke-width', '3');
+            }
+            const curRay = document.getElementById(`solar-ray-${target}`);
+            if (curRay) {
+                curRay.setAttribute('stroke', '#fbbf24');
+                curRay.setAttribute('stroke-width', '2');
+            }
+            const curEdges = document.querySelectorAll(`.solar-edge-${target}`);
+            curEdges.forEach(e => {
+                e.setAttribute('stroke', '#38bdf8');
+                e.setAttribute('stroke-width', '2.2');
+            });
+
+            if (CosmicAudio && CosmicAudio.playStardustChime) {
+                CosmicAudio.playStardustChime(0, 0.4);
+            }
+        }
+
+        window.openSolarCoreGraphModal = openSolarCoreGraphModal;
+        window.closeSolarCoreGraphModal = closeSolarCoreGraphModal;
+        window.renderSolarRadialGraph = renderSolarRadialGraph;
+        window.inspectSolarGraphNode = inspectSolarGraphNode;
+        window.highlightSolarGraphNode = highlightSolarGraphNode;
+
         // --- 3. The Central Fiery Sun Core (Item 4: Plasma Mantle, Coronal Prominences & Cypher Mandala) ---
         function createTheSun() {
             sunGroup = new THREE.Group();
@@ -2724,6 +3120,7 @@ REV: rel-wad@r2
                 blending: THREE.AdditiveBlending
             });
             sunSphere = new THREE.Mesh(sunGeo, sunMat);
+            sunSphere.userData = { isSunCore: true };
             sunGroup.add(sunSphere);
 
             // 2. Secondary Inner Plasma Shroud (Dense multi-faceted incandescent combustion cage)
@@ -2736,6 +3133,7 @@ REV: rel-wad@r2
                 blending: THREE.AdditiveBlending
             });
             sunPlasmaShroud = new THREE.Mesh(shroudGeo, shroudMat);
+            sunPlasmaShroud.userData = { isSunCore: true };
             sunGroup.add(sunPlasmaShroud);
 
             // 3. Inner Radiant Fusion Core
@@ -2747,7 +3145,9 @@ REV: rel-wad@r2
                 blending: THREE.AdditiveBlending
             });
             innerSun = new THREE.Mesh(innerSunGeo, innerSunMat);
+            innerSun.userData = { isSunCore: true };
             sunGroup.add(innerSun);
+            sunGroup.userData = { isSunCore: true };
 
             // 4. Primary Coronal Ring (Tilted Golden Halo)
             const ringGeo = new THREE.RingGeometry(1.08, 1.58, 64);
@@ -5609,7 +6009,7 @@ REV: rel-wad@r2
         }
 
         function isAnyModalOpen() {
-            const modalIds = ['idea-modal', 'comet-info-modal', 'evidence-modal', 'human-modal', 'guide-modal', 'outage-rejection-modal'];
+            const modalIds = ['idea-modal', 'comet-info-modal', 'evidence-modal', 'human-modal', 'guide-modal', 'outage-rejection-modal', 'solar-core-graph-modal'];
             return modalIds.some(id => {
                 const el = document.getElementById(id);
                 if (!el) return false;
@@ -5709,7 +6109,7 @@ REV: rel-wad@r2
 
                 for (let h of hoverHits) {
                     const u = h.object.userData;
-                    if (u && (u.isPyramid || u.isRedNode || u.isEvidenceNode || u.isComet)) {
+                    if (u && (u.isPyramid || u.isRedNode || u.isEvidenceNode || u.isComet || u.isSunCore)) {
                         hitInteractive = true;
                         if (u.isPyramid && u.agentKey) hoveredKey = u.agentKey;
                         break;
@@ -5760,14 +6160,14 @@ REV: rel-wad@r2
                 return;
             }
 
-            // Raycast for Pyramids, Comets, Red Evidence Nodes (for click selection on release if no drag)
+            // Raycast for Pyramids, Comets, Red Evidence Nodes, Sun Core (for click selection on release if no drag)
             raycaster.setFromCamera(mouse, camera);
             const intersects = raycaster.intersectObjects(scene.children, true);
 
             if (intersects.length > 0) {
                 for (let hit of intersects) {
                     const obj = hit.object;
-                    if (obj.userData && (obj.userData.isComet || obj.userData.isRedNode || obj.userData.isEvidenceNode || obj.userData.isPyramid)) {
+                    if (obj.userData && (obj.userData.isComet || obj.userData.isRedNode || obj.userData.isEvidenceNode || obj.userData.isPyramid || obj.userData.isSunCore)) {
                         pendingClickObject = obj;
                         break;
                     }
@@ -5794,6 +6194,8 @@ REV: rel-wad@r2
                         spawnSynapticLightning(key, isDatabaseOutage);
                     }
                     openAgentChamber(key);
+                } else if (obj.userData && obj.userData.isSunCore) {
+                    openSolarCoreGraphModal();
                 }
             }
 
@@ -5898,6 +6300,7 @@ REV: rel-wad@r2
                 closeModals();
                 closeNodeModal();
                 closeCometModal();
+                closeSolarCoreGraphModal();
                 closeMatrixDrawer();
             } else if (e.key === '1') {
                 openAgentChamber('roy');
@@ -6013,6 +6416,7 @@ REV: rel-wad@r2
             }
             closeNodeModal();
             closeCometModal();
+            closeSolarCoreGraphModal();
             const outageRejection = document.getElementById('outage-rejection-modal');
             if (outageRejection) outageRejection.classList.add('hidden');
         }
@@ -6056,6 +6460,16 @@ REV: rel-wad@r2
             document.getElementById('close-guide-btn').addEventListener('click', closeModals);
             const closeIdeaBtn = document.getElementById('close-idea-btn');
             if (closeIdeaBtn) closeIdeaBtn.addEventListener('click', closeModals);
+            const closeSolarGraphBtn = document.getElementById('close-solar-graph-btn');
+            if (closeSolarGraphBtn) closeSolarGraphBtn.addEventListener('click', closeSolarCoreGraphModal);
+            const solarGraphModal = document.getElementById('solar-core-graph-modal');
+            if (solarGraphModal) {
+                solarGraphModal.addEventListener('click', (e) => {
+                    if (e.target === solarGraphModal) {
+                        closeSolarCoreGraphModal();
+                    }
+                });
+            }
 
             const cometBadge = document.getElementById('comet-badge');
             if (cometBadge) {
