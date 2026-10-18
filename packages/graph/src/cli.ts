@@ -1,6 +1,6 @@
-// Operator CLI for the graph lane: health | seed-studio [tenantId] | studio-overview [tenantId] | seed-agent-profiles [tenantId] | agent-profiles [tenantId] | seed [--init-witness] [--resume] [bundle...] | witness-recover | analyze <releaseId> [tenantId].
+// Operator CLI for the graph lane: health | seed-ideaverse [tenantId] | seed-studio [tenantId] | studio-overview [tenantId] | seed-agent-profiles [tenantId] | agent-profiles [tenantId] | seed [--init-witness] [--resume] [bundle...] | witness-recover | analyze <releaseId> [tenantId].
 // Run from the repository root: node --env-file-if-exists=.env --import tsx packages/graph/src/cli.ts <command>
-import { analyzeRelease, configFromEnv, evidenceKeyFromEnv, graphHealth, GraphClient, ledgerFromEnv, recoverWitness, revokeEvidence, seedGraph, seedStudio, studioOverview, seedAgentProfiles, agentProfileOverview } from './index.js';
+import { analyzeRelease, configFromEnv, evidenceKeyFromEnv, graphHealth, GraphClient, ledgerFromEnv, recoverWitness, revokeEvidence, seedGraph, seedIdeaverse, seedStudio, studioOverview, seedAgentProfiles, agentProfileOverview } from './index.js';
 
 const [command, arg1, arg2] = process.argv.slice(2);
 const rest = process.argv.slice(3);
@@ -13,6 +13,9 @@ try {
   } else if (command === 'seed') {
     const bundles = rest.filter(a => !a.startsWith('--'));
     console.log(JSON.stringify(await seedGraph(client, process.cwd(), { bundles, initWitness: rest.includes('--init-witness'), resumeWitness: rest.includes('--resume'), allowRevisionRollback: rest.includes('--allow-revision-rollback'), reinstate: rest.filter(a => a.startsWith('--reinstate=')).map(a => a.slice('--reinstate='.length)) })));
+  } else if (command === 'seed-ideaverse' && (!arg1 || !arg1.startsWith('--')) && !arg2) {
+    // Verified repository manifest only; studio proposals do not initialize or modify the licensing witness.
+    console.log(JSON.stringify(await seedIdeaverse(client, process.cwd(), arg1 ? { tenantId: arg1 } : {})));
   } else if (command === 'seed-studio') {
     // Studio crew and departments: separate from the licensing seed and its witness. arg1 = tenantId (default t-wad).
     console.log(JSON.stringify(await seedStudio(client, process.cwd(), arg1 ? { tenantId: arg1 } : {})));
@@ -40,7 +43,7 @@ try {
     console.log(JSON.stringify(result ?? { status: 'NOT_FOUND', releaseId: arg1 }, null, 2));
     process.exitCode = result?.status === 'AVAILABLE' ? 0 : 1;
   } else {
-    console.error('usage: cli.ts health | seed-studio [tenantId] | studio-overview [tenantId] | seed-agent-profiles [tenantId] | agent-profiles [tenantId] | seed [--init-witness] [--resume] [--allow-revision-rollback] [\'--reinstate=<kind|subject|path>\'] [bundle...] | revoke <licenseId> <newRevision> [releaseId] | witness-recover [tenantId] [--repair-torn-tail] | analyze <releaseId> [tenantId]');
+    console.error('usage: cli.ts health | seed-ideaverse [tenantId] | seed-studio [tenantId] | studio-overview [tenantId] | seed-agent-profiles [tenantId] | agent-profiles [tenantId] | seed [--init-witness] [--resume] [--allow-revision-rollback] [\'--reinstate=<kind|subject|path>\'] [bundle...] | revoke <licenseId> <newRevision> [releaseId] | witness-recover [tenantId] [--repair-torn-tail] | analyze <releaseId> [tenantId]');
     process.exitCode = 2;
   }
 } finally {
