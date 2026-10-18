@@ -48,7 +48,7 @@ export function Shell({ route, health, graph, analysis, Scene, reducedMotion, se
                 <StatusArea phase={phase ?? 'CHECKING'} releaseId={route.releaseId} analysis={analysis} recovered={recovered} />
                 <AnalysisView releaseId={route.releaseId} result={analysis} phase={phase} />
                 {current?.status === 'AVAILABLE' && <TalkPanel key={`${generation ?? 0}:${current.releaseId}:${current.revision}`} analysis={current} />}
-                {studio && <StudioPanel controller={studio.controller} phase={phase} {...(studio.access ? { access: studio.access } : {})} />}
+                {studio && <StudioPanel controller={studio.controller} phase={phase} {...(studio.access ? { access: studio.access } : {})} {...(studio.accessStore ? { accessStore: studio.accessStore } : {})} />}
               </div>
             </div>)}
           {route.name === 'not_found' && (
