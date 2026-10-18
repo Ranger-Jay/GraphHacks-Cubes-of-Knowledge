@@ -2,7 +2,8 @@
 
 Development-only v038 adds an opted-in loopback owner alias for the existing IdeaVerse HTTP
 routes; it does not change API authorization or the default reader proxy. See
-[owner-rehearsal transport](owner-rehearsal-v038.md). Effective-access and UI binding remain held.
+[owner-rehearsal transport](owner-rehearsal-v038.md). Effective access is served by
+`GET /api/session/access` (see [session access](session-access-v048.md)); UI binding remains held.
 
 The v026 IdeaVerse read/import/reconciliation endpoints are specified in [IdeaVerse HTTP contract](ideaverse-api-v026.md), with exported transport types in `packages/contracts/src/ideaverse.ts`. Partial candidate v034 includes the reviewed API adapter and real manifest, but keeps the browser import binding disabled. Transport is reconciled with the accepted graph: an ambiguous workspace has `revision: null`, and imports may reject `AMBIGUOUS_IDENTITY`. A raw graph receipt or local shape check is not confirmed HTTP success. See [partial candidate status](integration-v034.md).
 
@@ -12,6 +13,7 @@ Types: packages/contracts/src/index.ts. These are transport types, not runtime i
 | --- | --- | --- | --- |
 | GET /api/health | Bootstrap metadata | 200 BOOTSTRAP, ready=false | Process liveness only; never graph readiness |
 | GET /api/graph/status | GraphStatusResponse; shipped, unauthenticated | 200 AVAILABLE after real query | 503 UNAVAILABLE / CONNECTION_FAILED or QUERY_FAILED; exposes graphName but no release/evidence/token fields. Factory without a probe retains NOT_IMPLEMENTED |
+| GET /api/session/access | Session access; shipped | 200 OWNER (canReadIdeas, canImportIdeas) / READER (canReadIdeas only) | 401 anonymous, 403 agent/other; no token, principal id, tenant, or caller-supplied field returned |
 | GET /api/releases/:releaseId/analysis | AnalysisResponse; shipped | 200 AVAILABLE, clearance ESTABLISHED/GAP/UNKNOWN | 503 UNAVAILABLE; empty current evidence/paths/actions; scoped reads |
 | POST /api/approvals | ApprovalRequest → ApprovalResponse; writer disabled | Planned: 201 RECORDED / matching replay, not shipped | Shipped: 401 anonymous, 403 reader/agent, 503 owner fail-closed; no approval is recorded |
 | POST /api/handoffs | HandoffRequest → Handoff; planned, currently 404 | 201 with server-derived identity, scoped approved state | 401/403/409/503; unauthorized proposed next step must not become approved |
