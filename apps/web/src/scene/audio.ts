@@ -15,6 +15,13 @@ let activeAudio: HTMLAudioElement | null = null;
 let activeClipFile: string | null = null;
 /** Agent that owns the active clip. Cancellation is scoped to this owner. */
 let activeAgentId: AgentId | null = null;
+let activeReadAloud: { utterance: SpeechSynthesisUtterance; agentId: AgentId; onEnd?: () => void } | null = null;
+const muteListeners = new Set<() => void>();
+
+export function subscribeAudioMuted(listener: () => void): () => void {
+  muteListeners.add(listener);
+  return () => { muteListeners.delete(listener); };
+}
 
 export type SpeakOptions = {
   onEnd?: () => void;
@@ -36,14 +43,22 @@ export function getActiveAgentId(): AgentId | null {
 }
 
 export function setAudioMuted(muted: boolean): void {
+  const changed = audioMuted !== muted;
   audioMuted = muted;
   if (muted) {
     cancelSpeech();
   }
+  if (changed) for (const listener of [...muteListeners]) listener();
 }
 
 /** Stop browser synthesis leftovers and any active WAV element. */
 export function cancelSpeech(): void {
+  const reading = activeReadAloud;
+  activeReadAloud = null;
+  if (reading) {
+    reading.utterance.onend = null;
+    reading.utterance.onerror = null;
+  }
   if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
     try {
       window.speechSynthesis.cancel();
@@ -52,6 +67,41 @@ export function cancelSpeech(): void {
     }
   }
   cancelActiveAudioElement();
+  reading?.onEnd?.();
+}
+
+/** Only installed/local-service voices; never silently route live company text to a remote TTS service. */
+export function localReadAloudVoices(): SpeechSynthesisVoice[] {
+  if (typeof window === 'undefined' || !window.speechSynthesis) return [];
+  try { return window.speechSynthesis.getVoices().filter(v => v.localService === true); }
+  catch { return []; }
+}
+
+/** Explicit read-aloud, separate from recorded persona clips. The caller supplies current READY text. */
+export function readCurrentExplanation(text: string, agentId: AgentId, voiceURI: string, phase: ScenePhase,
+  onEnd?: () => void): { started: boolean; stop: () => void } {
+  const refused = { started: false, stop: () => {} };
+  if (audioMuted || phase !== 'READY' || typeof window === 'undefined' || !window.speechSynthesis
+    || typeof SpeechSynthesisUtterance === 'undefined' || globalThis.navigator?.userActivation?.isActive !== true
+    || text.trim().length === 0 || text.length > 1_200) return refused;
+  // Re-resolve at click time: the selected device voice may have disappeared since the menu rendered.
+  const voice = localReadAloudVoices().find(v => v.voiceURI === voiceURI);
+  if (!voice) return refused;
+  cancelSpeech();
+  const utterance = new SpeechSynthesisUtterance(text);
+  utterance.voice = voice; utterance.lang = voice.lang;
+  utterance.rate = 1; utterance.pitch = 1;
+  const reading = { utterance, agentId, ...(onEnd ? { onEnd } : {}) };
+  activeReadAloud = reading;
+  const finish = () => {
+    if (activeReadAloud !== reading) return;
+    activeReadAloud = null;
+    onEnd?.();
+  };
+  utterance.onend = finish; utterance.onerror = finish;
+  try { window.speechSynthesis.speak(utterance); }
+  catch { finish(); return refused; }
+  return { started: true, stop: () => { if (activeReadAloud === reading) cancelSpeech(); } };
 }
 
 /** Cancel the active WAV element only. Synthesis leftovers are not agent-owned. */
@@ -77,6 +127,7 @@ function cancelActiveAudioElement(): void {
  * cancel a clip it does not own.
  */
 export function cancelSpeechForAgent(agentId: AgentId): void {
+  if (activeReadAloud?.agentId === agentId) { cancelSpeech(); return; }
   if (activeAgentId !== agentId) return;
   cancelActiveAudioElement();
 }
@@ -98,6 +149,7 @@ function gateAllows(clip: AudioClip, phase: ScenePhase | undefined, recoveryAuth
 
 /** Cancel the active WAV when the current phase no longer allows that clip. */
 export function enforcePhaseGate(phase: ScenePhase | undefined, recoveryAuthorized = false): void {
+  if (activeReadAloud && phase !== 'READY') cancelSpeech();
   if (!activeClipFile) return;
   const clip = findClipByFile(activeClipFile);
   if (!clip || !gateAllows(clip, phase, recoveryAuthorized)) {
