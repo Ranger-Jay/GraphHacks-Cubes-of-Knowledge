@@ -350,6 +350,14 @@ export class SolarCorePanel {
     });
   }
 
+  public getModalElement(): HTMLElement | null {
+    return this.modalEl;
+  }
+
+  public isPanelOpen(): boolean {
+    return this.isOpen;
+  }
+
   public dispose(): void {
     if (typeof window !== 'undefined') {
       window.removeEventListener('keydown', this.handleKeyDownBound);

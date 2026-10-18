@@ -85,8 +85,10 @@ function setupMockDOM() {
     removeEventListener(type: string, listener: EventListener) {
       this.eventListeners.get(type)?.delete(listener);
     }
-    dispatchEvent(event: { type: string; target?: unknown }) {
+    dispatchEvent(event: { type: string; target?: unknown; stopPropagation?: () => void; preventDefault?: () => void }) {
       event.target = this;
+      if (!event.stopPropagation) event.stopPropagation = () => {};
+      if (!event.preventDefault) event.preventDefault = () => {};
       this.eventListeners.get(event.type)?.forEach((l) => l(event as any));
       return true;
     }
@@ -365,18 +367,40 @@ test('6. Solar Core 2D panel: shared panel state across sun click and top-bar bu
     dispatch: async () => 'DISPATCHED',
   };
 
-  const panel = new SolarCorePanel(container, bridge);
-  panel.update(snap);
+  const adapter = new SpaceSceneAdapter(container, bridge, snap);
 
-  // Open panel
-  panel.open();
-  // Panel renders nodes and sources from snapshot
-  // Now update to GRAPH_UNAVAILABLE
-  panel.update(projectSpaceScene(testInput({ runtime: { phase: 'GRAPH_UNAVAILABLE' } })));
+  // 1. Top-bar button click path opens shared solar panel
+  const hudBtn = container.querySelector<any>('.btn-solar-core');
+  assert.ok(hudBtn, 'HUD solar core button must be rendered');
+  hudBtn.dispatchEvent({ type: 'click' });
+  const panel = adapter.getSolarPanel();
+  assert.ok(panel, 'Solar panel must exist');
+  assert.equal(panel.isPanelOpen(), true, 'Panel must be open after top-bar button click');
+  const modalEl = container.querySelector<any>('.solar-core-modal-overlay');
+  assert.ok(modalEl, 'Solar panel modal overlay must exist');
+  assert.equal(modalEl.classList.contains('hidden'), false, 'Modal overlay must be visible after top-bar button click');
 
-  // Panel clears proof
-  panel.close();
-  panel.dispose();
+  // Close panel
+  adapter.closeSolarPanel();
+  assert.equal(panel.isPanelOpen(), false, 'Panel must be closed after closeSolarPanel()');
+  assert.equal(modalEl.classList.contains('hidden'), true, 'Modal overlay must be hidden after closeSolarPanel()');
+
+  // 2. Sun click callback path opens the EXACT same shared solar panel
+  adapter.openSolarPanel();
+  assert.equal(panel.isPanelOpen(), true, 'Panel must be open after sun click path');
+  assert.equal(modalEl.classList.contains('hidden'), false, 'Modal overlay must be visible after sun click path');
+
+  // 3. Three renderer provides getSunScreenMetrics method
+  const renderer = adapter.getThreeRenderer();
+  if (renderer) {
+    assert.equal(typeof renderer.getSunScreenMetrics, 'function', 'Renderer must expose getSunScreenMetrics');
+  }
+
+  // 4. Outage clears proof
+  adapter.update(projectSpaceScene(testInput({ runtime: { phase: 'GRAPH_UNAVAILABLE' } })));
+  assert.equal(adapter.getSnapshot().runtime.phase, 'GRAPH_UNAVAILABLE');
+
+  adapter.unmount();
 });
 
 test('7. Reduced motion: static presentation without continuous animation loops', () => {

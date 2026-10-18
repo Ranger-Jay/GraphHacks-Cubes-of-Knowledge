@@ -182,7 +182,7 @@ export class SpaceSceneAdapter implements SpaceSceneInstance {
     const solarBtn = this.hudEl.querySelector<HTMLButtonElement>('.btn-solar-core');
     if (solarBtn) {
       solarBtn.addEventListener('click', (e) => {
-        e.stopPropagation();
+        if (typeof e.stopPropagation === 'function') e.stopPropagation();
         this.openSolarPanel(solarBtn);
       });
     }
@@ -191,7 +191,7 @@ export class SpaceSceneAdapter implements SpaceSceneInstance {
     const refreshBtn = this.hudEl.querySelector<HTMLButtonElement>('.btn-refresh');
     if (refreshBtn) {
       refreshBtn.addEventListener('click', (e) => {
-        e.stopPropagation();
+        if (typeof e.stopPropagation === 'function') e.stopPropagation();
         this.dispatchRefresh();
       });
     }
@@ -200,7 +200,7 @@ export class SpaceSceneAdapter implements SpaceSceneInstance {
     const muteBtn = this.hudEl.querySelector<HTMLButtonElement>('.btn-mute-toggle');
     if (muteBtn) {
       muteBtn.addEventListener('click', (e) => {
-        e.stopPropagation();
+        if (typeof e.stopPropagation === 'function') e.stopPropagation();
         this.dispatchSetAudioMuted(!this.snapshot.audioMuted);
       });
     }
@@ -209,7 +209,7 @@ export class SpaceSceneAdapter implements SpaceSceneInstance {
     const agentBtns = this.hudEl.querySelectorAll<HTMLButtonElement>('[data-agent]');
     agentBtns.forEach((btn) => {
       btn.addEventListener('click', (e) => {
-        e.stopPropagation();
+        if (typeof e.stopPropagation === 'function') e.stopPropagation();
         const agent = btn.getAttribute('data-agent') as AgentId;
         if (agent === 'ava' || agent === 'roy' || agent === 'guz') {
           this.dispatchAgentTaskStart(agent);
@@ -362,6 +362,14 @@ export class SpaceSceneAdapter implements SpaceSceneInstance {
 
   public getSnapshot(): SpaceSceneSnapshot {
     return this.snapshot;
+  }
+
+  public getThreeRenderer(): SceneThreeRenderer | null {
+    return this.threeRenderer;
+  }
+
+  public getSolarPanel(): SolarCorePanel | null {
+    return this.solarPanel;
   }
 
   public isMounted(): boolean {

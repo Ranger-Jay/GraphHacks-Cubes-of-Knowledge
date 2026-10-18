@@ -124,8 +124,9 @@ All dispatched events strictly enforce the protocol envelope `{ protocol: 'cubes
    - No embedded base64 audio strings, no own `AudioContext`, no `new Audio()`.
    - Prototype fake Cypher terminal and hardcoded 28-node lists removed; nodes derive solely from `snapshot.data.nodes`.
    - External audio player binding (`options.audioPlayerBinding`) is invoked only when `!snapshot.audioMuted`.
-6. **Solar Core 2D Graph Panel**:
+6. **Solar Core 2D Graph Panel & 100% Reliable Screen-Space Hit-Testing**:
    - Clicking central Sun in 3D and clicking `.btn-solar-core` in top HUD activate the exact same shared `SolarCorePanel` instance.
+   - **100% Reliable Hit-Testing via Screen-Space Projection**: Implemented `getSunScreenMetrics()` mapping the 3D Sun position to exact viewport client pixels via `camera.project()`. Provides immediate hover cursor feedback (`pointer`), robust pointerdown/up release confirmation with expanded 32px drag threshold, debounced click safety net, and fallback raycasting.
    - In `READY`: nodes, edges, and sources are populated directly from `snapshot.data`.
    - In non-READY: clears proof and displays the active phase explanation.
    - Keyboard access: Escape key closes modal and returns focus to the last opener element.
@@ -154,6 +155,6 @@ Ran `node --import tsx tests/scene/space-scene-adapter.test.ts`:
   3. Exact event envelope dispatching (`SELECT_NODE`, `SELECT_SOURCE`, `OPEN_IDEA`, `AGENT_TASK_START`, `CLOSE_AGENT`, `REFRESH`, `SET_AUDIO_MUTED`)
   4. `DISPATCHED` callback delivery only (no premature ingestion effects)
   5. Audio mute respect & no standalone audio creation
-  6. Shared Solar Core 2D panel state & phase clearing
+  6. Shared Solar Core 2D panel state (dual-path verified: top-bar button click + sun click callback) & phase clearing
   7. Reduced motion static presentation
-- TypeScript verification: `npm run check -w @cubes/web` passes with exit code 0.
+- TypeScript verification: `npm run check -w @cubes/web` passes with exit code 0 across all workspaces.

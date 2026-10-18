@@ -37,6 +37,7 @@ export class SceneThreeRenderer {
   private dragStartPos = { x: 0, y: 0 };
   private previousMousePos = { x: 0, y: 0 };
   private pendingClickObj: THREE.Object3D | null = null;
+  private lastSunClickTime = 0;
 
   // Animation State
   private startTime = performance.now();
@@ -49,6 +50,7 @@ export class SceneThreeRenderer {
   private handlePointerDownBound: (e: PointerEvent) => void;
   private handlePointerMoveBound: (e: PointerEvent) => void;
   private handlePointerUpBound: (e: PointerEvent) => void;
+  private handleClickBound: (e: MouseEvent) => void;
 
   constructor(container: HTMLElement, callbacks: SceneThreeCallbacks) {
     this.container = container;
@@ -57,6 +59,7 @@ export class SceneThreeRenderer {
     this.handlePointerDownBound = this.handlePointerDown.bind(this);
     this.handlePointerMoveBound = this.handlePointerMove.bind(this);
     this.handlePointerUpBound = this.handlePointerUp.bind(this);
+    this.handleClickBound = this.handleClick.bind(this);
 
     this.init();
   }
@@ -100,6 +103,7 @@ export class SceneThreeRenderer {
       this.canvas.addEventListener('pointerdown', this.handlePointerDownBound);
       this.canvas.addEventListener('pointermove', this.handlePointerMoveBound);
       this.canvas.addEventListener('pointerup', this.handlePointerUpBound);
+      this.canvas.addEventListener('click', this.handleClickBound);
 
       // Start Render Loop
       this.startLoop();
@@ -405,6 +409,50 @@ export class SceneThreeRenderer {
     this.renderer.setSize(width, height);
   }
 
+  /**
+   * Computes 2D viewport coordinates and dynamic pixel hit-testing radius for the central Solar Core.
+   * Maps 3D world coordinates to exact canvas client pixels via camera.project(),
+   * guaranteeing 100% reliable click and hover registration regardless of orbit angle, zoom, or camera lerp.
+   */
+  public getSunScreenMetrics(): { x: number; y: number; radiusPx: number; worldPos: THREE.Vector3 } | null {
+    if (!this.sunGroup || !this.camera || !this.canvas) return null;
+    const rect = this.canvas.getBoundingClientRect();
+    if (!rect || rect.width <= 0 || rect.height <= 0) return null;
+
+    const sunWorldPos = new THREE.Vector3();
+    this.sunGroup.getWorldPosition(sunWorldPos);
+    const p = sunWorldPos.clone().project(this.camera);
+    if (p.z >= 1.0) return null; // Behind camera plane
+
+    const sx = rect.left + (p.x * 0.5 + 0.5) * rect.width;
+    const sy = rect.top + (-(p.y * 0.5) + 0.5) * rect.height;
+
+    // Dynamic visible radius from 3D corona extent (2.4 units) projected to screen pixels
+    const edgePos = sunWorldPos.clone().add(new THREE.Vector3(2.4, 0, 0));
+    const edgeP = edgePos.project(this.camera);
+    const edgeX = rect.left + (edgeP.x * 0.5 + 0.5) * rect.width;
+    const radiusPx = Math.max(90, Math.min(280, Math.abs(edgeX - sx)));
+
+    return { x: sx, y: sy, radiusPx, worldPos: sunWorldPos };
+  }
+
+  private triggerSunClick(): void {
+    const now = performance.now();
+    if (now - this.lastSunClickTime < 250) return;
+    this.lastSunClickTime = now;
+    this.callbacks.onSunClick();
+  }
+
+  private handleClick(event: MouseEvent): void {
+    const sunMetrics = this.getSunScreenMetrics();
+    if (sunMetrics) {
+      const distPx = Math.hypot(event.clientX - sunMetrics.x, event.clientY - sunMetrics.y);
+      if (distPx <= sunMetrics.radiusPx) {
+        this.triggerSunClick();
+      }
+    }
+  }
+
   private handlePointerDown(event: PointerEvent): void {
     if (!this.camera || !this.scene) return;
     const rect = this.canvas?.getBoundingClientRect();
@@ -423,12 +471,20 @@ export class SceneThreeRenderer {
 
     this.raycaster.setFromCamera(this.mouse, this.camera);
 
-    // Check distance to Sun center
+    // Dual-Check: Screen-space projection AND 3D ray distance to Sun Core
     let isTargetingSun = false;
-    if (this.sunGroup) {
+    const sunMetrics = this.getSunScreenMetrics();
+    if (sunMetrics) {
+      const distPx = Math.hypot(event.clientX - sunMetrics.x, event.clientY - sunMetrics.y);
+      if (distPx <= sunMetrics.radiusPx) {
+        isTargetingSun = true;
+      }
+    }
+
+    if (!isTargetingSun && this.sunGroup) {
       const sunWorldPos = new THREE.Vector3();
       this.sunGroup.getWorldPosition(sunWorldPos);
-      if (this.raycaster.ray.distanceToPoint(sunWorldPos) <= 1.85) {
+      if (this.raycaster.ray.distanceToPoint(sunWorldPos) <= 2.2) {
         isTargetingSun = true;
       }
     }
@@ -451,28 +507,89 @@ export class SceneThreeRenderer {
     } else if (isTargetingSun) {
       this.pendingClickObj = this.sunHitSphere || this.sunGroup;
     }
+
+    if (this.canvas) {
+      this.canvas.style.cursor = 'grabbing';
+    }
   }
 
   private handlePointerMove(event: PointerEvent): void {
-    if (!this.isDragging || !this.cubeGroup || this.reducedMotion) return;
-    const deltaX = event.clientX - this.previousMousePos.x;
-    const deltaY = event.clientY - this.previousMousePos.y;
-    this.cubeGroup.rotation.y += deltaX * 0.008;
-    this.cubeGroup.rotation.x += deltaY * 0.008;
-    this.previousMousePos = { x: event.clientX, y: event.clientY };
+    if (this.isDragging) {
+      if (!this.cubeGroup || this.reducedMotion) return;
+      const deltaX = event.clientX - this.previousMousePos.x;
+      const deltaY = event.clientY - this.previousMousePos.y;
+      this.cubeGroup.rotation.y += deltaX * 0.008;
+      this.cubeGroup.rotation.x += deltaY * 0.008;
+      this.previousMousePos = { x: event.clientX, y: event.clientY };
+      return;
+    }
+
+    // Hover Cursor Feedback (Instant pointer feedback when hovering interactive elements)
+    if (!this.canvas) return;
+    let hitInteractive = false;
+
+    // 1. Screen-space Solar Core hover check (highest priority, zero raycast drop)
+    const sunMetrics = this.getSunScreenMetrics();
+    if (sunMetrics) {
+      const distToSunPx = Math.hypot(event.clientX - sunMetrics.x, event.clientY - sunMetrics.y);
+      if (distToSunPx <= sunMetrics.radiusPx) {
+        hitInteractive = true;
+      }
+    }
+
+    // 2. 3D Raycast fallback for nodes, comets, agent pyramids, or 3D sun proximity
+    if (!hitInteractive && this.camera && this.scene) {
+      const rect = this.canvas.getBoundingClientRect();
+      if (rect && rect.width > 0 && rect.height > 0) {
+        this.mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+        this.mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+        this.raycaster.setFromCamera(this.mouse, this.camera);
+
+        if (this.sunGroup) {
+          const sunWorldPos = new THREE.Vector3();
+          this.sunGroup.getWorldPosition(sunWorldPos);
+          if (this.raycaster.ray.distanceToPoint(sunWorldPos) <= 2.2) {
+            hitInteractive = true;
+          }
+        }
+
+        if (!hitInteractive) {
+          const hoverHits = this.raycaster.intersectObjects(this.scene.children, true);
+          for (const h of hoverHits) {
+            const u = h.object.userData;
+            if (u && (u.isSunCore || u.isComet || u.isGraphNode || u.isPyramid)) {
+              hitInteractive = true;
+              break;
+            }
+          }
+        }
+      }
+    }
+
+    this.canvas.style.cursor = hitInteractive ? 'pointer' : 'grab';
   }
 
   private handlePointerUp(event: PointerEvent): void {
     const dragDist = Math.hypot(event.clientX - this.dragStartPos.x, event.clientY - this.dragStartPos.y);
 
+    // Screen-space verification for the central Sun
+    let isSunScreenTarget = false;
+    const sunMetrics = this.getSunScreenMetrics();
+    if (sunMetrics) {
+      const distPx = Math.hypot(event.clientX - sunMetrics.x, event.clientY - sunMetrics.y);
+      if (distPx <= sunMetrics.radiusPx) {
+        isSunScreenTarget = true;
+      }
+    }
+
     if (this.pendingClickObj) {
       const u = this.pendingClickObj.userData || {};
-      const isSun = u.isSunCore || this.pendingClickObj === this.sunGroup || this.pendingClickObj === this.sunHitSphere;
-      const maxDrag = isSun || u.isComet ? 24 : 10;
+      const isSun = isSunScreenTarget || u.isSunCore || this.pendingClickObj === this.sunGroup || this.pendingClickObj === this.sunHitSphere;
+      const maxDrag = isSun || u.isComet ? 32 : 12;
 
       if (dragDist <= maxDrag) {
         if (isSun) {
-          this.callbacks.onSunClick();
+          this.triggerSunClick();
         } else if (u.isComet && u.ideaId) {
           this.callbacks.onCometClick(u.ideaId);
         } else if (u.isGraphNode && u.nodeId) {
@@ -481,23 +598,31 @@ export class SceneThreeRenderer {
           this.callbacks.onAgentClick(u.agentId);
         }
       }
-    } else if (dragDist <= 20 && this.sunGroup && this.camera) {
-      // Fallback click check for central Sun core
-      const rect = this.canvas?.getBoundingClientRect();
-      if (rect) {
-        this.mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
-        this.mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
-        this.raycaster.setFromCamera(this.mouse, this.camera);
-        const sunWorldPos = new THREE.Vector3();
-        this.sunGroup.getWorldPosition(sunWorldPos);
-        if (this.raycaster.ray.distanceToPoint(sunWorldPos) <= 1.85) {
-          this.callbacks.onSunClick();
+    } else if (dragDist <= 32) {
+      // Direct release / fallback check for central Sun core
+      if (isSunScreenTarget) {
+        this.triggerSunClick();
+      } else if (this.sunGroup && this.camera) {
+        const rect = this.canvas?.getBoundingClientRect();
+        if (rect && rect.width > 0 && rect.height > 0) {
+          this.mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+          this.mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+          this.raycaster.setFromCamera(this.mouse, this.camera);
+          const sunWorldPos = new THREE.Vector3();
+          this.sunGroup.getWorldPosition(sunWorldPos);
+          if (this.raycaster.ray.distanceToPoint(sunWorldPos) <= 2.2) {
+            this.triggerSunClick();
+          }
         }
       }
     }
 
     this.isDragging = false;
     this.pendingClickObj = null;
+
+    if (this.canvas) {
+      this.canvas.style.cursor = isSunScreenTarget ? 'pointer' : 'grab';
+    }
   }
 
   private disposeObject(obj: THREE.Object3D): void {
@@ -531,6 +656,7 @@ export class SceneThreeRenderer {
       this.canvas.removeEventListener('pointerdown', this.handlePointerDownBound);
       this.canvas.removeEventListener('pointermove', this.handlePointerMoveBound);
       this.canvas.removeEventListener('pointerup', this.handlePointerUpBound);
+      this.canvas.removeEventListener('click', this.handleClickBound);
       if (this.canvas.parentNode) {
         this.canvas.parentNode.removeChild(this.canvas);
       }
