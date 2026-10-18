@@ -63,6 +63,13 @@ authenticated identity. Unknown fields and verbs are rejected. There are no role
 tenant, Cypher, receipt, import, ADDED, simulation-state or graph-write event fields.
 IDs are nonempty strings up to 256 characters; generation is a nonnegative safe integer.
 
+Dispatch captures the supplied event with `structuredClone` before validation. All
+validation, membership checks and callback arguments use that captured copy, so an
+accessor cannot change an ID between the check and the call. Proxies, throwing getters
+and other uncloneable payloads return INVALID without reading application state or
+calling a handler. The exported shape predicate alone does not capture a caller's
+object; do not use it to validate an object and later dispatch the original directly.
+
 Create one bridge for a mount, supplying a getter for the **current application-owned
 snapshot**, not a getter closing over its first READY view. Each dispatch re-reads that
 snapshot, then checks generation, phase and membership. Handlers must use the existing
@@ -84,6 +91,18 @@ request already sent.
 stale AVAILABLE data in every blocked phase, detached views, dangling paths, invalid
 payloads and privilege fields, unknown IDs, old event generations, phase changes,
 unbound callbacks, handler failure and disposal. It is not live graph or browser proof.
+
+The v045.003 fix, v045.004 tests and v045.005 documentation address the independent
+review's event accessor/Proxy finding at `7157f8bdc16cc799952954ee5577bb232735ef2c`.
+Two added tests cover changing/initially invented IDs for all three selection verbs,
+Proxies, revoked Proxies and throwing getters. Both tests fail against that prior
+implementation and pass with event capture; the full boundary file has 14 tests.
+This is author regression evidence, not independent acceptance.
+
+Mount obligations from that review remain: advance generation on every phase change
+(including outage and recovery) so pre-outage events cannot replay after reconnect;
+keep authoritative snapshots separate from renderer-mutable views; enforce audio
+gesture/mute rules in the shell and accepted player. These are not proved by this slice.
 
 Still required: actual scene renderer/entrypoint binding; accepted audio player and
 recovery gate; controller-driven comets/card; accessible keyboard/text and reduced-motion
