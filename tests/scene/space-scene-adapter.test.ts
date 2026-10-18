@@ -47,7 +47,20 @@ function setupMockDOM() {
     public classList: MockClassList;
     public children: MockElement[] = [];
     public parentNode: MockElement | null = null;
-    public textContent: string = '';
+    private _textContent: string = '';
+    get textContent(): string {
+      const parts: string[] = [];
+      if (this._textContent) parts.push(this._textContent);
+      for (const child of this.children) {
+        const cText = child.textContent;
+        if (cText) parts.push(cText);
+      }
+      return parts.join(' ').trim();
+    }
+    set textContent(v: string) {
+      this.children = [];
+      this._textContent = v;
+    }
     public attributes = new Map<string, string>();
     public style: Record<string, string> = {};
     private eventListeners = new Map<string, Set<EventListener>>();
@@ -57,15 +70,37 @@ function setupMockDOM() {
       this.classList = new MockClassList();
     }
 
+    public disabled: boolean = false;
+    public hidden: boolean = false;
+
     setAttribute(k: string, v: string) {
       this.attributes.set(k, String(v));
       if (k === 'class') {
         this.className = String(v);
         this.classList = new MockClassList(this.className);
       }
+      if (k === 'disabled') {
+        this.disabled = true;
+      }
+      if (k === 'hidden') {
+        this.hidden = true;
+      }
+    }
+    removeAttribute(k: string) {
+      this.attributes.delete(k);
+      if (k === 'disabled') this.disabled = false;
+      if (k === 'hidden') this.hidden = false;
     }
     getAttribute(k: string) {
       return this.attributes.get(k) ?? null;
+    }
+    contains(child: any): boolean {
+      if (!child) return false;
+      if (child === this) return true;
+      for (const c of this.children) {
+        if (c === child || (c.contains && c.contains(child))) return true;
+      }
+      return false;
     }
     appendChild(child: MockElement) {
       child.parentNode = this;
@@ -126,27 +161,57 @@ function setupMockDOM() {
     }
     set innerHTML(html: string) {
       this.children = [];
-      // Basic mock parser creating identifiable elements
-      const tagMatches = html.matchAll(/<([a-z0-9-]+)([^>]*)>/gi);
-      for (const m of tagMatches) {
-        const tag = m[1]!;
-        if (tag === 'svg' || tag === 'g' || tag === 'button' || tag === 'div' || tag === 'span' || tag === 'h2' || tag === 'p') {
-          const el = new MockElement(tag);
-          const attrs = m[2] || '';
-          const classMatch = attrs.match(/class=["']([^"']+)["']/i);
-          if (classMatch) {
-            el.className = classMatch[1]!;
-            el.classList = new MockClassList(el.className);
+      this._textContent = '';
+      const cleanHtml = html.replace(/<!--[\s\S]*?-->/g, '');
+      const stack: MockElement[] = [this];
+      const voidTags = new Set(['input', 'img', 'br', 'hr', 'meta', 'link']);
+      const tokenRegex = /<(\/)?([a-z0-9-]+)([^>]*)>|([^<]+)/gi;
+      let match;
+      while ((match = tokenRegex.exec(cleanHtml)) !== null) {
+        const isClosing = Boolean(match[1]);
+        const tagName = match[2]?.toLowerCase();
+        const attrs = match[3] || '';
+        const text = match[4];
+
+        if (text) {
+          const trimmed = text.trim();
+          if (trimmed) {
+            const current = stack[stack.length - 1];
+            if (current) {
+              current._textContent = current._textContent
+                ? current._textContent + ' ' + trimmed
+                : trimmed;
+            }
           }
-          const idMatch = attrs.match(/id=["']([^"']+)["']/i);
-          if (idMatch) el.setAttribute('id', idMatch[1]!);
-          const dataNodeMatch = attrs.match(/data-node-id=["']([^"']+)["']/i);
-          if (dataNodeMatch) el.setAttribute('data-node-id', dataNodeMatch[1]!);
-          const dataSourceMatch = attrs.match(/data-source-id=["']([^"']+)["']/i);
-          if (dataSourceMatch) el.setAttribute('data-source-id', dataSourceMatch[1]!);
-          const dataAgentMatch = attrs.match(/data-agent=["']([^"']+)["']/i);
-          if (dataAgentMatch) el.setAttribute('data-agent', dataAgentMatch[1]!);
-          this.appendChild(el);
+        } else if (isClosing) {
+          if (stack.length > 1) {
+            for (let i = stack.length - 1; i >= 1; i--) {
+              if (stack[i]!.tagName.toLowerCase() === tagName) {
+                stack.splice(i);
+                break;
+              }
+            }
+          }
+        } else if (tagName) {
+          const el = new MockElement(tagName);
+          const isSelfClosing = attrs.trim().endsWith('/') || voidTags.has(tagName);
+
+          const attrMatches = attrs.matchAll(/([a-zA-Z0-9_-]+)(?:=["']([^"']*)["'])?/gi);
+          for (const am of attrMatches) {
+            const k = am[1]!;
+            if (k === '/') continue;
+            const v = am[2] !== undefined ? am[2] : '';
+            el.setAttribute(k, v);
+          }
+
+          const parent = stack[stack.length - 1];
+          if (parent) {
+            parent.appendChild(el);
+          }
+
+          if (!isSelfClosing) {
+            stack.push(el);
+          }
         }
       }
     }
@@ -460,3 +525,186 @@ test('8. Stored XSS immunity & safe DOM textContent rendering for malicious payl
 
   adapter.unmount();
 });
+
+test('9. Two-cube visual & spatial presence: main and disconnected comparison cubes', () => {
+  const container = (document.createElement('div') as unknown) as HTMLElement;
+  const snap = projectSpaceScene(testInput({ runtime: { phase: 'READY' } }));
+  const bridge: SpaceSceneBridge = {
+    dispatch: async () => 'DISPATCHED',
+  };
+
+  const adapter = new SpaceSceneAdapter(container, bridge, snap);
+  const renderer = adapter.getThreeRenderer();
+
+  // Both adapter and renderer support multi-cube focus querying
+  assert.equal(adapter.getCubeFocus(), 'main', 'Initial focus must be on main cube');
+  if (renderer) {
+    assert.equal(renderer.getCubeFocus(), 'main', 'Renderer initial focus must be on main cube');
+  }
+
+  // Scene hint must be rendered in DOM
+  const hintEl = container.querySelector<any>('.cube-switch-hint');
+  assert.ok(hintEl, 'Scene hint must be present in HUD');
+  assert.ok(hintEl.textContent.includes('Tab: switch cube'), 'Hint must contain exact text "Tab: switch cube"');
+
+  // Toggle to disconnected cube
+  adapter.toggleCubeFocus();
+  assert.equal(adapter.getCubeFocus(), 'disconnected', 'Focus should toggle to disconnected cube');
+  if (renderer) {
+    assert.equal(renderer.getCubeFocus(), 'disconnected', 'Renderer focus should toggle to disconnected cube');
+  }
+
+  // Toggle back to main cube
+  adapter.toggleCubeFocus();
+  assert.equal(adapter.getCubeFocus(), 'main', 'Focus should toggle back to main cube');
+
+  adapter.unmount();
+});
+
+test('10. Canvas-scoped Tab switching and back-to-main-cube navigation', () => {
+  const container = (document.createElement('div') as unknown) as HTMLElement;
+  const snap = projectSpaceScene(testInput({ runtime: { phase: 'READY' } }));
+  const bridge: SpaceSceneBridge = {
+    dispatch: async () => 'DISPATCHED',
+  };
+
+  const adapter = new SpaceSceneAdapter(container, bridge, snap);
+
+  // Focus container
+  (document as any).activeElement = container;
+
+  // 1. Press Tab on scene container -> switches to disconnected cube
+  let prevented = false;
+  const tabEvent = {
+    type: 'keydown',
+    key: 'Tab',
+    target: container,
+    preventDefault: () => { prevented = true; },
+  };
+  (window as any).dispatchEvent(tabEvent);
+
+  assert.equal(prevented, true, 'Tab key inside scene container should call preventDefault()');
+  assert.equal(adapter.getCubeFocus(), 'disconnected', 'Tab should switch focus to disconnected cube');
+
+  // 2. Visible "Back to main cube" control
+  const backBtn = container.querySelector<any>('.btn-back-main-cube');
+  assert.ok(backBtn, 'Back to main cube button must exist');
+  backBtn.dispatchEvent({ type: 'click' });
+  assert.equal(adapter.getCubeFocus(), 'main', 'Clicking back button must restore focus to main cube');
+
+  // 3. Tab key while typing in an input element must NEVER be intercepted
+  const inputEl = (document.createElement('input') as unknown) as any;
+  (document as any).activeElement = inputEl;
+  let inputPrevented = false;
+  (window as any).dispatchEvent({
+    type: 'keydown',
+    key: 'Tab',
+    target: inputEl,
+    preventDefault: () => { inputPrevented = true; },
+  });
+  assert.equal(inputPrevented, false, 'Tab key inside an <input> must not call preventDefault()');
+  assert.equal(adapter.getCubeFocus(), 'main', 'Typing in input must not trigger cube focus change');
+
+  // 4. Tab key while modal dialog is open must NEVER be intercepted
+  (document as any).activeElement = container;
+  adapter.openSolarPanel();
+  let modalPrevented = false;
+  (window as any).dispatchEvent({
+    type: 'keydown',
+    key: 'Tab',
+    target: container,
+    preventDefault: () => { modalPrevented = true; },
+  });
+  assert.equal(modalPrevented, false, 'Tab key while solar dialog is open must not be intercepted');
+  assert.equal(adapter.getCubeFocus(), 'main', 'Dialog must preserve ordinary navigation');
+  adapter.closeSolarPanel();
+
+  adapter.unmount();
+});
+
+test('11. Absolute database & mutation isolation for disconnected comparison cube', async () => {
+  const container = (document.createElement('div') as unknown) as HTMLElement;
+  const snap = projectSpaceScene(testInput({ runtime: { phase: 'READY' } }));
+  let bridgeDispatched = false;
+  const bridge: SpaceSceneBridge = {
+    dispatch: async () => {
+      bridgeDispatched = true;
+      return 'DISPATCHED';
+    },
+  };
+
+  const adapter = new SpaceSceneAdapter(container, bridge, snap);
+
+  // Switch to disconnected cube
+  adapter.setCubeFocus('disconnected');
+  assert.equal(adapter.getCubeFocus(), 'disconnected');
+
+  // 1. Mandatory text display
+  const cardEl = container.querySelector<any>('.disconnected-cube-card');
+  assert.ok(cardEl, 'Disconnected cube card must be rendered');
+  assert.equal(cardEl.classList.contains('hidden'), false, 'Card must be visible when focused');
+  assert.ok(cardEl.textContent.includes('No database connected'), 'Must display "No database connected"');
+  assert.ok(
+    cardEl.textContent.includes('Information unavailable. Connect FalkorDB to use this cube.'),
+    'Must display "Information unavailable. Connect FalkorDB to use this cube."'
+  );
+
+  // 2. Data panels are withheld
+  adapter.openSolarPanel();
+  const panel = adapter.getSolarPanel();
+  assert.equal(panel?.isPanelOpen(), false, 'Solar panel must remain closed while disconnected cube is focused');
+
+  // 3. Data actions are disabled and return UNBOUND without bridge dispatch
+  const resRefresh = await adapter.dispatchRefresh();
+  assert.equal(resRefresh, 'UNBOUND', 'dispatchRefresh must return UNBOUND');
+  assert.equal(bridgeDispatched, false, 'No bridge events may be dispatched from disconnected cube');
+
+  const resNode = await adapter.dispatchNodeSelection('node-1');
+  assert.equal(resNode, 'UNBOUND', 'dispatchNodeSelection must return UNBOUND');
+
+  const resSource = await adapter.dispatchSourceSelection('src-1');
+  assert.equal(resSource, 'UNBOUND', 'dispatchSourceSelection must return UNBOUND');
+
+  const resIdea = await adapter.dispatchOpenIdea('idea-1');
+  assert.equal(resIdea, 'UNBOUND', 'dispatchOpenIdea must return UNBOUND');
+
+  const resTask = await adapter.dispatchAgentTaskStart('roy');
+  assert.equal(resTask, 'UNBOUND', 'dispatchAgentTaskStart must return UNBOUND');
+
+  // 4. Working cube state is preserved and not put into outage
+  assert.equal(adapter.getSnapshot().runtime.phase, 'READY', 'Main cube must retain its genuine READY phase');
+
+  // 5. Return to main cube restores controls and view
+  adapter.setCubeFocus('main');
+  assert.equal(cardEl.classList.contains('hidden'), true, 'Disconnected card must be hidden on return to main');
+  const solarBtn = container.querySelector<any>('.btn-solar-core');
+  assert.equal(solarBtn?.disabled, false, 'Solar button must be re-enabled upon return to main');
+
+  // Bridge dispatch works normally from main cube
+  const mainNodeRes = await adapter.dispatchNodeSelection('node-1');
+  assert.equal(mainNodeRes, 'DISPATCHED');
+  assert.equal(bridgeDispatched, true);
+
+  adapter.unmount();
+});
+
+test('12. Reduced motion compliance: immediate camera snap without animated lerp', () => {
+  const container = (document.createElement('div') as unknown) as HTMLElement;
+  const snap = projectSpaceScene(testInput({ runtime: { phase: 'READY' }, reducedMotion: true }));
+  const bridge: SpaceSceneBridge = {
+    dispatch: async () => 'DISPATCHED',
+  };
+
+  const adapter = new SpaceSceneAdapter(container, bridge, snap);
+  assert.equal(adapter.getSnapshot().reducedMotion, true);
+
+  // Switching focus snaps camera immediately
+  adapter.setCubeFocus('disconnected');
+  assert.equal(adapter.getCubeFocus(), 'disconnected');
+
+  adapter.setCubeFocus('main');
+  assert.equal(adapter.getCubeFocus(), 'main');
+
+  adapter.unmount();
+});
+

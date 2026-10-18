@@ -30,4 +30,7 @@ export interface SpaceSceneInstance {
   openSolarPanel: (openerElement?: HTMLElement | null) => void;
   closeSolarPanel: () => void;
   isMounted: () => boolean;
+  getCubeFocus?: () => 'main' | 'disconnected';
+  setCubeFocus?: (focus: 'main' | 'disconnected') => void;
+  toggleCubeFocus?: () => void;
 }

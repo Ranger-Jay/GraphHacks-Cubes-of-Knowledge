@@ -1,11 +1,22 @@
 import * as THREE from 'three';
 import type { AgentId, GraphNode, GraphEdge, SpaceSceneSnapshot } from '@cubes/contracts';
 
+export type CubeFocus = 'main' | 'disconnected';
+
+export const MAIN_CUBE_POS = new THREE.Vector3(0, 0, 0);
+export const MAIN_CUBE_CAM_POS = new THREE.Vector3(0, 3.2, 12.5);
+export const MAIN_CUBE_LOOK_AT = new THREE.Vector3(0, 0, 0);
+
+export const DISCONNECTED_CUBE_POS = new THREE.Vector3(6.8, 0.6, -2.0);
+export const DISCONNECTED_CAM_POS = new THREE.Vector3(11.2, 2.4, 5.0);
+export const DISCONNECTED_LOOK_AT = new THREE.Vector3(6.8, 0.6, -2.0);
+
 export interface SceneThreeCallbacks {
   onSunClick: () => void;
   onNodeClick: (nodeId: string) => void;
   onAgentClick: (agentId: AgentId) => void;
   onCometClick: (ideaId: string) => void;
+  onCubeFocusChange?: (focus: CubeFocus) => void;
 }
 
 export class SceneThreeRenderer {
@@ -18,7 +29,13 @@ export class SceneThreeRenderer {
   private rafId: number | null = null;
   private isDisposed = false;
 
-  // Scene Objects
+  // Cube Focus & Multi-Cube Camera Navigation
+  private cubeFocus: CubeFocus = 'main';
+  private cameraTargetLookAt = new THREE.Vector3(0, 0, 0);
+  private cameraTargetPosition = new THREE.Vector3(0, 3.2, 12.5);
+  private currentLookAt = new THREE.Vector3(0, 0, 0);
+
+  // Scene Objects (Main Cube)
   private cubeGroup: THREE.Group | null = null;
   private sunGroup: THREE.Group | null = null;
   private sunSphere: THREE.Mesh | null = null;
@@ -35,6 +52,17 @@ export class SceneThreeRenderer {
   private edgesMesh: THREE.LineSegments | null = null;
   private pyramidsGroup: THREE.Group | null = null;
   private cometsGroup: THREE.Group | null = null;
+
+  // Scene Objects (Disconnected Comparison Cube)
+  private disconnectedCubeGroup: THREE.Group | null = null;
+  private disconnectedSunGroup: THREE.Group | null = null;
+  private disconnectedSunSphere: THREE.Mesh | null = null;
+  private disconnectedInnerSun: THREE.Mesh | null = null;
+  private disconnectedCoronaRing1: THREE.Mesh | null = null;
+  private disconnectedCoronaRing2: THREE.Mesh | null = null;
+  private disconnectedWireframe: THREE.LineSegments | null = null;
+  private disconnectedCornerSpheres: THREE.Mesh[] = [];
+  private disconnectedDebrisGroup: THREE.Group | null = null;
 
   // Interaction State
   private raycaster = new THREE.Raycaster();
@@ -82,7 +110,11 @@ export class SceneThreeRenderer {
       const height = this.container.clientHeight || 600;
 
       this.camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 1000);
-      this.camera.position.set(0, 3.2, 12.5);
+      this.camera.position.copy(MAIN_CUBE_CAM_POS);
+      this.camera.lookAt(MAIN_CUBE_LOOK_AT);
+      this.cameraTargetPosition.copy(MAIN_CUBE_CAM_POS);
+      this.cameraTargetLookAt.copy(MAIN_CUBE_LOOK_AT);
+      this.currentLookAt.copy(MAIN_CUBE_LOOK_AT);
 
       this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: 'high-performance' });
       this.renderer.setSize(width, height);
@@ -91,6 +123,7 @@ export class SceneThreeRenderer {
       this.canvas.style.display = 'block';
       this.canvas.style.width = '100%';
       this.canvas.style.height = '100%';
+      this.canvas.tabIndex = 0;
       this.container.appendChild(this.canvas);
 
       // Build 3D Objects
@@ -100,6 +133,7 @@ export class SceneThreeRenderer {
       this.buildCornerSpheres();
       this.buildSunCore();
       this.buildAgentPyramids();
+      this.buildDisconnectedCube();
 
       this.nodesGroup = new THREE.Group();
       this.scene.add(this.nodesGroup);
@@ -181,6 +215,7 @@ export class SceneThreeRenderer {
   private buildCompanyCube(): void {
     if (!this.scene) return;
     this.cubeGroup = new THREE.Group();
+    this.cubeGroup.userData = { isMainCube: true };
     this.scene.add(this.cubeGroup);
 
     const size = 6.4;
@@ -192,6 +227,7 @@ export class SceneThreeRenderer {
       opacity: 0.85,
     });
     this.wireframeCube = new THREE.LineSegments(wireGeo, wireMat);
+    this.wireframeCube.userData = { isMainCube: true };
     this.cubeGroup.add(this.wireframeCube);
   }
 
@@ -212,6 +248,7 @@ export class SceneThreeRenderer {
         coords.forEach((z) => {
           const sphere = new THREE.Mesh(geo, mat);
           sphere.position.set(x, y, z);
+          sphere.userData = { isMainCube: true };
           this.cubeGroup?.add(sphere);
           this.cornerSpheres.push(sphere);
         });
@@ -222,6 +259,7 @@ export class SceneThreeRenderer {
   private buildSunCore(): void {
     if (!this.cubeGroup) return;
     this.sunGroup = new THREE.Group();
+    this.sunGroup.userData = { isMainCube: true, isSunCore: true };
     this.cubeGroup.add(this.sunGroup);
 
     // 1. Mantle
@@ -233,7 +271,7 @@ export class SceneThreeRenderer {
       opacity: 0.85,
     });
     this.sunSphere = new THREE.Mesh(sunGeo, sunMat);
-    this.sunSphere.userData = { isSunCore: true };
+    this.sunSphere.userData = { isMainCube: true, isSunCore: true };
     this.sunGroup.add(this.sunSphere);
 
     // 2. Fusion Core
@@ -244,7 +282,7 @@ export class SceneThreeRenderer {
       opacity: 0.92,
     });
     this.innerSun = new THREE.Mesh(innerGeo, innerMat);
-    this.innerSun.userData = { isSunCore: true };
+    this.innerSun.userData = { isMainCube: true, isSunCore: true };
     this.sunGroup.add(this.innerSun);
 
     // 3. Counter-Rotating Corona Rings
@@ -255,6 +293,7 @@ export class SceneThreeRenderer {
       opacity: 0.7,
     });
     this.coronaRing1 = new THREE.Mesh(ringGeo1, ringMat1);
+    this.coronaRing1.userData = { isMainCube: true };
     this.sunGroup.add(this.coronaRing1);
 
     const ringGeo2 = new THREE.TorusGeometry(1.38, 0.012, 12, 48);
@@ -265,6 +304,7 @@ export class SceneThreeRenderer {
     });
     this.coronaRing2 = new THREE.Mesh(ringGeo2, ringMat2);
     this.coronaRing2.rotation.x = Math.PI / 3;
+    this.coronaRing2.userData = { isMainCube: true };
     this.sunGroup.add(this.coronaRing2);
 
     // 4. Dedicated Transparent Hit Sphere for Reliable Interception
@@ -276,7 +316,7 @@ export class SceneThreeRenderer {
       side: THREE.DoubleSide,
     });
     this.sunHitSphere = new THREE.Mesh(hitGeo, hitMat);
-    this.sunHitSphere.userData = { isSunCore: true };
+    this.sunHitSphere.userData = { isMainCube: true, isSunCore: true };
     this.sunGroup.add(this.sunHitSphere);
   }
 
@@ -302,7 +342,7 @@ export class SceneThreeRenderer {
         opacity: 0.75,
       });
       const coreMesh = new THREE.Mesh(coreGeo, coreMat);
-      coreMesh.userData = { isPyramid: true, agentId: ag.id };
+      coreMesh.userData = { isMainCube: true, isPyramid: true, agentId: ag.id };
       group.add(coreMesh);
 
       // Wireframe outer glyph shell
@@ -314,7 +354,7 @@ export class SceneThreeRenderer {
         opacity: 0.95,
       });
       const wireMesh = new THREE.Mesh(wireGeo, wireMat);
-      wireMesh.userData = { isPyramid: true, agentId: ag.id };
+      wireMesh.userData = { isMainCube: true, isPyramid: true, agentId: ag.id };
       group.add(wireMesh);
 
       // Orbit ring
@@ -326,14 +366,155 @@ export class SceneThreeRenderer {
       });
       const ringMesh = new THREE.Mesh(ringGeo, ringMat);
       ringMesh.rotation.x = Math.PI / 2;
-      ringMesh.userData = { isPyramid: true, agentId: ag.id };
+      ringMesh.userData = { isMainCube: true, isPyramid: true, agentId: ag.id };
       group.add(ringMesh);
 
       const r = 5.2;
       group.position.set(Math.cos(ag.angle) * r, 0, Math.sin(ag.angle) * r);
-      group.userData = { isPyramid: true, agentId: ag.id, baseAngle: ag.angle };
+      group.userData = { isMainCube: true, isPyramid: true, agentId: ag.id, baseAngle: ag.angle };
       this.pyramidsGroup?.add(group);
     });
+  }
+
+  private buildDisconnectedCube(): void {
+    if (!this.scene) return;
+
+    this.disconnectedCubeGroup = new THREE.Group();
+    this.disconnectedCubeGroup.position.copy(DISCONNECTED_CUBE_POS);
+    this.disconnectedCubeGroup.userData = { isDisconnectedCube: true };
+    this.scene.add(this.disconnectedCubeGroup);
+
+    // 1. Red Damaged Wireframe Cube (Scale ~0.72 of main cube, size 4.6)
+    const size = 4.6;
+    const boxGeo = new THREE.BoxGeometry(size, size, size);
+    const wireGeo = new THREE.WireframeGeometry(boxGeo);
+    const wireMat = new THREE.LineBasicMaterial({
+      color: 0xe11d48, // Approved crimson red
+      transparent: true,
+      opacity: 0.85,
+    });
+    this.disconnectedWireframe = new THREE.LineSegments(wireGeo, wireMat);
+    this.disconnectedWireframe.userData = { isDisconnectedCube: true };
+    this.disconnectedCubeGroup.add(this.disconnectedWireframe);
+
+    // 2. Crimson / Rose Corner Spheres
+    const half = size / 2;
+    const coords = [-half, half];
+    const cornerGeo = new THREE.SphereGeometry(0.18, 16, 16);
+    const cornerMat = new THREE.MeshBasicMaterial({
+      color: 0xe11d48,
+      transparent: true,
+      opacity: 0.55,
+    });
+
+    coords.forEach((x) => {
+      coords.forEach((y) => {
+        coords.forEach((z) => {
+          const sphere = new THREE.Mesh(cornerGeo, cornerMat);
+          sphere.position.set(x, y, z);
+          sphere.userData = { isDisconnectedCube: true };
+          this.disconnectedCubeGroup?.add(sphere);
+          this.disconnectedCornerSpheres.push(sphere);
+        });
+      });
+    });
+
+    // 3. Dim Grey Collapsed Core (Jay's approved damaged appearance)
+    this.disconnectedSunGroup = new THREE.Group();
+    this.disconnectedSunGroup.userData = { isDisconnectedCube: true };
+    this.disconnectedCubeGroup.add(this.disconnectedSunGroup);
+
+    // Mantle - Dim Slate Grey (0x334155)
+    const sunGeo = new THREE.SphereGeometry(0.68, 20, 20);
+    const sunMat = new THREE.MeshBasicMaterial({
+      color: 0x334155,
+      wireframe: true,
+      transparent: true,
+      opacity: 0.75,
+    });
+    this.disconnectedSunSphere = new THREE.Mesh(sunGeo, sunMat);
+    this.disconnectedSunSphere.userData = { isDisconnectedCube: true };
+    this.disconnectedSunGroup.add(this.disconnectedSunSphere);
+
+    // Inner Core - Deep Slate (0x1e293b)
+    const innerGeo = new THREE.SphereGeometry(0.48, 16, 16);
+    const innerMat = new THREE.MeshBasicMaterial({
+      color: 0x1e293b,
+      transparent: true,
+      opacity: 0.85,
+    });
+    this.disconnectedInnerSun = new THREE.Mesh(innerGeo, innerMat);
+    this.disconnectedInnerSun.userData = { isDisconnectedCube: true };
+    this.disconnectedSunGroup.add(this.disconnectedInnerSun);
+
+    // Dim Grey Corona Rings
+    const ringGeo1 = new THREE.TorusGeometry(0.88, 0.012, 12, 48);
+    const ringMat1 = new THREE.MeshBasicMaterial({
+      color: 0x334155,
+      transparent: true,
+      opacity: 0.55,
+    });
+    this.disconnectedCoronaRing1 = new THREE.Mesh(ringGeo1, ringMat1);
+    this.disconnectedCoronaRing1.userData = { isDisconnectedCube: true };
+    this.disconnectedSunGroup.add(this.disconnectedCoronaRing1);
+
+    const ringGeo2 = new THREE.TorusGeometry(1.02, 0.01, 12, 48);
+    const ringMat2 = new THREE.MeshBasicMaterial({
+      color: 0x1e293b,
+      transparent: true,
+      opacity: 0.45,
+    });
+    this.disconnectedCoronaRing2 = new THREE.Mesh(ringGeo2, ringMat2);
+    this.disconnectedCoronaRing2.rotation.x = Math.PI / 3;
+    this.disconnectedCoronaRing2.userData = { isDisconnectedCube: true };
+    this.disconnectedSunGroup.add(this.disconnectedCoronaRing2);
+
+    // Dedicated Hit Sphere for Disconnected Cube
+    const hitGeo = new THREE.SphereGeometry(1.4, 16, 16);
+    const hitMat = new THREE.MeshBasicMaterial({
+      transparent: true,
+      opacity: 0.0,
+      depthWrite: false,
+      side: THREE.DoubleSide,
+    });
+    const hitMesh = new THREE.Mesh(hitGeo, hitMat);
+    hitMesh.userData = { isDisconnectedCube: true };
+    this.disconnectedSunGroup.add(hitMesh);
+
+    // 4. Damaged Shards / Drifting Debris (Existing Damaged Particle Treatment)
+    this.disconnectedDebrisGroup = new THREE.Group();
+    this.disconnectedDebrisGroup.userData = { isDisconnectedCube: true };
+    const debrisCount = 18;
+    for (let i = 0; i < debrisCount; i++) {
+      const geo = new THREE.TetrahedronGeometry(0.08 + Math.random() * 0.10, 0);
+      const isCrimson = Math.random() > 0.4;
+      const mat = new THREE.MeshBasicMaterial({
+        color: isCrimson ? 0xe11d48 : 0x475569,
+        transparent: true,
+        opacity: 0.65 + Math.random() * 0.25,
+      });
+      const shard = new THREE.Mesh(geo, mat);
+      const radius = 2.4 + Math.random() * 1.5;
+      const theta = Math.random() * Math.PI * 2;
+      const phi = Math.acos(2 * Math.random() - 1);
+      shard.position.set(
+        radius * Math.sin(phi) * Math.cos(theta),
+        radius * Math.sin(phi) * Math.sin(theta),
+        radius * Math.cos(phi)
+      );
+      shard.userData = {
+        isDisconnectedCube: true,
+        rotSpeedX: (Math.random() - 0.5) * 1.2,
+        rotSpeedY: (Math.random() - 0.5) * 1.2,
+        rotSpeedZ: (Math.random() - 0.5) * 1.2,
+        orbitSpeed: 0.2 + Math.random() * 0.4,
+        orbitRadius: radius,
+        baseAngle: theta,
+        phi,
+      };
+      this.disconnectedDebrisGroup.add(shard);
+    }
+    this.disconnectedCubeGroup.add(this.disconnectedDebrisGroup);
   }
 
   public update(snapshot: SpaceSceneSnapshot): void {
@@ -393,6 +574,10 @@ export class SceneThreeRenderer {
     // If reduced motion is requested, render a static frame
     if (this.reducedMotion && this.renderer && this.scene && this.camera) {
       if (this.cubeGroup) this.cubeGroup.rotation.set(0.18, 0.28, 0);
+      if (this.disconnectedCubeGroup) this.disconnectedCubeGroup.rotation.set(-0.15, 0.22, 0);
+      this.camera.position.copy(this.cameraTargetPosition);
+      this.currentLookAt.copy(this.cameraTargetLookAt);
+      this.camera.lookAt(this.currentLookAt);
       this.renderer.render(this.scene, this.camera);
     }
   }
@@ -515,6 +700,14 @@ export class SceneThreeRenderer {
         this.lastTime = now;
         const elapsed = (now - this.startTime) / 1000;
 
+        // Smooth Camera Transition (Lerp towards active cube target)
+        if (this.camera) {
+          const lerpFactor = Math.min(delta * 4.0, 0.25);
+          this.camera.position.lerp(this.cameraTargetPosition, lerpFactor);
+          this.currentLookAt.lerp(this.cameraTargetLookAt, lerpFactor);
+          this.camera.lookAt(this.currentLookAt);
+        }
+
         // Orbit Pyramids
         if (this.pyramidsGroup) {
           this.pyramidsGroup.children.forEach((p) => {
@@ -538,10 +731,31 @@ export class SceneThreeRenderer {
           });
         }
 
-        // Gentle Cube Idle Tumble
-        if (this.cubeGroup && !this.isDragging) {
+        // Gentle Main Cube Idle Tumble
+        if (this.cubeGroup && (!this.isDragging || this.cubeFocus !== 'main')) {
           this.cubeGroup.rotation.y += delta * 0.12;
           this.cubeGroup.rotation.x += delta * 0.06;
+        }
+
+        // Gentle Disconnected Cube Idle Tumble
+        if (this.disconnectedCubeGroup && (!this.isDragging || this.cubeFocus !== 'disconnected')) {
+          this.disconnectedCubeGroup.rotation.y += delta * 0.09;
+          this.disconnectedCubeGroup.rotation.x -= delta * 0.05;
+        }
+
+        // Disconnected Debris Shard drift
+        if (this.disconnectedDebrisGroup) {
+          this.disconnectedDebrisGroup.children.forEach((c) => {
+            const u = c.userData;
+            if (u.baseAngle !== undefined) {
+              u.baseAngle += delta * u.orbitSpeed;
+              c.position.x = u.orbitRadius * Math.sin(u.phi) * Math.cos(u.baseAngle);
+              c.position.y = u.orbitRadius * Math.sin(u.phi) * Math.sin(u.baseAngle);
+              c.rotation.x += delta * u.rotSpeedX;
+              c.rotation.y += delta * u.rotSpeedY;
+              c.rotation.z += delta * u.rotSpeedZ;
+            }
+          });
         }
 
         // Sun Breathing & Corona Rings Rotation
@@ -556,9 +770,19 @@ export class SceneThreeRenderer {
           this.coronaRing2.rotation.y += delta * 0.28;
           this.coronaRing2.rotation.z -= delta * 0.18;
         }
+        if (this.disconnectedCoronaRing1) {
+          this.disconnectedCoronaRing1.rotation.z += delta * 0.25;
+        }
+        if (this.disconnectedCoronaRing2) {
+          this.disconnectedCoronaRing2.rotation.y -= delta * 0.20;
+        }
         if (this.starfield) {
           this.starfield.rotation.y += delta * 0.012;
         }
+      } else if (this.camera) {
+        this.camera.position.copy(this.cameraTargetPosition);
+        this.currentLookAt.copy(this.cameraTargetLookAt);
+        this.camera.lookAt(this.currentLookAt);
       }
 
       if (this.renderer && this.scene && this.camera) {
@@ -584,6 +808,7 @@ export class SceneThreeRenderer {
    * guaranteeing 100% reliable click and hover registration regardless of orbit angle, zoom, or camera lerp.
    */
   public getSunScreenMetrics(): { x: number; y: number; radiusPx: number; worldPos: THREE.Vector3 } | null {
+    if (this.cubeFocus === 'disconnected') return null;
     if (!this.sunGroup || !this.camera || !this.canvas) return null;
     const rect = this.canvas.getBoundingClientRect();
     if (!rect || rect.width <= 0 || rect.height <= 0) return null;
@@ -606,6 +831,7 @@ export class SceneThreeRenderer {
   }
 
   private triggerSunClick(): void {
+    if (this.cubeFocus === 'disconnected') return;
     const now = performance.now();
     if (now - this.lastSunClickTime < 250) return;
     this.lastSunClickTime = now;
@@ -613,6 +839,7 @@ export class SceneThreeRenderer {
   }
 
   private handleClick(event: MouseEvent): void {
+    if (this.cubeFocus === 'disconnected') return;
     const sunMetrics = this.getSunScreenMetrics();
     if (sunMetrics) {
       const distPx = Math.hypot(event.clientX - sunMetrics.x, event.clientY - sunMetrics.y);
@@ -637,41 +864,58 @@ export class SceneThreeRenderer {
 
     if (this.cubeGroup) this.cubeGroup.updateMatrixWorld(true);
     if (this.sunGroup) this.sunGroup.updateMatrixWorld(true);
+    if (this.disconnectedCubeGroup) this.disconnectedCubeGroup.updateMatrixWorld(true);
 
     this.raycaster.setFromCamera(this.mouse, this.camera);
 
-    // Dual-Check: Screen-space projection AND 3D ray distance to Sun Core
     let isTargetingSun = false;
-    const sunMetrics = this.getSunScreenMetrics();
-    if (sunMetrics) {
-      const distPx = Math.hypot(event.clientX - sunMetrics.x, event.clientY - sunMetrics.y);
-      if (distPx <= sunMetrics.radiusPx) {
-        isTargetingSun = true;
+    if (this.cubeFocus === 'main') {
+      const sunMetrics = this.getSunScreenMetrics();
+      if (sunMetrics) {
+        const distPx = Math.hypot(event.clientX - sunMetrics.x, event.clientY - sunMetrics.y);
+        if (distPx <= sunMetrics.radiusPx) {
+          isTargetingSun = true;
+        }
       }
-    }
 
-    if (!isTargetingSun && this.sunGroup) {
-      const sunWorldPos = new THREE.Vector3();
-      this.sunGroup.getWorldPosition(sunWorldPos);
-      if (this.raycaster.ray.distanceToPoint(sunWorldPos) <= 2.2) {
-        isTargetingSun = true;
+      if (!isTargetingSun && this.sunGroup) {
+        const sunWorldPos = new THREE.Vector3();
+        this.sunGroup.getWorldPosition(sunWorldPos);
+        if (this.raycaster.ray.distanceToPoint(sunWorldPos) <= 2.2) {
+          isTargetingSun = true;
+        }
       }
     }
 
     const hits = this.raycaster.intersectObjects(this.scene.children, true);
     if (hits.length > 0) {
+      const discHit = hits.find((h) => h.object.userData && h.object.userData.isDisconnectedCube);
+      const mainHit = hits.find(
+        (h) =>
+          h.object.userData &&
+          (h.object.userData.isMainCube ||
+            h.object.userData.isGraphNode ||
+            h.object.userData.isPyramid ||
+            h.object.userData.isSunCore)
+      );
       const cometHit = hits.find((h) => h.object.userData && h.object.userData.isComet);
-      if (cometHit) {
-        this.pendingClickObj = cometHit.object;
-      } else if (isTargetingSun) {
-        this.pendingClickObj = this.sunHitSphere || this.sunGroup;
+
+      if (this.cubeFocus === 'disconnected') {
+        if (mainHit) {
+          this.pendingClickObj = mainHit.object;
+        } else if (discHit) {
+          this.pendingClickObj = discHit.object;
+        }
       } else {
-        const interactive = hits.find(
-          (h) =>
-            h.object.userData &&
-            (h.object.userData.isGraphNode || h.object.userData.isPyramid || h.object.userData.isSunCore)
-        );
-        if (interactive) this.pendingClickObj = interactive.object;
+        if (discHit) {
+          this.pendingClickObj = discHit.object;
+        } else if (cometHit) {
+          this.pendingClickObj = cometHit.object;
+        } else if (isTargetingSun) {
+          this.pendingClickObj = this.sunHitSphere || this.sunGroup;
+        } else if (mainHit) {
+          this.pendingClickObj = mainHit.object;
+        }
       }
     } else if (isTargetingSun) {
       this.pendingClickObj = this.sunHitSphere || this.sunGroup;
@@ -684,11 +928,16 @@ export class SceneThreeRenderer {
 
   private handlePointerMove(event: PointerEvent): void {
     if (this.isDragging) {
-      if (!this.cubeGroup || this.reducedMotion) return;
+      if (this.reducedMotion) return;
       const deltaX = event.clientX - this.previousMousePos.x;
       const deltaY = event.clientY - this.previousMousePos.y;
-      this.cubeGroup.rotation.y += deltaX * 0.008;
-      this.cubeGroup.rotation.x += deltaY * 0.008;
+      if (this.cubeFocus === 'main' && this.cubeGroup) {
+        this.cubeGroup.rotation.y += deltaX * 0.008;
+        this.cubeGroup.rotation.x += deltaY * 0.008;
+      } else if (this.cubeFocus === 'disconnected' && this.disconnectedCubeGroup) {
+        this.disconnectedCubeGroup.rotation.y += deltaX * 0.008;
+        this.disconnectedCubeGroup.rotation.x += deltaY * 0.008;
+      }
       this.previousMousePos = { x: event.clientX, y: event.clientY };
       return;
     }
@@ -697,16 +946,16 @@ export class SceneThreeRenderer {
     if (!this.canvas) return;
     let hitInteractive = false;
 
-    // 1. Screen-space Solar Core hover check (highest priority, zero raycast drop)
-    const sunMetrics = this.getSunScreenMetrics();
-    if (sunMetrics) {
-      const distToSunPx = Math.hypot(event.clientX - sunMetrics.x, event.clientY - sunMetrics.y);
-      if (distToSunPx <= sunMetrics.radiusPx) {
-        hitInteractive = true;
+    if (this.cubeFocus === 'main') {
+      const sunMetrics = this.getSunScreenMetrics();
+      if (sunMetrics) {
+        const distToSunPx = Math.hypot(event.clientX - sunMetrics.x, event.clientY - sunMetrics.y);
+        if (distToSunPx <= sunMetrics.radiusPx) {
+          hitInteractive = true;
+        }
       }
     }
 
-    // 2. 3D Raycast fallback for nodes, comets, agent pyramids, or 3D sun proximity
     if (!hitInteractive && this.camera && this.scene) {
       const rect = this.canvas.getBoundingClientRect();
       if (rect && rect.width > 0 && rect.height > 0) {
@@ -714,22 +963,21 @@ export class SceneThreeRenderer {
         this.mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
         this.raycaster.setFromCamera(this.mouse, this.camera);
 
-        if (this.sunGroup) {
-          const sunWorldPos = new THREE.Vector3();
-          this.sunGroup.getWorldPosition(sunWorldPos);
-          if (this.raycaster.ray.distanceToPoint(sunWorldPos) <= 2.2) {
+        const hoverHits = this.raycaster.intersectObjects(this.scene.children, true);
+        for (const h of hoverHits) {
+          const u = h.object.userData;
+          if (!u) continue;
+          if (u.isDisconnectedCube) {
             hitInteractive = true;
+            break;
           }
-        }
-
-        if (!hitInteractive) {
-          const hoverHits = this.raycaster.intersectObjects(this.scene.children, true);
-          for (const h of hoverHits) {
-            const u = h.object.userData;
-            if (u && (u.isSunCore || u.isComet || u.isGraphNode || u.isPyramid)) {
-              hitInteractive = true;
-              break;
-            }
+          if (this.cubeFocus === 'main' && (u.isSunCore || u.isComet || u.isGraphNode || u.isPyramid)) {
+            hitInteractive = true;
+            break;
+          }
+          if (this.cubeFocus === 'disconnected' && (u.isMainCube || u.isSunCore || u.isGraphNode || u.isPyramid)) {
+            hitInteractive = true;
+            break;
           }
         }
       }
@@ -741,18 +989,45 @@ export class SceneThreeRenderer {
   private handlePointerUp(event: PointerEvent): void {
     const dragDist = Math.hypot(event.clientX - this.dragStartPos.x, event.clientY - this.dragStartPos.y);
 
-    // Screen-space verification for the central Sun
     let isSunScreenTarget = false;
-    const sunMetrics = this.getSunScreenMetrics();
-    if (sunMetrics) {
-      const distPx = Math.hypot(event.clientX - sunMetrics.x, event.clientY - sunMetrics.y);
-      if (distPx <= sunMetrics.radiusPx) {
-        isSunScreenTarget = true;
+    if (this.cubeFocus === 'main') {
+      const sunMetrics = this.getSunScreenMetrics();
+      if (sunMetrics) {
+        const distPx = Math.hypot(event.clientX - sunMetrics.x, event.clientY - sunMetrics.y);
+        if (distPx <= sunMetrics.radiusPx) {
+          isSunScreenTarget = true;
+        }
       }
     }
 
     if (this.pendingClickObj) {
       const u = this.pendingClickObj.userData || {};
+
+      // 1. Click on Disconnected Cube while on Main Cube -> Switch to disconnected
+      if (u.isDisconnectedCube && this.cubeFocus === 'main') {
+        if (dragDist <= 24) {
+          this.setCubeFocus('disconnected');
+        }
+        this.isDragging = false;
+        this.pendingClickObj = null;
+        if (this.canvas) this.canvas.style.cursor = 'grab';
+        return;
+      }
+
+      // 2. Click on Main Cube while inspecting Disconnected Cube -> Switch back to main
+      if (this.cubeFocus === 'disconnected') {
+        if (u.isMainCube || u.isSunCore || u.isGraphNode || u.isPyramid) {
+          if (dragDist <= 24) {
+            this.setCubeFocus('main');
+          }
+        }
+        this.isDragging = false;
+        this.pendingClickObj = null;
+        if (this.canvas) this.canvas.style.cursor = 'grab';
+        return;
+      }
+
+      // 3. Normal Main Cube interactions
       const isSun = isSunScreenTarget || u.isSunCore || this.pendingClickObj === this.sunGroup || this.pendingClickObj === this.sunHitSphere;
       const maxDrag = isSun || u.isComet ? 32 : 12;
 
@@ -767,8 +1042,7 @@ export class SceneThreeRenderer {
           this.callbacks.onAgentClick(u.agentId);
         }
       }
-    } else if (dragDist <= 32) {
-      // Direct release / fallback check for central Sun core
+    } else if (dragDist <= 32 && this.cubeFocus === 'main') {
       if (isSunScreenTarget) {
         this.triggerSunClick();
       } else if (this.sunGroup && this.camera) {
@@ -792,6 +1066,40 @@ export class SceneThreeRenderer {
     if (this.canvas) {
       this.canvas.style.cursor = isSunScreenTarget ? 'pointer' : 'grab';
     }
+  }
+
+  // --- Cube Focus Switching & Navigation API ---
+
+  public getCubeFocus(): CubeFocus {
+    return this.cubeFocus;
+  }
+
+  public setCubeFocus(focus: CubeFocus): void {
+    if (this.cubeFocus === focus) return;
+    this.cubeFocus = focus;
+
+    if (focus === 'main') {
+      this.cameraTargetLookAt.copy(MAIN_CUBE_LOOK_AT);
+      this.cameraTargetPosition.copy(MAIN_CUBE_CAM_POS);
+    } else {
+      this.cameraTargetLookAt.copy(DISCONNECTED_LOOK_AT);
+      this.cameraTargetPosition.copy(DISCONNECTED_CAM_POS);
+    }
+
+    if (this.reducedMotion && this.camera) {
+      this.camera.position.copy(this.cameraTargetPosition);
+      this.currentLookAt.copy(this.cameraTargetLookAt);
+      this.camera.lookAt(this.currentLookAt);
+      if (this.renderer && this.scene) {
+        this.renderer.render(this.scene, this.camera);
+      }
+    }
+
+    this.callbacks.onCubeFocusChange?.(focus);
+  }
+
+  public toggleCubeFocus(): void {
+    this.setCubeFocus(this.cubeFocus === 'main' ? 'disconnected' : 'main');
   }
 
   private disposeObject(obj: THREE.Object3D): void {
@@ -864,5 +1172,16 @@ export class SceneThreeRenderer {
     this.edgesMesh = null;
     this.pyramidsGroup = null;
     this.cometsGroup = null;
+
+    // Dispose Disconnected Cube references
+    this.disconnectedCubeGroup = null;
+    this.disconnectedSunGroup = null;
+    this.disconnectedSunSphere = null;
+    this.disconnectedInnerSun = null;
+    this.disconnectedCoronaRing1 = null;
+    this.disconnectedCoronaRing2 = null;
+    this.disconnectedWireframe = null;
+    this.disconnectedCornerSpheres = [];
+    this.disconnectedDebrisGroup = null;
   }
 }

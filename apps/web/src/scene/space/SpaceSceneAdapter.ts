@@ -72,7 +72,7 @@ const SPACE_SCENE_ADAPTER_STYLES = `
   gap: 0.5rem;
 }
 
-/* Badges */
+/* Badges & Scene Hints */
 .space-scene-root .space-phase-badge {
   display: flex;
   align-items: center;
@@ -84,10 +84,68 @@ const SPACE_SCENE_ADAPTER_STYLES = `
   box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3);
 }
 
+.space-scene-root .cube-switch-hint {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.375rem 0.75rem;
+  border-radius: 0.75rem;
+  background: rgba(15, 23, 42, 0.9);
+  border: 1px solid #334155;
+  color: #94a3b8;
+  font-size: 0.75rem;
+  font-weight: 700;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3);
+}
+
 .space-scene-root .space-phase-dot {
   width: 0.5rem;
   height: 0.5rem;
   border-radius: 9999px;
+}
+
+/* Disconnected Cube Card */
+.space-scene-root .disconnected-cube-card {
+  position: absolute;
+  top: 4.5rem;
+  right: 1rem;
+  z-index: 20;
+  max-width: 22rem;
+  padding: 1rem;
+  border-radius: 1rem;
+  background: rgba(2, 6, 23, 0.95);
+  border: 1px solid rgba(225, 29, 72, 0.8);
+  color: #fecdd3;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.8);
+  backdrop-filter: blur(8px);
+  pointer-events: auto;
+}
+
+.space-scene-root .btn-back-main-cube {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.375rem 0.75rem;
+  border-radius: 0.75rem;
+  background: rgba(22, 78, 99, 0.9);
+  border: 1px solid rgba(6, 182, 212, 0.8);
+  color: #a5f3fc;
+  font-size: 0.75rem;
+  font-weight: 700;
+  transition: all 0.15s ease;
+  cursor: pointer;
+}
+.space-scene-root .btn-back-main-cube:hover {
+  background: rgba(21, 94, 117, 0.95);
+  border-color: #22d3ee;
+  color: #ffffff;
+}
+
+.space-scene-root button:disabled,
+.space-scene-root button[disabled] {
+  opacity: 0.38 !important;
+  cursor: not-allowed !important;
+  pointer-events: none !important;
 }
 
 /* Outage Banner */
@@ -340,6 +398,10 @@ export class SpaceSceneAdapter implements SpaceSceneInstance {
   // Opener element cache for focus restoration
   private lastSolarOpener: HTMLElement | null = null;
 
+  // Multi-Cube Focus State ('main' | 'disconnected')
+  private currentCubeFocus: 'main' | 'disconnected' = 'main';
+  private handleKeyDownBound: ((e: KeyboardEvent) => void) | null = null;
+
   constructor(
     container: HTMLElement,
     bridge: SpaceSceneBridge,
@@ -386,6 +448,7 @@ export class SpaceSceneAdapter implements SpaceSceneInstance {
     this.rootEl = document.createElement('div');
     this.rootEl.className =
       'space-scene-root relative w-full h-full min-h-[500px] overflow-hidden bg-slate-950 font-mono text-slate-200 select-none';
+    this.rootEl.setAttribute('tabindex', '0');
     this.container.appendChild(this.rootEl);
 
     // Injected scoped stylesheet (P1-2 Self-contained, zero Tailwind dependency)
@@ -397,6 +460,7 @@ export class SpaceSceneAdapter implements SpaceSceneInstance {
     // Three.js viewport container
     this.threeContainer = document.createElement('div');
     this.threeContainer.className = 'space-scene-viewport absolute inset-0 z-0 overflow-hidden';
+    this.threeContainer.setAttribute('tabindex', '0');
     this.rootEl.appendChild(this.threeContainer);
 
     // Top and Bottom HUD DOM Layer
@@ -410,6 +474,12 @@ export class SpaceSceneAdapter implements SpaceSceneInstance {
           <div class="space-phase-badge flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-900/90 border border-slate-700 text-xs font-bold shadow">
             <span class="space-phase-dot w-2 h-2 rounded-full bg-slate-400"></span>
             <span class="space-phase-label">CHECKING</span>
+          </div>
+
+          <!-- Cube Switch Scene Hint -->
+          <div class="cube-switch-hint flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-900/90 border border-slate-700 text-xs font-mono text-slate-300 shadow">
+            <span>⌨️</span>
+            <span>Tab: switch cube</span>
           </div>
 
           <!-- Solar Core Access Button -->
@@ -430,6 +500,21 @@ export class SpaceSceneAdapter implements SpaceSceneInstance {
             <span>🔄 REFRESH</span>
           </button>
         </div>
+      </div>
+
+      <!-- Disconnected Cube Comparison Card (Shown when inspecting disconnected cube) -->
+      <div class="disconnected-cube-card hidden absolute top-16 right-4 z-20 max-w-sm p-4 rounded-2xl bg-slate-950/95 border border-rose-600/80 text-rose-200 shadow-2xl backdrop-blur pointer-events-auto" hidden>
+        <div class="flex items-center gap-2 mb-2">
+          <span class="w-2.5 h-2.5 rounded-full bg-rose-500 animate-pulse"></span>
+          <span class="text-[11px] font-bold uppercase tracking-wider text-rose-400">Disconnected Cube</span>
+        </div>
+        <div class="text-sm font-bold text-white mb-1">No database connected</div>
+        <p class="text-xs text-slate-300 leading-relaxed mb-3">
+          Information unavailable. Connect FalkorDB to use this cube.
+        </p>
+        <button type="button" class="btn-back-main-cube px-3 py-1.5 rounded-xl bg-cyan-950/90 border border-cyan-500/80 text-cyan-200 hover:bg-cyan-900 text-xs font-bold transition shadow cursor-pointer">
+          ⬅ Back to main cube
+        </button>
       </div>
 
       <!-- Outage Banner (Visible in GRAPH_UNAVAILABLE) -->
@@ -478,7 +563,16 @@ export class SpaceSceneAdapter implements SpaceSceneInstance {
       onCometClick: (ideaId) => {
         this.dispatchOpenIdea(ideaId);
       },
+      onCubeFocusChange: (focus) => {
+        this.handleCubeFocusChange(focus);
+      },
     });
+
+    // Wire Keyboard Navigation (Canvas-scoped Tab)
+    this.handleKeyDownBound = this.handleKeyDown.bind(this);
+    if (typeof window !== 'undefined') {
+      window.addEventListener('keydown', this.handleKeyDownBound);
+    }
 
     // Wire HUD Controls
     this.wireHUDControls();
@@ -496,6 +590,15 @@ export class SpaceSceneAdapter implements SpaceSceneInstance {
 
   private wireHUDControls(): void {
     if (!this.hudEl) return;
+
+    // Back to Main Cube Button
+    const backBtn = this.hudEl.querySelector<HTMLButtonElement>('.btn-back-main-cube');
+    if (backBtn) {
+      backBtn.addEventListener('click', (e) => {
+        if (typeof e.stopPropagation === 'function') e.stopPropagation();
+        this.setCubeFocus('main');
+      });
+    }
 
     // Solar Core Button -> opens shared 2D panel
     const solarBtn = this.hudEl.querySelector<HTMLButtonElement>('.btn-solar-core');
@@ -587,12 +690,28 @@ export class SpaceSceneAdapter implements SpaceSceneInstance {
           (outageBanner as HTMLElement).hidden = true;
         }
       }
+
+      // If disconnected cube is currently inspected, maintain its overlay and disabled states
+      if (this.currentCubeFocus === 'disconnected') {
+        const discCard = this.hudEl.querySelector<HTMLElement>('.disconnected-cube-card');
+        const solarBtn = this.hudEl.querySelector<HTMLButtonElement>('.btn-solar-core');
+        const refreshBtn = this.hudEl.querySelector<HTMLButtonElement>('.btn-refresh');
+        const agentBtns = this.hudEl.querySelectorAll<HTMLButtonElement>('[data-agent]');
+        if (discCard) {
+          discCard.classList.remove('hidden');
+          discCard.hidden = false;
+        }
+        if (solarBtn) solarBtn.setAttribute('disabled', 'true');
+        if (refreshBtn) refreshBtn.setAttribute('disabled', 'true');
+        agentBtns.forEach((b) => b.setAttribute('disabled', 'true'));
+      }
     }
   }
 
-  // --- Strict Event Dispatchers (Protocol Compliant) ---
+  // --- Strict Event Dispatchers (Protocol Compliant & Multi-Cube Isolated) ---
 
   public async dispatchRefresh(): Promise<SpaceSceneDispatchResult> {
+    if (this.currentCubeFocus === 'disconnected') return 'UNBOUND';
     const event: SpaceSceneEvent = {
       protocol: SPACE_SCENE_PROTOCOL,
       generation: this.snapshot.generation,
@@ -602,6 +721,7 @@ export class SpaceSceneAdapter implements SpaceSceneInstance {
   }
 
   public async dispatchNodeSelection(id: string): Promise<SpaceSceneDispatchResult> {
+    if (this.currentCubeFocus === 'disconnected') return 'UNBOUND';
     const event: SpaceSceneEvent = {
       protocol: SPACE_SCENE_PROTOCOL,
       generation: this.snapshot.generation,
@@ -616,6 +736,7 @@ export class SpaceSceneAdapter implements SpaceSceneInstance {
   }
 
   public async dispatchSourceSelection(id: string): Promise<SpaceSceneDispatchResult> {
+    if (this.currentCubeFocus === 'disconnected') return 'UNBOUND';
     const event: SpaceSceneEvent = {
       protocol: SPACE_SCENE_PROTOCOL,
       generation: this.snapshot.generation,
@@ -626,6 +747,7 @@ export class SpaceSceneAdapter implements SpaceSceneInstance {
   }
 
   public async dispatchOpenIdea(id: string): Promise<SpaceSceneDispatchResult> {
+    if (this.currentCubeFocus === 'disconnected') return 'UNBOUND';
     const event: SpaceSceneEvent = {
       protocol: SPACE_SCENE_PROTOCOL,
       generation: this.snapshot.generation,
@@ -636,6 +758,7 @@ export class SpaceSceneAdapter implements SpaceSceneInstance {
   }
 
   public async dispatchAgentTaskStart(agentId: AgentId): Promise<SpaceSceneDispatchResult> {
+    if (this.currentCubeFocus === 'disconnected') return 'UNBOUND';
     const event: SpaceSceneEvent = {
       protocol: SPACE_SCENE_PROTOCOL,
       generation: this.snapshot.generation,
@@ -646,6 +769,7 @@ export class SpaceSceneAdapter implements SpaceSceneInstance {
   }
 
   public async dispatchCloseAgent(agentId: AgentId): Promise<SpaceSceneDispatchResult> {
+    if (this.currentCubeFocus === 'disconnected') return 'UNBOUND';
     const event: SpaceSceneEvent = {
       protocol: SPACE_SCENE_PROTOCOL,
       generation: this.snapshot.generation,
@@ -680,9 +804,107 @@ export class SpaceSceneAdapter implements SpaceSceneInstance {
     }
   }
 
+  // --- Multi-Cube Navigation & Focus API ---
+
+  public getCubeFocus(): 'main' | 'disconnected' {
+    return this.currentCubeFocus;
+  }
+
+  public setCubeFocus(focus: 'main' | 'disconnected'): void {
+    if (this.threeRenderer) {
+      this.threeRenderer.setCubeFocus(focus);
+    }
+    this.handleCubeFocusChange(focus);
+  }
+
+  public toggleCubeFocus(): void {
+    this.setCubeFocus(this.currentCubeFocus === 'main' ? 'disconnected' : 'main');
+  }
+
+  private handleCubeFocusChange(focus: 'main' | 'disconnected'): void {
+    this.currentCubeFocus = focus;
+
+    const discCard = this.hudEl?.querySelector<HTMLElement>('.disconnected-cube-card');
+    const solarBtn = this.hudEl?.querySelector<HTMLButtonElement>('.btn-solar-core');
+    const refreshBtn = this.hudEl?.querySelector<HTMLButtonElement>('.btn-refresh');
+    const agentBtns = this.hudEl?.querySelectorAll<HTMLButtonElement>('[data-agent]');
+
+    if (focus === 'disconnected') {
+      // 1. Withhold main-cube data panels
+      if (this.solarPanel?.isPanelOpen()) {
+        this.closeSolarPanel();
+      }
+
+      // 2. Show disconnected cube comparison card
+      if (discCard) {
+        discCard.classList.remove('hidden');
+        discCard.hidden = false;
+      }
+
+      // 3. Disable main-cube data actions
+      if (solarBtn) solarBtn.setAttribute('disabled', 'true');
+      if (refreshBtn) refreshBtn.setAttribute('disabled', 'true');
+      agentBtns?.forEach((b) => b.setAttribute('disabled', 'true'));
+    } else {
+      // Returning to main cube
+      if (discCard) {
+        discCard.classList.add('hidden');
+        discCard.hidden = true;
+      }
+
+      if (solarBtn) solarBtn.removeAttribute('disabled');
+      if (refreshBtn) refreshBtn.removeAttribute('disabled');
+      agentBtns?.forEach((b) => b.removeAttribute('disabled'));
+
+      // Restore appropriate current view from snapshot
+      this.update(this.snapshot);
+    }
+  }
+
+  private handleKeyDown(e: KeyboardEvent): void {
+    if (e.key !== 'Tab') return;
+
+    // Never intercept while typing in an input, textarea, select, or editable element
+    const active = (typeof document !== 'undefined' ? document.activeElement : null) as HTMLElement | null;
+    const target = e.target as HTMLElement | null;
+
+    const isEditable = (el: HTMLElement | null) => {
+      if (!el) return false;
+      const tag = (el.tagName || '').toLowerCase();
+      return (
+        tag === 'input' ||
+        tag === 'textarea' ||
+        tag === 'select' ||
+        el.isContentEditable ||
+        el.getAttribute?.('contenteditable') === 'true'
+      );
+    };
+
+    if (isEditable(target) || isEditable(active)) return;
+
+    // Never intercept inside active dialogs or modals
+    if (this.solarPanel?.isPanelOpen()) return;
+    if (active?.closest?.('.solar-core-modal-overlay') || active?.closest?.('[role="dialog"]')) return;
+
+    // Only intercept if keyboard focus is within the scene container or canvas
+    const isSceneFocused =
+      this.container?.contains(active) ||
+      this.container === active ||
+      this.rootEl?.contains(active) ||
+      this.rootEl === active ||
+      this.threeContainer?.contains(active) ||
+      this.threeContainer === active;
+
+    if (isSceneFocused) {
+      e.preventDefault();
+      this.toggleCubeFocus();
+    }
+  }
+
   // --- Solar Panel API ---
 
   public openSolarPanel(opener?: HTMLElement | null): void {
+    if (this.currentCubeFocus === 'disconnected') return;
     this.lastSolarOpener = opener ?? null;
     this.solarPanel?.open(opener);
   }
@@ -710,6 +932,11 @@ export class SpaceSceneAdapter implements SpaceSceneInstance {
   public unmount(): void {
     if (this.isDestroyed) return;
     this.isDestroyed = true;
+
+    if (this.handleKeyDownBound && typeof window !== 'undefined') {
+      window.removeEventListener('keydown', this.handleKeyDownBound);
+      this.handleKeyDownBound = null;
+    }
 
     if (this.unbindAddedListener) {
       this.unbindAddedListener();
