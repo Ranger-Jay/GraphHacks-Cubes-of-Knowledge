@@ -101,6 +101,10 @@ async function route(
       await getGraphStatus(response, requestId, status);
       return;
     }
+    if (request.method === 'GET' && request.url === '/api/session/access') {
+      getSessionAccess(request, response, requestId, sessions);
+      return;
+    }
     if (typeof request.url === 'string' && request.url.startsWith('/api/studio')) {
       await dispatchStudio(request, response, () => principalFrom(request, sessions), ideaverse, requestId);
       return;
@@ -152,6 +156,24 @@ async function getGraphStatus(response: ServerResponse, requestId: string, statu
     };
     send(response, 503, body);
   }
+}
+
+/** Server-derived effective access for this session. No principal id, tenant, or caller-supplied field is returned. */
+function getSessionAccess(request: IncomingMessage, response: ServerResponse, requestId: string, sessions: SessionStore): void {
+  const principal = principalFrom(request, sessions);
+  if (principal === null) {
+    sendError(response, 401, 'UNAUTHENTICATED', 'Session access was not read. No server session was presented.', requestId);
+    return;
+  }
+  if (principal.id === 'kanny' && principal.kind === 'owner') {
+    send(response, 200, { access: 'OWNER', canReadIdeas: true, canImportIdeas: true });
+    return;
+  }
+  if (principal.id === 'serena' && principal.kind === 'reader') {
+    send(response, 200, { access: 'READER', canReadIdeas: true, canImportIdeas: false });
+    return;
+  }
+  sendError(response, 403, 'FORBIDDEN', 'Session access was not read. This session cannot read it.', requestId);
 }
 
 function releaseIdFrom(request: IncomingMessage): string | null {
