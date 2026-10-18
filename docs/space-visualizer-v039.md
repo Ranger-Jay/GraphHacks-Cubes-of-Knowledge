@@ -1092,3 +1092,29 @@ All 10 milestone rows across the 3D Space Visualizer roadmap are now **100% COMP
 - **Four-Mirror SHA-256 Parity**:
   - All 3 visualizer mirrors and brain artifact verified with identical SHA-256 `D1D88F03D9428201C4AAC08B877D01E27F2DDA4B9C4999E9E9FD8043C800A8C9`.
 
+### 18.16 Animated Matrix Neural Stream, Concept Art Pyramid Glyphs with Blacklight UV Luminescence, and Aligned Telemetry Windows (`v043.12` / `v043.13`)
+- **Animated Matrix Neural Stream on Agent Chamber**:
+  - Integrated `<canvas id="matrix-rain-canvas">` inside the `.matrix-card` above the agent chamber.
+  - Implemented `renderMatrixRain()` running an authentic 24–30 fps digital rain cascade with Japanese Katakana, runes, hex bytes, and math symbols.
+  - Rendered leading glyphs with bright white/lime glow and fading emerald green phosphor trails (`rgba(2, 8, 6, 0.22)` fade persistence).
+  - Overlaid with the CLI Neural Stream label and status badge (`[OK]`, `[AUTH: SES_RW]`, `REV: rel-wad@r2`) with crisp drop shadows.
+- **Concept-Art Pyramid Glyphs with Blacklight UV Shine and White Shadow**:
+  - Implemented `createPyramidGlyphsTexture()` generating a 1024x512 procedural canvas texture faithful to the original pyramid concept art (`media_1792290604441_235090b6.jpg`):
+    - **Tier 1 (Apex)**: Iconic ancient runes (`𓊽`, `ᚹ`, `⌆`, `ᛉ`) centered near each pyramid peak.
+    - **Tier 2 (Binary Stream)**: Dual and triple horizontal binary code streams (`1010110001010`).
+    - **Tier 3 (Sacred Runes)**: Bold ancient runes (`ᛗ  ᚾ  ᛏ  ᛒ`, `Σ  π  ᚱ  𓊽`, `ᛖ  ᛉ  ᛞ  ᛈ`, `∢  ᚦ  ᛟ  ᚷ`) rendered with luminous white shadow (`shadowBlur = 10; shadowColor = '#ffffff'`) and neon magenta/violet core.
+    - **Tier 4 (Cybernetic Block Glyphs)**: Secondary tiered row (`K  E  R  Δ  Ω`, etc.) matching the physical concept art layout.
+    - **Tier 5 (Micro-Circuits & Hashes)**: Inset horizontal ladder traces with FalkorDB hashes (`[FALKORDB v4.22.0] HASH:0A7B`, `10100101...`).
+  - Added dedicated `glyphMesh` onto each pyramid rig (`new THREE.ConeGeometry(0.465, 0.785, 4)` with additive blending).
+  - Standardized pyramid wireframes to radiant concept-art UV magenta/violet (`0xd946ef`).
+  - Implemented periodic Blacklight UV resonance surges in `animate()`: every ~5.5 seconds, each pyramid pulses with an organic phosphorescent wave, flaring glyph opacity from ambient 0.35 to 0.98 and shifting colors into brilliant white-violet blacklight luminescence.
+- **Aligned Telemetry & Environment Modal Status Windows**:
+  - Standardized the 3 Runtime State Simulator buttons in `#side-matrix-drawer` with uniform 2-line flex column layout (`flex flex-col items-center justify-center gap-0.5 min-h-[52px]`):
+    - **Left**: Green Dot (`🟢`). To the right: `Ready`. Centered underneath: `Protected`.
+    - **Center**: Yellow Dot (`🟡`). To the right: `Breach`. Centered underneath: `Vulnerable`.
+    - **Right**: Red Dot (`🔴`). To the right: `Fail`. Centered underneath: `Outage`.
+  - Added `updateDrawerStateButtons(activeState)` helper, ensuring that clicking any button or toggling database outages updates active styling while strictly preserving the 2-line layout without collapsing into single-line flex rows.
+- **Four-Mirror SHA-256 Parity**:
+  - All 3 visualizer mirrors and brain artifact verified with identical SHA-256 `537EDBD1C64CE36346CBDAB637D9A7DE511A5DDFDD0FF553F2ECDE683997174C`.
+
+
