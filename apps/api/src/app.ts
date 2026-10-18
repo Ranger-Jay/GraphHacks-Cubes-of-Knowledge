@@ -2,6 +2,7 @@ import { createServer, type IncomingMessage, type Server, type ServerResponse } 
 import { randomUUID } from 'node:crypto';
 import type { AnalysisResponse, ApiError, ApprovalResponse, GraphStatusResponse } from '@cubes/contracts';
 import { dispatchStudio, type IdeaverseGateway } from './ideaverse.js';
+import { talkContext, type Talker } from './talker.js';
 
 export interface Principal {
   id: 'kanny' | 'serena' | 'roy' | 'ava' | 'guz';
@@ -75,19 +76,19 @@ interface ApprovalBody {
   evidenceSourceIds: string[];
 }
 
-export function createApiServer(options?: { sessions?: SessionStore; graph?: ApprovalGraph; analysis?: ReleaseReader; status?: GraphStatusProbe; ideaverse?: IdeaverseGateway }): Server {
+export function createApiServer(options?: { sessions?: SessionStore; graph?: ApprovalGraph; analysis?: ReleaseReader; status?: GraphStatusProbe; ideaverse?: IdeaverseGateway; talker?: Talker }): Server {
   const sessions = options?.sessions ?? denyAllSessions;
   const graph = options?.graph ?? unavailableGraph;
   const analysis = options?.analysis ?? unconfiguredAnalysis;
   const status = options?.status;
   const ideaverse = options?.ideaverse;
   return createServer((request, response) => {
-    void route(request, response, sessions, graph, analysis, status, ideaverse);
+    void route(request, response, sessions, graph, analysis, status, ideaverse, options?.talker);
   });
 }
 
 async function route(
-  request: IncomingMessage, response: ServerResponse, sessions: SessionStore, graph: ApprovalGraph, analysis: ReleaseReader, status?: GraphStatusProbe, ideaverse?: IdeaverseGateway,
+  request: IncomingMessage, response: ServerResponse, sessions: SessionStore, graph: ApprovalGraph, analysis: ReleaseReader, status?: GraphStatusProbe, ideaverse?: IdeaverseGateway, talker?: Talker,
 ): Promise<void> {
   const requestId = randomUUID();
   response.setHeader('Content-Type', 'application/json; charset=utf-8');
@@ -103,6 +104,10 @@ async function route(
     }
     if (request.method === 'GET' && request.url === '/api/session/access') {
       getSessionAccess(request, response, requestId, sessions);
+      return;
+    }
+    if (request.method === 'POST' && request.url === '/api/talk') {
+      await postTalk(request, response, requestId, sessions, analysis, talker);
       return;
     }
     if (typeof request.url === 'string' && request.url.startsWith('/api/studio')) {
@@ -122,6 +127,50 @@ async function route(
   } catch {
     sendError(response, 503, 'GRAPH_UNAVAILABLE', 'Approval was not recorded. The request failed closed.', requestId);
   }
+}
+
+async function postTalk(request: IncomingMessage, response: ServerResponse, requestId: string,
+  sessions: SessionStore, analysis: ReleaseReader, talker?: Talker): Promise<void> {
+  const principal = principalFrom(request, sessions);
+  if (principal === null) return sendError(response, 401, 'UNAUTHENTICATED', 'No server session was presented. The model was not called.', requestId);
+  if (!((principal.id === 'kanny' && principal.kind === 'owner') || (principal.id === 'serena' && principal.kind === 'reader'))) {
+    return sendError(response, 403, 'FORBIDDEN', 'This session cannot request an explanation. The model was not called.', requestId);
+  }
+  const origin = request.headers.origin;
+  if (request.headers['sec-fetch-site'] === 'cross-site' || (origin !== undefined && origin !== (process.env['WEB_ORIGIN'] ?? 'http://127.0.0.1:5173'))) {
+    return sendError(response, 403, 'FORBIDDEN', 'The request origin was refused. The model was not called.', requestId);
+  }
+  const body = await readJson(request);
+  if (!request.headers['content-type']?.startsWith('application/json') || body === null || typeof body !== 'object' || Array.isArray(body)) {
+    return sendError(response, 400, 'VALIDATION_ERROR', 'Expected a bounded JSON talk request. The model was not called.', requestId);
+  }
+  const r = body as Record<string, unknown>;
+  if (Object.keys(r).sort().join(',') !== 'intent,persona,releaseId' || r['intent'] !== 'release-gap'
+    || !['roy', 'ava', 'guz'].includes(String(r['persona'])) || typeof r['releaseId'] !== 'string' || !/^[A-Za-z0-9._~-]{1,128}$/.test(r['releaseId'])) {
+    return sendError(response, 400, 'VALIDATION_ERROR', 'The talk request did not match the supported release-gap intent. The model was not called.', requestId);
+  }
+  if (!talker) return sendError(response, 503, 'NOT_IMPLEMENTED', 'Model explanations are not configured. The model was not called.', requestId);
+  const first = await analysis.analyze(r['releaseId'], requestId);
+  if (first === null) return sendError(response, 404, 'NOT_FOUND', 'That release is not available in this server tenant. The model was not called.', requestId);
+  if (first.status !== 'AVAILABLE') return sendError(response, 503, 'GRAPH_UNAVAILABLE', 'The graph analysis is unavailable. The model was not called.', requestId);
+  if (response.destroyed) return;
+  const evidenceContext = JSON.stringify(talkContext(first));
+  const controller = new AbortController();
+  const abort = () => { if (!response.writableEnded) controller.abort(); };
+  response.once('close', abort);
+  try {
+    const answer = await talker.explain(first, r['persona'] as 'roy' | 'ava' | 'guz', controller.signal);
+    // A completion cannot turn old evidence into a current answer after an outage or revision change.
+    const fresh = await analysis.analyze(r['releaseId'], requestId);
+    if (controller.signal.aborted || response.destroyed) return;
+    if (fresh === null || fresh.status !== 'AVAILABLE') return sendError(response, 503, 'GRAPH_UNAVAILABLE', 'The graph is no longer available. The model explanation was discarded.', requestId);
+    if (evidenceContext !== JSON.stringify(talkContext(fresh))) {
+      return sendError(response, 409, 'STALE_REVISION', 'The graph evidence changed. Request a fresh analysis before another explanation.', requestId);
+    }
+    send(response, 200, answer);
+  } catch {
+    if (!response.destroyed) sendError(response, 503, 'NOT_IMPLEMENTED', 'Model explanation unavailable. Check the provider configuration, capped key and availability. No generated answer is shown.', requestId);
+  } finally { response.removeListener('close', abort); }
 }
 
 async function getGraphStatus(response: ServerResponse, requestId: string, status?: GraphStatusProbe): Promise<void> {
