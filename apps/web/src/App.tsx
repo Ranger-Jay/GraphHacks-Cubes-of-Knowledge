@@ -14,7 +14,7 @@ export type { StudioBinding } from './studio/StudioPanel';
 /** Seeded demo release (graph seed: Release rel-wad, tenant t-wad). */
 export const SEEDED_RELEASE_ID = 'rel-wad';
 
-export const IDENTITY = 'Cubes of Knowledge: A company brain built on FalkorDB, with traceable decisions and persistent agent memory.';
+export const IDENTITY = 'Cubes of Knowledge: A source-linked studio evidence workspace built on FalkorDB.';
 
 export function Shell({ route, health, graph, analysis, Scene, reducedMotion, selected, onSelect, onRequery, recovered = false, generation, studio }: {
   route: Route; health: Loadable<HealthResponse>; graph: Loadable<GraphStatusResponse>;
