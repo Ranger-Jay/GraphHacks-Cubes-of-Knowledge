@@ -8,6 +8,7 @@ import { StatusArea } from './components/StatusArea';
 import { currentAnalysis, deriveScenePhase, nextRecovery, toRuntimeContext, type RecoveryState } from './sceneState';
 import { nextRoute, parseRoute, type Route } from './route';
 import { StudioPanel, type StudioBinding } from './studio/StudioPanel';
+import { TalkPanel } from './components/TalkPanel';
 export type { StudioBinding } from './studio/StudioPanel';
 
 /** Seeded demo release (graph seed: Release rel-wad, tenant t-wad). */
@@ -46,6 +47,7 @@ export function Shell({ route, health, graph, analysis, Scene, reducedMotion, se
               <div className="side-col">
                 <StatusArea phase={phase ?? 'CHECKING'} releaseId={route.releaseId} analysis={analysis} recovered={recovered} />
                 <AnalysisView releaseId={route.releaseId} result={analysis} phase={phase} />
+                {current?.status === 'AVAILABLE' && <TalkPanel key={`${generation ?? 0}:${current.releaseId}:${current.revision}`} analysis={current} />}
                 {studio && <StudioPanel controller={studio.controller} phase={phase} {...(studio.access ? { access: studio.access } : {})} />}
               </div>
             </div>)}
