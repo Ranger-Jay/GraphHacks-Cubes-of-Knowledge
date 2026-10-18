@@ -84,7 +84,7 @@ const SPACE_SCENE_ADAPTER_STYLES = `
   box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3);
 }
 
-.space-scene-root .cube-switch-hint {
+.space-scene-root .btn-focus-disconnected {
   display: flex;
   align-items: center;
   gap: 0.375rem;
@@ -92,10 +92,17 @@ const SPACE_SCENE_ADAPTER_STYLES = `
   border-radius: 0.75rem;
   background: rgba(15, 23, 42, 0.9);
   border: 1px solid #334155;
-  color: #94a3b8;
+  color: #cbd5e1;
   font-size: 0.75rem;
   font-weight: 700;
   box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3);
+  transition: all 0.15s ease;
+  cursor: pointer;
+}
+.space-scene-root .btn-focus-disconnected:hover {
+  color: #ffffff;
+  border-color: #64748b;
+  background: rgba(30, 41, 59, 0.9);
 }
 
 .space-scene-root .space-phase-dot {
@@ -400,7 +407,6 @@ export class SpaceSceneAdapter implements SpaceSceneInstance {
 
   // Multi-Cube Focus State ('main' | 'disconnected')
   private currentCubeFocus: 'main' | 'disconnected' = 'main';
-  private handleKeyDownBound: ((e: KeyboardEvent) => void) | null = null;
 
   constructor(
     container: HTMLElement,
@@ -448,7 +454,6 @@ export class SpaceSceneAdapter implements SpaceSceneInstance {
     this.rootEl = document.createElement('div');
     this.rootEl.className =
       'space-scene-root relative w-full h-full min-h-[500px] overflow-hidden bg-slate-950 font-mono text-slate-200 select-none';
-    this.rootEl.setAttribute('tabindex', '0');
     this.container.appendChild(this.rootEl);
 
     // Injected scoped stylesheet (P1-2 Self-contained, zero Tailwind dependency)
@@ -460,7 +465,6 @@ export class SpaceSceneAdapter implements SpaceSceneInstance {
     // Three.js viewport container
     this.threeContainer = document.createElement('div');
     this.threeContainer.className = 'space-scene-viewport absolute inset-0 z-0 overflow-hidden';
-    this.threeContainer.setAttribute('tabindex', '0');
     this.rootEl.appendChild(this.threeContainer);
 
     // Top and Bottom HUD DOM Layer
@@ -476,11 +480,11 @@ export class SpaceSceneAdapter implements SpaceSceneInstance {
             <span class="space-phase-label">CHECKING</span>
           </div>
 
-          <!-- Cube Switch Scene Hint -->
-          <div class="cube-switch-hint flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-900/90 border border-slate-700 text-xs font-mono text-slate-300 shadow">
-            <span>⌨️</span>
-            <span>Tab: switch cube</span>
-          </div>
+          <!-- Focus Disconnected Cube Button -->
+          <button type="button" class="btn-focus-disconnected flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-900/90 border border-slate-700 text-slate-300 hover:text-white hover:border-slate-500 text-xs font-mono transition shadow cursor-pointer" title="Focus Disconnected Comparison Cube">
+            <span>🧊</span>
+            <span>Focus disconnected cube</span>
+          </button>
 
           <!-- Solar Core Access Button -->
           <button type="button" class="btn-solar-core flex items-center gap-2 px-3 py-1.5 rounded-xl bg-amber-950/80 border border-amber-500/60 text-amber-300 hover:border-amber-400 hover:bg-amber-900 text-xs font-bold transition shadow cursor-pointer" title="Open Solar Core 2D Topology Panel">
@@ -568,12 +572,6 @@ export class SpaceSceneAdapter implements SpaceSceneInstance {
       },
     });
 
-    // Wire Keyboard Navigation (Canvas-scoped Tab)
-    this.handleKeyDownBound = this.handleKeyDown.bind(this);
-    if (typeof window !== 'undefined') {
-      window.addEventListener('keydown', this.handleKeyDownBound);
-    }
-
     // Wire HUD Controls
     this.wireHUDControls();
 
@@ -591,12 +589,25 @@ export class SpaceSceneAdapter implements SpaceSceneInstance {
   private wireHUDControls(): void {
     if (!this.hudEl) return;
 
+    // Focus Disconnected Cube Button
+    const focusDiscBtn = this.hudEl.querySelector<HTMLButtonElement>('.btn-focus-disconnected');
+    if (focusDiscBtn) {
+      focusDiscBtn.addEventListener('click', (e) => {
+        if (typeof e.stopPropagation === 'function') e.stopPropagation();
+        this.setCubeFocus('disconnected');
+        const backBtn = this.hudEl?.querySelector<HTMLButtonElement>('.btn-back-main-cube');
+        backBtn?.focus();
+      });
+    }
+
     // Back to Main Cube Button
     const backBtn = this.hudEl.querySelector<HTMLButtonElement>('.btn-back-main-cube');
     if (backBtn) {
       backBtn.addEventListener('click', (e) => {
         if (typeof e.stopPropagation === 'function') e.stopPropagation();
         this.setCubeFocus('main');
+        const focusBtn = this.hudEl?.querySelector<HTMLButtonElement>('.btn-focus-disconnected');
+        focusBtn?.focus();
       });
     }
 
@@ -825,6 +836,7 @@ export class SpaceSceneAdapter implements SpaceSceneInstance {
     this.currentCubeFocus = focus;
 
     const discCard = this.hudEl?.querySelector<HTMLElement>('.disconnected-cube-card');
+    const focusDiscBtn = this.hudEl?.querySelector<HTMLButtonElement>('.btn-focus-disconnected');
     const solarBtn = this.hudEl?.querySelector<HTMLButtonElement>('.btn-solar-core');
     const refreshBtn = this.hudEl?.querySelector<HTMLButtonElement>('.btn-refresh');
     const agentBtns = this.hudEl?.querySelectorAll<HTMLButtonElement>('[data-agent]');
@@ -835,15 +847,25 @@ export class SpaceSceneAdapter implements SpaceSceneInstance {
         this.closeSolarPanel();
       }
 
-      // 2. Show disconnected cube comparison card
+      // 2. Show disconnected cube comparison card & hide focus-disconnected button
       if (discCard) {
         discCard.classList.remove('hidden');
         discCard.hidden = false;
       }
+      if (focusDiscBtn) {
+        focusDiscBtn.classList.add('hidden');
+        focusDiscBtn.hidden = true;
+      }
 
       // 3. Disable main-cube data actions
-      if (solarBtn) solarBtn.setAttribute('disabled', 'true');
-      if (refreshBtn) refreshBtn.setAttribute('disabled', 'true');
+      if (solarBtn) {
+        solarBtn.setAttribute('disabled', 'true');
+        solarBtn.setAttribute('title', 'Solar Core topology is disabled while inspecting disconnected cube');
+      }
+      if (refreshBtn) {
+        refreshBtn.setAttribute('disabled', 'true');
+        refreshBtn.setAttribute('title', 'Refresh is disabled while inspecting disconnected cube');
+      }
       agentBtns?.forEach((b) => b.setAttribute('disabled', 'true'));
     } else {
       // Returning to main cube
@@ -851,53 +873,23 @@ export class SpaceSceneAdapter implements SpaceSceneInstance {
         discCard.classList.add('hidden');
         discCard.hidden = true;
       }
+      if (focusDiscBtn) {
+        focusDiscBtn.classList.remove('hidden');
+        focusDiscBtn.hidden = false;
+      }
 
-      if (solarBtn) solarBtn.removeAttribute('disabled');
-      if (refreshBtn) refreshBtn.removeAttribute('disabled');
+      if (solarBtn) {
+        solarBtn.removeAttribute('disabled');
+        solarBtn.setAttribute('title', 'Open Solar Core 2D Topology Panel');
+      }
+      if (refreshBtn) {
+        refreshBtn.removeAttribute('disabled');
+        refreshBtn.setAttribute('title', 'Request Authoritative Graph Refresh');
+      }
       agentBtns?.forEach((b) => b.removeAttribute('disabled'));
 
       // Restore appropriate current view from snapshot
       this.update(this.snapshot);
-    }
-  }
-
-  private handleKeyDown(e: KeyboardEvent): void {
-    if (e.key !== 'Tab') return;
-
-    // Never intercept while typing in an input, textarea, select, or editable element
-    const active = (typeof document !== 'undefined' ? document.activeElement : null) as HTMLElement | null;
-    const target = e.target as HTMLElement | null;
-
-    const isEditable = (el: HTMLElement | null) => {
-      if (!el) return false;
-      const tag = (el.tagName || '').toLowerCase();
-      return (
-        tag === 'input' ||
-        tag === 'textarea' ||
-        tag === 'select' ||
-        el.isContentEditable ||
-        el.getAttribute?.('contenteditable') === 'true'
-      );
-    };
-
-    if (isEditable(target) || isEditable(active)) return;
-
-    // Never intercept inside active dialogs or modals
-    if (this.solarPanel?.isPanelOpen()) return;
-    if (active?.closest?.('.solar-core-modal-overlay') || active?.closest?.('[role="dialog"]')) return;
-
-    // Only intercept if keyboard focus is within the scene container or canvas
-    const isSceneFocused =
-      this.container?.contains(active) ||
-      this.container === active ||
-      this.rootEl?.contains(active) ||
-      this.rootEl === active ||
-      this.threeContainer?.contains(active) ||
-      this.threeContainer === active;
-
-    if (isSceneFocused) {
-      e.preventDefault();
-      this.toggleCubeFocus();
     }
   }
 
@@ -932,11 +924,6 @@ export class SpaceSceneAdapter implements SpaceSceneInstance {
   public unmount(): void {
     if (this.isDestroyed) return;
     this.isDestroyed = true;
-
-    if (this.handleKeyDownBound && typeof window !== 'undefined') {
-      window.removeEventListener('keydown', this.handleKeyDownBound);
-      this.handleKeyDownBound = null;
-    }
 
     if (this.unbindAddedListener) {
       this.unbindAddedListener();

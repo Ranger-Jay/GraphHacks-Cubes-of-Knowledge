@@ -542,10 +542,10 @@ test('9. Two-cube visual & spatial presence: main and disconnected comparison cu
     assert.equal(renderer.getCubeFocus(), 'main', 'Renderer initial focus must be on main cube');
   }
 
-  // Scene hint must be rendered in DOM
-  const hintEl = container.querySelector<any>('.cube-switch-hint');
-  assert.ok(hintEl, 'Scene hint must be present in HUD');
-  assert.ok(hintEl.textContent.includes('Tab: switch cube'), 'Hint must contain exact text "Tab: switch cube"');
+  // Focus disconnected cube button must be rendered in DOM
+  const focusBtn = container.querySelector<any>('.btn-focus-disconnected');
+  assert.ok(focusBtn, 'Focus disconnected cube button must be present in HUD');
+  assert.ok(focusBtn.textContent.includes('Focus disconnected cube'), 'Button must contain text "Focus disconnected cube"');
 
   // Toggle to disconnected cube
   adapter.toggleCubeFocus();
@@ -561,7 +561,7 @@ test('9. Two-cube visual & spatial presence: main and disconnected comparison cu
   adapter.unmount();
 });
 
-test('10. Canvas-scoped Tab switching and back-to-main-cube navigation', () => {
+test('10. Accessible keyboard navigation: HUD button focus, no Tab hijacking, and natural DOM flow', () => {
   const container = (document.createElement('div') as unknown) as HTMLElement;
   const snap = projectSpaceScene(testInput({ runtime: { phase: 'READY' } }));
   const bridge: SpaceSceneBridge = {
@@ -570,54 +570,46 @@ test('10. Canvas-scoped Tab switching and back-to-main-cube navigation', () => {
 
   const adapter = new SpaceSceneAdapter(container, bridge, snap);
 
-  // Focus container
-  (document as any).activeElement = container;
+  // 1. Scene root and viewport must NOT add synthetic tab stops
+  const rootEl = container.querySelector<any>('.space-scene-root');
+  assert.equal(rootEl?.getAttribute('tabindex'), null, 'Root element must not set tabindex');
+  const viewportEl = container.querySelector<any>('.space-scene-viewport');
+  assert.equal(viewportEl?.getAttribute('tabindex'), null, 'Viewport must not set tabindex');
 
-  // 1. Press Tab on scene container -> switches to disconnected cube
-  let prevented = false;
+  // 2. Tab key must NEVER be hijacked or preventDefault()ed
+  let tabPrevented = false;
   const tabEvent = {
     type: 'keydown',
     key: 'Tab',
     target: container,
-    preventDefault: () => { prevented = true; },
+    preventDefault: () => { tabPrevented = true; },
   };
   (window as any).dispatchEvent(tabEvent);
+  assert.equal(tabPrevented, false, 'Tab key must never be intercepted or prevented by the scene');
 
-  assert.equal(prevented, true, 'Tab key inside scene container should call preventDefault()');
-  assert.equal(adapter.getCubeFocus(), 'disconnected', 'Tab should switch focus to disconnected cube');
+  // 3. Focus disconnected cube via normal HUD button
+  const focusBtn = container.querySelector<any>('.btn-focus-disconnected');
+  assert.ok(focusBtn, 'Focus disconnected cube button must exist in HUD');
+  focusBtn.dispatchEvent({ type: 'click' });
+  assert.equal(adapter.getCubeFocus(), 'disconnected', 'Clicking button must focus disconnected cube');
 
-  // 2. Visible "Back to main cube" control
+  // While viewing disconnected cube, card is visible and back button is available
+  const cardEl = container.querySelector<any>('.disconnected-cube-card');
+  assert.equal(cardEl?.classList.contains('hidden'), false, 'Disconnected card must be visible');
   const backBtn = container.querySelector<any>('.btn-back-main-cube');
   assert.ok(backBtn, 'Back to main cube button must exist');
+
+  // 4. Return to main cube via back button
   backBtn.dispatchEvent({ type: 'click' });
   assert.equal(adapter.getCubeFocus(), 'main', 'Clicking back button must restore focus to main cube');
 
-  // 3. Tab key while typing in an input element must NEVER be intercepted
-  const inputEl = (document.createElement('input') as unknown) as any;
-  (document as any).activeElement = inputEl;
-  let inputPrevented = false;
-  (window as any).dispatchEvent({
-    type: 'keydown',
-    key: 'Tab',
-    target: inputEl,
-    preventDefault: () => { inputPrevented = true; },
-  });
-  assert.equal(inputPrevented, false, 'Tab key inside an <input> must not call preventDefault()');
-  assert.equal(adapter.getCubeFocus(), 'main', 'Typing in input must not trigger cube focus change');
-
-  // 4. Tab key while modal dialog is open must NEVER be intercepted
-  (document as any).activeElement = container;
-  adapter.openSolarPanel();
-  let modalPrevented = false;
-  (window as any).dispatchEvent({
-    type: 'keydown',
-    key: 'Tab',
-    target: container,
-    preventDefault: () => { modalPrevented = true; },
-  });
-  assert.equal(modalPrevented, false, 'Tab key while solar dialog is open must not be intercepted');
-  assert.equal(adapter.getCubeFocus(), 'main', 'Dialog must preserve ordinary navigation');
-  adapter.closeSolarPanel();
+  // 5. Normal DOM order for keyboard navigation: all HUD buttons are accessible buttons
+  const solarBtn = container.querySelector<any>('.btn-solar-core');
+  const muteBtn = container.querySelector<any>('.btn-mute-toggle');
+  const refreshBtn = container.querySelector<any>('.btn-refresh');
+  assert.ok(solarBtn, 'Solar Core button must exist in DOM order');
+  assert.ok(muteBtn, 'Mute button must exist in DOM order');
+  assert.ok(refreshBtn, 'Refresh button must exist in DOM order');
 
   adapter.unmount();
 });

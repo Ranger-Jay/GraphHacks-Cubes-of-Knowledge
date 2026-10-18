@@ -7,9 +7,9 @@ export const MAIN_CUBE_POS = new THREE.Vector3(0, 0, 0);
 export const MAIN_CUBE_CAM_POS = new THREE.Vector3(0, 3.2, 12.5);
 export const MAIN_CUBE_LOOK_AT = new THREE.Vector3(0, 0, 0);
 
-export const DISCONNECTED_CUBE_POS = new THREE.Vector3(6.8, 0.6, -2.0);
-export const DISCONNECTED_CAM_POS = new THREE.Vector3(11.2, 2.4, 5.0);
-export const DISCONNECTED_LOOK_AT = new THREE.Vector3(6.8, 0.6, -2.0);
+export const DISCONNECTED_CUBE_POS = new THREE.Vector3(5.6, 0.5, -2.0);
+export const DISCONNECTED_CAM_POS = new THREE.Vector3(10.0, 2.3, 5.0);
+export const DISCONNECTED_LOOK_AT = new THREE.Vector3(5.6, 0.5, -2.0);
 
 export interface SceneThreeCallbacks {
   onSunClick: () => void;
