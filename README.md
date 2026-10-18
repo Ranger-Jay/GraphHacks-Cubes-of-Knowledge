@@ -10,9 +10,11 @@ A Graph Hacks entry exploring a fictional studio's current-cut licensing, eviden
 
 The accepted fallback is [PR #60](https://github.com/Ranger-Jay/GraphHacks-Cubes-of-Knowledge/pull/60) (`adacbe736f886c234f4a9ad60383d7d2f8c25578`, v050 composition). This v055 branch is an early combined review candidate with repaired server-capability binding, optional text explanations and local read-aloud, and reproducible IdeaVerse setup. It requires independent exact-head combined verification; it is not a released, completed product. See the [v055 composition manifest](docs/integration-v055.md) for source pins, resolutions and held gates. Earlier integration manifests remain historical evidence.
 
-The implemented path includes scoped, source-linked release analysis and studio/IdeaVerse inspection through a real graph adapter, server-configured sessions, the local web proxy and mounted studio shell. Add is gated by a fresh server capability; only the explicitly opted-in local owner rehearsal can enable it through the proxy. Its actual combined import/read-back journey remains a verification gate. Optional model explanations default to disabled; no live provider execution is yet proved. Browser read-aloud uses local device voices separately from recorded WAVs. Approval writes, durable agent handoff, persistent agent memory, hosted runtime and deployment remain unproven or outside this candidate.
+The implemented path includes scoped, source-linked release analysis and studio/IdeaVerse inspection through a real graph adapter, server-configured sessions, the local web proxy and mounted studio shell. Add is gated by a fresh server capability; only the explicitly opted-in local owner rehearsal can enable it through the proxy. Its actual combined import/read-back journey remains a verification gate. Optional model explanations default to disabled; one capped OpenRouter text completion (mistralai/mistral-nemo) was run on the author's host and recorded as metadata only; explanations are disabled by default. Browser read-aloud uses local device voices separately from recorded WAVs. Approval writes, durable agent handoff, persistent agent memory, hosted runtime and deployment remain unproven or outside this candidate.
 
-## Required demonstration
+## Original goals
+
+Implemented and demonstrated in this candidate: source-linked release analysis, stale vs current evidence, denied/unavailable states, real database stop and reconnect, owner/reader session enforcement, optional graph-grounded text explanation. Not implemented: persisting an agent handoff across sessions and persistent agent memory.
 
 - Follow current release → cut → track → license/version → source evidence.
 - Distinguish stale clearance, unresolved evidence, denied actions, and database unavailability.
@@ -24,12 +26,12 @@ The implemented path includes scoped, source-linked release analysis and studio/
 
 Node.js **22.12+ or 24** (24 recommended; .nvmrc), npm workspaces, TypeScript, official FalkorDB client, React/Vite and Three.js. Exact package versions and integrity hashes are in package-lock.json. Dependencies were resolved from the registry during kickoff; do not change the shared lockfile without coordination.
 
-The checkout below targets the pending v055 integration branch, not the accepted #60 fallback (which does not have `seed-ideaverse`).
+The checkout below targets the final-art candidate branch, which contains the accepted #64 stack plus the disconnected second cube.
 
 ```sh
 git clone https://github.com/Ranger-Jay/GraphHacks-Cubes-of-Knowledge.git
 cd GraphHacks-Cubes-of-Knowledge
-git switch buddy/combined-owner-talker-v055
+git switch gem/visual-preservation-v054
 npm ci
 cp .env.example .env
 ```
@@ -53,6 +55,8 @@ npm run graph:up
 ```
 
 Database: 127.0.0.1:6379. FalkorDB Browser: http://127.0.0.1:3001. This is a loopback-only, unauthenticated development configuration with a named /data volume and AOF. It has **not** been runtime-verified in the bootstrap host. Record a verified image digest and restart proof through technical issue #2. Docker image defaults to latest until that verification lands. `.env` client credentials do not enable server auth automatically; see [runtime baseline](infra/falkordb/README.md).
+
+The runtime verified for this project is the pinned FalkorDBLite 0.10.0 embedded server (see CI graph-live); the Docker configuration above is not runtime-verified.
 
 On a **new disposable local graph**, set `GRAPH_EVIDENCE_KEY`, `GRAPH_WITNESS_DIR`, and a freshly generated `API_READER_TOKEN` in the root `.env`. The example sets `API_TENANT_ID=t-wad`; that server-derived scope is required for release analysis. Use the token format in [API sessions](apps/api/README.md#sessions), and leave all credentials outside the browser. Initialize only the fresh graph/witness pair:
 
@@ -140,6 +144,14 @@ Public issues and pull requests contain technical work in one unified project vo
 
 Built after the permitted Graph Hacks start, October 14, 2026 at 14:31 America/New_York. Intended tracks: Company Brain, Agent Memory and Coordination, and Agents That Act on Connected Data; qualification remains subject to working evidence.
 
-AI assistance is used. OpenAI ChatGPT/Codex assisted with this initial workspace, shared contracts, documentation and bootstrap checks. Other assistance is recorded as contributions land; the roster alone is not evidence of authored code. The human entrant is responsible for meaningful contribution, understanding, testing, and final submission. No independent review or human verification is implied by the builder's passing checks. The project has not selected a distribution license; third-party dependencies retain their own licenses.
+**AI assistance is used throughout this project.** The human entrant, Jay (Ranger-Jay), set the direction and made the product decisions. Jay is responsible for the work, tested it, and will make the final submission.
+- **Anthropic Claude:** authored the graph schema, seed data, named queries and agent-profile fixtures in the early lanes, and independently reviewed and verified many later slices with real-browser and real-graph test harnesses.
+- **Google Gemini ("Gem"):** authored the 3D scene renderer and adapter, the approved-art port, and the permanently disconnected comparison cube.
+- **OpenAI ChatGPT/Codex:** assisted with the initial workspace, shared contracts, documentation and bootstrap checks.
+- **Other AI agents and tools:** additional team agents and tools were used; the entrant is confirming the full list and roles.
+- **Agent voices:** the recorded agent voice clips are assets supplied by the entrant; the entrant is confirming the voice tool details.
+- **Runtime model use:** optional text explanations through OpenRouter (mistralai/mistral-nemo), disabled by default. Read-aloud uses the browser's local device voices.
+
+No AI review in this project replaces human verification of the submission.
 
 Official references: [Graph Hacks](https://www.wemakedevs.org/hackathons/falkordb), [rules](https://www.wemakedevs.org/hackathons/falkordb/rules), [FalkorDB docs](https://docs.falkordb.com/).
