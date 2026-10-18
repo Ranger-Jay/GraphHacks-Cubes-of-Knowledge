@@ -833,7 +833,9 @@ export class SpaceSceneAdapter implements SpaceSceneInstance {
   }
 
   private handleCubeFocusChange(focus: 'main' | 'disconnected'): void {
+    const changed = this.currentCubeFocus !== focus;
     this.currentCubeFocus = focus;
+    if (changed) this.options.onCubeFocusChange?.(focus);
 
     const discCard = this.hudEl?.querySelector<HTMLElement>('.disconnected-cube-card');
     const focusDiscBtn = this.hudEl?.querySelector<HTMLButtonElement>('.btn-focus-disconnected');

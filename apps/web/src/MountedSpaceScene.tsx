@@ -2,6 +2,7 @@ import { useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react';
 import type { AgentId } from '@cubes/contracts';
 import type { SceneProps } from './components/SceneMount';
 import { focusSource } from './components/AnalysisView';
+import { TalkPanel } from './components/TalkPanel';
 import { createSpaceSceneHost, waitingSceneIdeaIds } from './spaceSceneHost';
 import { mount, type SpaceSceneInstance } from './scene/space';
 import { cancelSpeech, cancelSpeechForAgent, enforcePhaseGate, setAudioMuted, speakAuthorizedClip, speakRecoveryClip } from './scene/audio';
@@ -37,7 +38,7 @@ export function MountedSpaceScene(props: SceneProps) {
       onSelectNode: id => latest.current.onSelectNode(id),
       onSelectSource: id => focusSource({ preventDefault() {} }, id),
       onOpenIdea: id => latest.current.space?.studio?.controller.open(id),
-      // This opens a persona/voice preview; it does not claim model work has completed.
+      // Opening the agent never requests a model completion; Explain remains explicit.
       onAgentTaskStart: id => {
         setAgent(id);
         setCaption(findClipByAgentRole(id, 'greeting')?.transcript ?? '');
@@ -54,6 +55,9 @@ export function MountedSpaceScene(props: SceneProps) {
     try {
       // No audioPlayerBinding: the adapter's invented chime/shockwave names are not approved clips.
       mounted.current = mount(container.current, h.bridge, h.view(), {
+        onCubeFocusChange: focus => {
+          if (focus === 'disconnected') { setAgent(null); setCaption(''); cancelSpeech(); }
+        },
         onAddedBinding: listener => latest.current.space?.studio?.subscribeAdded?.(listener) ?? (() => {}),
         onAdded: () => latest.current.space?.onRefresh?.(),
       });
@@ -90,14 +94,16 @@ export function MountedSpaceScene(props: SceneProps) {
     setCaption(findClipByAgentRole(id, role)?.transcript ?? '');
     speakAuthorizedClip(id, role, current.runtime.phase);
   };
+  const currentAnalysis = phase === 'READY' && props.space?.analysis?.status === 'AVAILABLE'
+    ? props.space.analysis : null;
 
   return <div className="mounted-space-experience">
     <div ref={container} className="mounted-space-canvas" data-testid="mounted-space-scene" />
     {mountError && <p role="alert">3D rendering is unavailable. Use Solar Core and the graph text view to inspect current information.</p>}
     {agent && <section className="panel agent-preview" aria-label={`${agent} voice preview`} onKeyDown={e => { if (e.key === 'Escape') closeAgent(); }}>
       <h3 ref={agentHeading} tabIndex={-1}>{agent.toUpperCase()}</h3>
-      <p>Recorded voice preview. The current graph answer and its sources are shown in the analysis panel.</p>
-      <p>Model questions are not configured.</p>
+      <p>Recorded voice preview. Ask this agent to explain the current graph evidence below; source records remain in the analysis panel.</p>
+      {currentAnalysis && <TalkPanel key={`${props.space?.generation ?? 0}:${currentAnalysis.revision}:${agent}`} analysis={currentAnalysis} agent={agent} />}
       <button type="button" onClick={() => preview(agent, 'greeting')}>Greeting</button>{' '}
       <button type="button" onClick={() => preview(agent, 'help')}>Help</button>{' '}
       {props.space?.recovered && agent !== 'guz' && phase === 'READY' && <button type="button" onClick={() => {
