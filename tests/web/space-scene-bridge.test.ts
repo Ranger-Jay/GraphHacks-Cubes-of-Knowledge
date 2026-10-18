@@ -86,6 +86,46 @@ test('old callbacks re-read phase, generation and membership before acting', asy
   assert.equal(calls, 0);
 });
 
+test('changing accessors are captured once for validation, membership and callback delivery', async () => {
+  for (const [type, id] of [['SELECT_NODE', 'n2'], ['SELECT_SOURCE', 's1'], ['OPEN_IDEA', 'idea-1']] as const) {
+    let reads = 0;
+    const calls: string[] = [];
+    const b = createSpaceSceneBridge(() => projectSpaceScene(input()), {
+      onSelectNode: value => { calls.push(value); },
+      onSelectSource: value => { calls.push(value); },
+      onOpenIdea: value => { calls.push(value); },
+    });
+    const changing = { ...event(type), get id() { return ++reads <= 3 ? id : 'INVENTED'; } };
+    assert.equal(await b.dispatch(changing), 'DISPATCHED');
+    assert.deepEqual(calls, [id]);
+    assert.equal(reads, 1);
+
+    reads = 0;
+    calls.length = 0;
+    const initiallyForged = { ...event(type), get id() { return ++reads === 1 ? 'INVENTED' : id; } };
+    assert.equal(await b.dispatch(initiallyForged), 'BLOCKED');
+    assert.deepEqual(calls, []);
+    assert.equal(reads, 1);
+  }
+});
+
+test('proxy and throwing accessor events are INVALID without reading application state', async () => {
+  let reads = 0;
+  let calls = 0;
+  const b = createSpaceSceneBridge(() => { reads++; return projectSpaceScene(input()); }, {
+    onSelectNode: () => { calls++; },
+  });
+  const proxy = new Proxy(event('SELECT_NODE', { id: 'n2' }), {});
+  const revoked = Proxy.revocable(event('SELECT_NODE', { id: 'n2' }), {});
+  revoked.revoke();
+  const throwing = { ...event('SELECT_NODE'), get id(): string { throw new Error('changed'); } };
+  for (const raw of [proxy, revoked.proxy, throwing]) {
+    assert.equal(await b.dispatch(raw), 'INVALID');
+  }
+  assert.equal(reads, 0);
+  assert.equal(calls, 0);
+});
+
 test('blocked states permit refresh, mute and closing, but not starting an agent task', async () => {
   let current = input({ runtime: { phase: 'ACCESS_DENIED' } });
   const calls: string[] = [];
