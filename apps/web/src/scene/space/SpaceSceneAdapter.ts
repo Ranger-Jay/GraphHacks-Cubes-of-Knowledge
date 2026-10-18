@@ -9,6 +9,317 @@ import type { SpaceSceneBridge, SpaceSceneInstance, SpaceSceneMountOptions } fro
 import { SolarCorePanel } from './SolarCorePanel.js';
 import { SceneThreeRenderer } from './SceneThreeRenderer.js';
 
+const SPACE_SCENE_ADAPTER_STYLES = `
+/* Scoped Space Scene & Solar Core Styles (Self-Contained, Zero Tailwind Dependency) */
+.space-scene-root {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-height: 500px;
+  max-height: 100%;
+  overflow: hidden;
+  background-color: #020617;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  color: #e2e8f0;
+  user-select: none;
+  box-sizing: border-box;
+}
+
+.space-scene-root *,
+.solar-core-modal-overlay * {
+  box-sizing: border-box;
+}
+
+.space-scene-root [hidden],
+.space-scene-root .hidden,
+.solar-core-modal-overlay[hidden],
+.solar-core-modal-overlay.hidden,
+.solar-panel-phase-overlay[hidden],
+.solar-panel-phase-overlay.hidden {
+  display: none !important;
+}
+
+.space-scene-viewport {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+}
+
+.space-scene-hud {
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  pointer-events: none;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 1rem;
+}
+
+.space-hud-topbar,
+.space-hud-bottombar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  pointer-events: auto;
+}
+
+.space-hud-group {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+/* Badges */
+.space-phase-badge {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.375rem 0.75rem;
+  border-radius: 0.75rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3);
+}
+
+.space-phase-dot {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 9999px;
+}
+
+/* Outage Banner */
+.outage-banner {
+  align-self: center;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  border-radius: 1rem;
+  background: rgba(76, 5, 25, 0.95);
+  border: 1px solid #e11d48;
+  color: #fecdd3;
+  font-size: 0.75rem;
+  font-weight: 700;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.8);
+  pointer-events: auto;
+}
+
+/* Buttons */
+.btn-solar-core {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.375rem 0.75rem;
+  border-radius: 0.75rem;
+  background: rgba(69, 26, 3, 0.85);
+  border: 1px solid rgba(245, 158, 11, 0.6);
+  color: #fcd34d;
+  font-size: 0.75rem;
+  font-weight: 700;
+  transition: all 0.15s ease;
+  cursor: pointer;
+}
+.btn-solar-core:hover {
+  background: rgba(120, 53, 15, 0.95);
+  border-color: #fbbf24;
+}
+
+.btn-mute-toggle {
+  padding: 0.375rem 0.75rem;
+  border-radius: 0.75rem;
+  background: rgba(15, 23, 42, 0.9);
+  border: 1px solid #334155;
+  color: #cbd5e1;
+  font-size: 0.75rem;
+  font-weight: 700;
+  transition: all 0.15s ease;
+  cursor: pointer;
+}
+.btn-mute-toggle:hover {
+  color: #ffffff;
+  border-color: #64748b;
+}
+
+.btn-refresh {
+  padding: 0.375rem 0.75rem;
+  border-radius: 0.75rem;
+  background: rgba(22, 78, 99, 0.8);
+  border: 1px solid rgba(6, 182, 212, 0.6);
+  color: #67e8f9;
+  font-size: 0.75rem;
+  font-weight: 700;
+  transition: all 0.15s ease;
+  cursor: pointer;
+}
+.btn-refresh:hover {
+  background: rgba(21, 94, 117, 0.9);
+  border-color: #22d3ee;
+}
+
+.btn-agent-roy, .btn-agent-ava, .btn-agent-guz {
+  padding: 0.375rem 0.75rem;
+  border-radius: 0.75rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+  transition: all 0.15s ease;
+  cursor: pointer;
+}
+.btn-agent-roy {
+  background: rgba(69, 26, 3, 0.8);
+  border: 1px solid rgba(245, 158, 11, 0.6);
+  color: #fcd34d;
+}
+.btn-agent-roy:hover { background: rgba(120, 53, 15, 0.9); }
+
+.btn-agent-ava {
+  background: rgba(59, 7, 100, 0.8);
+  border: 1px solid rgba(168, 85, 247, 0.6);
+  color: #d8b4fe;
+}
+.btn-agent-ava:hover { background: rgba(88, 28, 135, 0.9); }
+
+.btn-agent-guz {
+  background: rgba(6, 78, 59, 0.8);
+  border: 1px solid rgba(16, 185, 129, 0.6);
+  color: #6ee7b7;
+}
+.btn-agent-guz:hover { background: rgba(4, 120, 87, 0.9); }
+
+/* Solar Core Modal Overlay (Fixed, centered, backdrop blurred) */
+.solar-core-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  background: rgba(0, 0, 0, 0.85);
+  backdrop-filter: blur(8px);
+}
+
+.solar-core-modal-content {
+  position: relative;
+  width: 100%;
+  max-width: 900px;
+  max-height: 90vh;
+  background: rgba(2, 6, 23, 0.98);
+  border: 1px solid rgba(245, 158, 11, 0.6);
+  border-radius: 1.5rem;
+  padding: 1.5rem;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.8);
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  font-family: ui-monospace, monospace;
+  color: #e2e8f0;
+  overflow: hidden;
+}
+
+.solar-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid rgba(245, 158, 11, 0.3);
+  padding-bottom: 0.75rem;
+}
+
+.solar-panel-close-btn {
+  padding: 0.375rem 0.75rem;
+  border-radius: 0.75rem;
+  border: 1px solid #334155;
+  background: #0f172a;
+  color: #cbd5e1;
+  font-size: 0.75rem;
+  transition: all 0.15s ease;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+}
+.solar-panel-close-btn:hover {
+  border-color: #f59e0b;
+  color: #ffffff;
+}
+
+.solar-panel-body {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 1rem;
+  flex: 1 1 auto;
+  overflow: hidden;
+  min-height: 360px;
+}
+@media (max-width: 768px) {
+  .solar-panel-body {
+    grid-template-columns: 1fr;
+  }
+}
+
+.solar-panel-svg-container {
+  background: rgba(15, 23, 42, 0.8);
+  border-radius: 1rem;
+  border: 1px solid #1e293b;
+  padding: 0.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  overflow: hidden;
+}
+
+.solar-panel-svg {
+  width: 100%;
+  height: 100%;
+  max-height: 420px;
+  user-select: none;
+}
+
+.solar-panel-phase-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(2, 6, 23, 0.95);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+  text-align: center;
+}
+
+.solar-panel-sidebar {
+  background: rgba(15, 23, 42, 0.6);
+  border-radius: 1rem;
+  border: 1px solid rgba(30, 41, 59, 0.8);
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  overflow-y: auto;
+  max-height: 440px;
+  font-size: 0.75rem;
+}
+
+.solar-source-btn {
+  width: 100%;
+  text-align: left;
+  padding: 0.5rem;
+  border-radius: 0.5rem;
+  background: rgba(30, 41, 59, 0.8);
+  border: 1px solid #334155;
+  transition: all 0.15s ease;
+  cursor: pointer;
+  margin-bottom: 0.375rem;
+}
+.solar-source-btn:hover {
+  background: rgba(51, 65, 85, 0.8);
+  border-color: #22d3ee;
+}
+`;
+
 export class SpaceSceneAdapter implements SpaceSceneInstance {
   private container: HTMLElement;
   private bridge: SpaceSceneBridge;
@@ -75,18 +386,24 @@ export class SpaceSceneAdapter implements SpaceSceneInstance {
       'space-scene-root relative w-full h-full min-h-[500px] overflow-hidden bg-slate-950 font-mono text-slate-200 select-none';
     this.container.appendChild(this.rootEl);
 
+    // Injected scoped stylesheet (P1-2 Self-contained, zero Tailwind dependency)
+    const styleEl = document.createElement('style');
+    styleEl.id = 'space-scene-adapter-styles';
+    styleEl.textContent = SPACE_SCENE_ADAPTER_STYLES;
+    this.rootEl.appendChild(styleEl);
+
     // Three.js viewport container
     this.threeContainer = document.createElement('div');
-    this.threeContainer.className = 'absolute inset-0 z-0 overflow-hidden';
+    this.threeContainer.className = 'space-scene-viewport absolute inset-0 z-0 overflow-hidden';
     this.rootEl.appendChild(this.threeContainer);
 
     // Top and Bottom HUD DOM Layer
     this.hudEl = document.createElement('div');
-    this.hudEl.className = 'absolute inset-0 z-10 pointer-events-none flex flex-col justify-between p-4';
+    this.hudEl.className = 'space-scene-hud absolute inset-0 z-10 pointer-events-none flex flex-col justify-between p-4';
     this.hudEl.innerHTML = `
       <!-- Top HUD Bar -->
-      <div class="flex items-center justify-between gap-3 pointer-events-auto">
-        <div class="flex items-center gap-2">
+      <div class="space-hud-topbar flex items-center justify-between gap-3 pointer-events-auto">
+        <div class="space-hud-group flex items-center gap-2">
           <!-- Runtime Phase Badge -->
           <div class="space-phase-badge flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-900/90 border border-slate-700 text-xs font-bold shadow">
             <span class="space-phase-dot w-2 h-2 rounded-full bg-slate-400"></span>
@@ -100,7 +417,7 @@ export class SpaceSceneAdapter implements SpaceSceneInstance {
           </button>
         </div>
 
-        <div class="flex items-center gap-2">
+        <div class="space-hud-group flex items-center gap-2">
           <!-- Audio Mute Toggle Button -->
           <button type="button" class="btn-mute-toggle px-3 py-1.5 rounded-xl bg-slate-900/90 border border-slate-700 text-slate-300 hover:text-white hover:border-slate-500 text-xs font-bold transition shadow cursor-pointer">
             <span class="mute-label">MUTED</span>
@@ -114,14 +431,14 @@ export class SpaceSceneAdapter implements SpaceSceneInstance {
       </div>
 
       <!-- Outage Banner (Visible in GRAPH_UNAVAILABLE) -->
-      <div class="outage-banner hidden self-center px-4 py-2 rounded-2xl bg-rose-950/90 border border-rose-600 text-rose-200 text-xs font-bold shadow-2xl flex items-center gap-2">
+      <div class="outage-banner hidden self-center px-4 py-2 rounded-2xl bg-rose-950/90 border border-rose-600 text-rose-200 text-xs font-bold shadow-2xl flex items-center gap-2" hidden>
         <span class="w-2.5 h-2.5 rounded-full bg-rose-500 animate-ping"></span>
         <span>GRAPH UNAVAILABLE • Zero-Write Audit Lock Active • All Current Proof Cleared</span>
       </div>
 
       <!-- Bottom Dock / Agent Persona Triggers -->
-      <div class="flex items-center justify-between gap-3 pointer-events-auto">
-        <div class="flex items-center gap-2">
+      <div class="space-hud-bottombar flex items-center justify-between gap-3 pointer-events-auto">
+        <div class="space-hud-group flex items-center gap-2">
           <button type="button" class="btn-agent-roy px-3 py-1.5 rounded-xl bg-amber-950/80 border border-amber-500/60 text-amber-300 hover:bg-amber-900 text-xs font-bold transition cursor-pointer" data-agent="roy">
             ROY [1]
           </button>
@@ -247,17 +564,26 @@ export class SpaceSceneAdapter implements SpaceSceneInstance {
       if (muteLabel) muteLabel.textContent = snapshot.audioMuted ? 'MUTED' : 'UNMUTED';
 
       if (phase === 'GRAPH_UNAVAILABLE') {
-        if (phaseBadge) phaseBadge.className = 'space-phase-badge flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-rose-950/90 border border-rose-600 text-xs font-bold text-rose-300 shadow';
-        if (phaseDot) phaseDot.className = 'space-phase-dot w-2 h-2 rounded-full bg-rose-500 animate-pulse';
-        if (outageBanner) outageBanner.classList.remove('hidden');
+        if (phaseBadge) phaseBadge.className = 'space-phase-badge phase-outage flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-rose-950/90 border border-rose-600 text-xs font-bold text-rose-300 shadow';
+        if (phaseDot) phaseDot.className = 'space-phase-dot dot-outage w-2 h-2 rounded-full bg-rose-500 animate-pulse';
+        if (outageBanner) {
+          outageBanner.classList.remove('hidden');
+          (outageBanner as HTMLElement).hidden = false;
+        }
       } else if (phase === 'READY') {
-        if (phaseBadge) phaseBadge.className = 'space-phase-badge flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-950/90 border border-emerald-600 text-xs font-bold text-emerald-300 shadow';
-        if (phaseDot) phaseDot.className = 'space-phase-dot w-2 h-2 rounded-full bg-emerald-400';
-        if (outageBanner) outageBanner.classList.add('hidden');
+        if (phaseBadge) phaseBadge.className = 'space-phase-badge phase-ready flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-950/90 border border-emerald-600 text-xs font-bold text-emerald-300 shadow';
+        if (phaseDot) phaseDot.className = 'space-phase-dot dot-ready w-2 h-2 rounded-full bg-emerald-400';
+        if (outageBanner) {
+          outageBanner.classList.add('hidden');
+          (outageBanner as HTMLElement).hidden = true;
+        }
       } else {
-        if (phaseBadge) phaseBadge.className = 'space-phase-badge flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-900/90 border border-slate-700 text-xs font-bold text-slate-300 shadow';
-        if (phaseDot) phaseDot.className = 'space-phase-dot w-2 h-2 rounded-full bg-slate-400';
-        if (outageBanner) outageBanner.classList.add('hidden');
+        if (phaseBadge) phaseBadge.className = 'space-phase-badge phase-default flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-900/90 border border-slate-700 text-xs font-bold text-slate-300 shadow';
+        if (phaseDot) phaseDot.className = 'space-phase-dot dot-default w-2 h-2 rounded-full bg-slate-400';
+        if (outageBanner) {
+          outageBanner.classList.add('hidden');
+          (outageBanner as HTMLElement).hidden = true;
+        }
       }
     }
   }
@@ -304,7 +630,6 @@ export class SpaceSceneAdapter implements SpaceSceneInstance {
       type: 'OPEN_IDEA',
       id,
     };
-    // DISPATCHED only delivers callback; it NEVER triggers ingestion or removal!
     return this.bridge.dispatch(event);
   }
 
@@ -338,12 +663,16 @@ export class SpaceSceneAdapter implements SpaceSceneInstance {
     return this.bridge.dispatch(event);
   }
 
-  // --- Verified Server Read-Back Handler ---
+  // --- Verified Server Ingestion Read-Back Hook ---
+
   public handleVerifiedAdded(ideaId: string): void {
-    // Only called when the controller confirms verified server read-back!
+    if (this.isDestroyed) return;
+
+    // Inform caller if direct listener was provided
     if (this.options.onAdded) {
       this.options.onAdded(ideaId);
     }
+
     if (!this.snapshot.audioMuted && this.options.audioPlayerBinding) {
       this.options.audioPlayerBinding.play('shockwave');
     }

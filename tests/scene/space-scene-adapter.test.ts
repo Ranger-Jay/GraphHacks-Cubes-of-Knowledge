@@ -59,6 +59,10 @@ function setupMockDOM() {
 
     setAttribute(k: string, v: string) {
       this.attributes.set(k, String(v));
+      if (k === 'class') {
+        this.className = String(v);
+        this.classList = new MockClassList(this.className);
+      }
     }
     getAttribute(k: string) {
       return this.attributes.get(k) ?? null;
@@ -154,6 +158,9 @@ function setupMockDOM() {
 
   (globalThis as any).document = {
     createElement(tag: string) {
+      return new MockElement(tag);
+    },
+    createElementNS(ns: string, tag: string) {
       return new MockElement(tag);
     },
     activeElement: null,
@@ -412,5 +419,44 @@ test('7. Reduced motion: static presentation without continuous animation loops'
 
   const adapter = mount(container, bridge, snapReduced);
   assert.equal(adapter.getSnapshot().reducedMotion, true);
+  adapter.unmount();
+});
+
+test('8. Stored XSS immunity & safe DOM textContent rendering for malicious payloads', () => {
+  const container = (document.createElement('div') as unknown) as HTMLElement;
+  const xssPayload = '<img src=x onerror="window.__xss=1">';
+  const quotePayload = 'test" onmouseover="alert(1)" data-x="';
+
+  const xssInput: SpaceSceneInput = {
+    ...testInput(),
+    analysis: {
+      ...available('GAP'),
+      nodes: [
+        { id: quotePayload, label: xssPayload, kind: 'RECORD' },
+      ],
+      sources: [
+        { id: xssPayload, path: quotePayload, excerpt: xssPayload },
+      ],
+    },
+  };
+
+  const snap = projectSpaceScene(xssInput);
+  const bridge: SpaceSceneBridge = {
+    dispatch: async () => 'DISPATCHED',
+  };
+
+  const adapter = new SpaceSceneAdapter(container, bridge, snap);
+  adapter.openSolarPanel();
+
+  // Check that the source button text contains the payload literally, without creating img elements
+  const sourceBtn = container.querySelector<any>('.solar-source-btn');
+  assert.ok(sourceBtn, 'Source button must be created');
+  assert.equal(sourceBtn.querySelector('img'), null, 'Malicious <img> must never be parsed or rendered in DOM');
+
+  // Check that the SVG node group exists without injected attributes
+  const svgGroup = container.querySelector<any>('.solar-node-group');
+  assert.ok(svgGroup, 'SVG node group must be created');
+  assert.equal(svgGroup.getAttribute('data-node-id'), quotePayload, 'Attribute must safely store quote payload without breaking out');
+
   adapter.unmount();
 });

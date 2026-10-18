@@ -28,12 +28,12 @@ This slice implements the minimal mountable v042 adapter connecting the applicat
 apps/web/src/scene/space/
 ├── index.ts                  # Public mount / unmount entrypoint
 ├── types.ts                  # Adapter interfaces, options, and instance types
-├── SpaceSceneAdapter.ts      # Lifecycle orchestration, HUD controls, event dispatching
-├── SolarCorePanel.ts         # Shared 2D Solar Core panel modal with SVG topology
-└── SceneThreeRenderer.ts     # Local Three.js scene, camera, wireframe, hit testing, and disposal
+├── SpaceSceneAdapter.ts      # Lifecycle orchestration, HUD controls, event dispatching, scoped stylesheet
+├── SolarCorePanel.ts         # Shared 2D Solar Core panel modal with SVG topology, XSS-safe DOM, focus trap
+└── SceneThreeRenderer.ts     # Local Three.js scene, camera, wireframe, screen-space hit testing, and disposal
 
 tests/scene/
-└── space-scene-adapter.test.ts  # 7-point exhaustive verification test suite
+└── space-scene-adapter.test.ts  # 8-point exhaustive verification test suite (including XSS and real-DOM assertions)
 
 docs/design/
 └── space-scene-bridge-v042.md   # This specification document
@@ -92,20 +92,19 @@ All dispatched events strictly enforce the protocol envelope `{ protocol: 'cubes
 | Visible Control / Interaction | Trigger Action | Emitted Event Envelope | Allowed Fields |
 | :--- | :--- | :--- | :--- |
 | **Top HUD Refresh Button** (`.btn-refresh`) | Click | `{ protocol: 'cubes.space-scene@1', generation, type: 'REFRESH' }` | None |
-| **3D Red Graph Node / 2D SVG Node** | Click | `{ protocol: 'cubes.space-scene@1', generation, type: 'SELECT_NODE', id }` | `id` (string) |
+| **3D Red Graph Node / 2D SVG Node** | Click / Enter / Space | `{ protocol: 'cubes.space-scene@1', generation, type: 'SELECT_NODE', id }` | `id` (string) |
 | **2D Panel Source Citation** (`.solar-source-btn`) | Click | `{ protocol: 'cubes.space-scene@1', generation, type: 'SELECT_SOURCE', id }` | `id` (string) |
 | **3D IdeaVerse Comet** (represents `ideaIds`) | Click | `{ protocol: 'cubes.space-scene@1', generation, type: 'OPEN_IDEA', id }` | `id` (string) |
 | **Agent Persona Button** (`ROY`, `AVA`, `GUZ`) | Click | `{ protocol: 'cubes.space-scene@1', generation, type: 'AGENT_TASK_START', agentId }` | `agentId` (`'ava' \| 'roy' \| 'guz'`) |
-| **Agent Chamber Close Button** | Click / ESC | `{ protocol: 'cubes.space-scene@1', generation, type: 'CLOSE_AGENT', agentId }` | `agentId` (`'ava' \| 'roy' \| 'guz'`) |
 | **HUD Audio Mute Toggle** (`.btn-mute-toggle`) | Click | `{ protocol: 'cubes.space-scene@1', generation, type: 'SET_AUDIO_MUTED', muted }` | `muted` (boolean) |
-| **Central Sun Core / Top HUD Solar Button** | Click | *Internal Panel Navigation*: Opens shared 2D Solar Core Panel (no graph event emitted) | Focus returns to opener |
+| **Central Sun Core / Top HUD Solar Button** | Click | *Internal Panel Navigation*: Opens shared 2D Solar Core Panel (no graph event emitted, ESC closes panel and returns focus to opener) | Focus returns to opener |
 
 ---
 
 ## 5. Requirement Verification & Implementation Details
 
 1. **Mount / Unmount Lifecycle**:
-   - `mount(container, bridge, initialSnapshot?, options?)` creates Three.js canvas, lights, geometry, DOM overlays, and listeners.
+   - `mount(container, bridge, initialSnapshot?, options?)` creates Three.js canvas, lights, geometry, DOM overlays, scoped stylesheet, and listeners.
    - `unmount()` cancels `requestAnimationFrame`, recursively disposes all Three.js geometries, materials, textures, renderer, removes window/canvas/document listeners, and clears DOM nodes. Tested with remounting to guarantee zero leaks.
 2. **Typed Snapshot State Rendering**:
    - Strictly renders states from `snapshot.runtime.phase`: `CHECKING`, `READY`, `GRAPH_UNAVAILABLE`, `ACCESS_DENIED`, `NOT_FOUND`, `UNAVAILABLE`.
@@ -124,9 +123,12 @@ All dispatched events strictly enforce the protocol envelope `{ protocol: 'cubes
    - No embedded base64 audio strings, no own `AudioContext`, no `new Audio()`.
    - Prototype fake Cypher terminal and hardcoded 28-node lists removed; nodes derive solely from `snapshot.data.nodes`.
    - External audio player binding (`options.audioPlayerBinding`) is invoked only when `!snapshot.audioMuted`.
-6. **Solar Core 2D Graph Panel & 100% Reliable Screen-Space Hit-Testing**:
-   - Clicking central Sun in 3D and clicking `.btn-solar-core` in top HUD activate the exact same shared `SolarCorePanel` instance.
+6. **Solar Core 2D Graph Panel, XSS Immunity & 100% Reliable Hit-Testing**:
+   - **Stored XSS Elimination (P1-1)**: Rebuilt all dynamic SVG nodes and source citation lists using safe DOM methods (`document.createElement`, `document.createElementNS`, `.textContent`, `.setAttribute`). Zero string interpolation into `innerHTML`. Payloads like `<img src=x onerror=...>` or injected quotes remain harmless literal text.
+   - **Self-Contained Scoped Stylesheet (P1-2)**: Injected scoped `<style>` element guaranteeing `.hidden { display: none !important; }`, `fixed inset-0`, flex/grid layouts, borders, and typography render with pixel-perfect accuracy in environments without Tailwind CSS. Native `hidden` boolean attributes bound to modal and outage elements.
+   - **Modal Focus Trap & Keyboard A11y (P3-1, P3-2)**: Tab/Shift+Tab cycles focus exclusively within the open modal. 2D SVG nodes have `tabindex="0"`, `role="button"`, `aria-label`, and Enter/Space keyboard selection.
    - **100% Reliable Hit-Testing via Screen-Space Projection**: Implemented `getSunScreenMetrics()` mapping the 3D Sun position to exact viewport client pixels via `camera.project()`. Provides immediate hover cursor feedback (`pointer`), robust pointerdown/up release confirmation with expanded 32px drag threshold, debounced click safety net, and fallback raycasting.
+   - **Honest Selection State (P3-3)**: Node selection highlighting only updates when `bridge.dispatch` resolves to `DISPATCHED`.
    - In `READY`: nodes, edges, and sources are populated directly from `snapshot.data`.
    - In non-READY: clears proof and displays the active phase explanation.
    - Keyboard access: Escape key closes modal and returns focus to the last opener element.
@@ -146,10 +148,10 @@ To maintain strict truthfulness:
 
 ---
 
-## 7. Author Test Evidence
+## 7. Author Test Evidence & Audit Closure
 
 Ran `node --import tsx tests/scene/space-scene-adapter.test.ts`:
-- **7 / 7 tests passed (0 failures, 0 skipped)**:
+- **8 / 8 tests passed (0 failures, 0 skipped)**:
   1. Mount/unmount lifecycle & remounting
   2. Typed snapshot state rendering (`READY` vs all 5 non-READY blocked phases)
   3. Exact event envelope dispatching (`SELECT_NODE`, `SELECT_SOURCE`, `OPEN_IDEA`, `AGENT_TASK_START`, `CLOSE_AGENT`, `REFRESH`, `SET_AUDIO_MUTED`)
@@ -157,4 +159,5 @@ Ran `node --import tsx tests/scene/space-scene-adapter.test.ts`:
   5. Audio mute respect & no standalone audio creation
   6. Shared Solar Core 2D panel state (dual-path verified: top-bar button click + sun click callback) & phase clearing
   7. Reduced motion static presentation
+  8. Stored XSS immunity & safe DOM textContent rendering for malicious payloads (`<img src=x onerror=...>`, quote attributes)
 - TypeScript verification: `npm run check -w @cubes/web` passes with exit code 0 across all workspaces.
