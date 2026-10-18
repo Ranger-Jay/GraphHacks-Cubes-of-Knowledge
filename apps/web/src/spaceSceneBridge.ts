@@ -77,35 +77,39 @@ export function createSpaceSceneBridge(readCurrent: () => SpaceSceneSnapshot, ha
     dispose(): void { disposed = true; },
     async dispatch(raw: unknown): Promise<SpaceSceneDispatchResult> {
       if (disposed) return 'DISPOSED';
-      if (!isSpaceSceneEvent(raw)) return 'INVALID';
+      // Capture before validation: accessors must not change an ID between its
+      // membership check and callback. Proxies and throwing getters are invalid.
+      let captured: unknown;
+      try { captured = structuredClone(raw); } catch { return 'INVALID'; }
+      if (!isSpaceSceneEvent(captured)) return 'INVALID';
       try {
         const current = readCurrent();
-        if (current.protocol !== SPACE_SCENE_PROTOCOL || raw.generation !== current.generation) return 'STALE';
+        if (current.protocol !== SPACE_SCENE_PROTOCOL || captured.generation !== current.generation) return 'STALE';
         const ready = current.runtime.phase === 'READY' && current.data.status === 'AVAILABLE';
         let call: (() => void | Promise<void>) | undefined;
-        switch (raw.type) {
+        switch (captured.type) {
           case 'REFRESH': call = handlers.onRefresh; break;
           case 'SET_AUDIO_MUTED':
-            if (handlers.onSetAudioMuted) call = () => handlers.onSetAudioMuted!(raw.muted);
+            if (handlers.onSetAudioMuted) call = () => handlers.onSetAudioMuted!(captured.muted);
             break;
           case 'CLOSE_AGENT':
-            if (handlers.onCloseAgent) call = () => handlers.onCloseAgent!(raw.agentId);
+            if (handlers.onCloseAgent) call = () => handlers.onCloseAgent!(captured.agentId);
             break;
           case 'SELECT_NODE':
-            if (!ready || !current.data.nodes.some(n => n.id === raw.id)) return 'BLOCKED';
-            if (handlers.onSelectNode) call = () => handlers.onSelectNode!(raw.id);
+            if (!ready || !current.data.nodes.some(n => n.id === captured.id)) return 'BLOCKED';
+            if (handlers.onSelectNode) call = () => handlers.onSelectNode!(captured.id);
             break;
           case 'SELECT_SOURCE':
-            if (!ready || !current.sources.some(s => s.id === raw.id)) return 'BLOCKED';
-            if (handlers.onSelectSource) call = () => handlers.onSelectSource!(raw.id);
+            if (!ready || !current.sources.some(s => s.id === captured.id)) return 'BLOCKED';
+            if (handlers.onSelectSource) call = () => handlers.onSelectSource!(captured.id);
             break;
           case 'OPEN_IDEA':
-            if (!ready || !current.ideaIds.includes(raw.id)) return 'BLOCKED';
-            if (handlers.onOpenIdea) call = () => handlers.onOpenIdea!(raw.id);
+            if (!ready || !current.ideaIds.includes(captured.id)) return 'BLOCKED';
+            if (handlers.onOpenIdea) call = () => handlers.onOpenIdea!(captured.id);
             break;
           case 'AGENT_TASK_START':
             if (!ready) return 'BLOCKED';
-            if (handlers.onAgentTaskStart) call = () => handlers.onAgentTaskStart!(raw.agentId);
+            if (handlers.onAgentTaskStart) call = () => handlers.onAgentTaskStart!(captured.agentId);
             break;
         }
         if (!call) return 'UNBOUND';
