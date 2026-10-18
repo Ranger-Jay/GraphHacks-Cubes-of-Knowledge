@@ -1066,3 +1066,29 @@ All 10 milestone rows across the 3D Space Visualizer roadmap are now **100% COMP
   - Registered `'solar-core-graph-modal'` in `isAnyModalOpen()`, suppressing underlying 3D drag rotation and orbit manipulation while inspecting the 2D graph.
   - Fully integrated into `closeModals()`, `onKeyDown()` (ESC and X shortcuts), the dedicated glowing amber close button (`#close-solar-graph-btn`), and background backdrop click dismissal.
 - **Three-Mirror Synchronization**: All 3 visualizer mirrors verified with identical SHA-256 `fbaf14dc28e07695589707fc513d1a0134f15bbd2635672b31093659dc8fb203`.
+
+### 18.15 Header De-Cluttering, FalkorDB v4.22.0 Pill, Transverse IdeaVerse Comets, Dynamic Graph Nodes Badge, and Stable Fluid Viscosity Damping (`v043.10` / `v043.11`)
+- **Header De-Cluttering & FalkorDB v4.22.0 Pill**:
+  - Dropped Zero-G Fluid, Pyramids, Graph Shards, and Outer Space status indicators to free up screen real estate for the docked Agent Chamber.
+  - Reduced title font size of "Company Cube & Core" to match "Warnings After Dark Studios" in `text-xs font-mono uppercase tracking-widest text-cyan-400 font-bold`, left-aligned and unified with identical cyan coloration.
+  - Capitalized brand name to official `FalkorDB` and updated version to `v4.22.0`.
+  - Relocated the `🗄️ FalkorDB v4.22.0 // AVAILABLE` status pill directly into the header title row beside Company Cube & Core.
+  - Updated outage simulation handlers to toggle `🗄️ FalkorDB v4.22.0 // UNAVAILABLE (OUTAGE)` with matching pill layout.
+- **Agent Chamber Top Clearance**:
+  - Shifted docked `#agent-chamber` from `top-16` to `top-[76px]`, eliminating any overlap between the header title block and the agent card.
+- **Dynamic Graph Nodes Badge & Ingested Idea Node Counting**:
+  - Renamed "Graph shards" to "Graph nodes" / "GRAPH NODES".
+  - Created dynamic badge `#solar-graph-nodes-badge` in the 2D Constellation Modal header displaying `28 GRAPH NODES` initially.
+  - Implemented `updateGraphNodesBadge()`, automatically incrementing the node count (+1) whenever an Idea-Verse comet is ingested into the cube via `spawnIngestedIdeaNode()`.
+  - Count reflects the total number of active nodes inside the cube (evidence shards + ingested idea nodes).
+- **Transverse Comets & High-Priority Click Interception**:
+  - Re-engineered `spawnComet()` with a transverse sweep across the viewing volume ($X = \pm 38 \dots 63$ to opposite side, $Z = -15 \dots +45$), eliminating sluggish head-on crawling along the camera Z-axis.
+  - Enlarged invisible click `hitSphere` from radius 1.4 to 2.4; tagged `nucleus`, `innerPoint`, and `tail` with `userData.isComet = true; userData.parentGroup = cometGroup;`.
+  - Prioritized comet hits in `onMouseDown` raycasting over background cube panels and red nodes.
+  - Increased drag cancellation tolerance from 5px to 16px for moving comets in `onMouseUp`, preventing hand jitter from cancelling comet clicks.
+- **Stable Bounded Fluid Viscosity Damping**:
+  - Repaired viscosity damping formula: replaced `0.978 / Math.max(0.2, viscosity)` (which caused velocity explosion to $10^{10}$ and particle disappearance at low viscosity, and instant freeze at high viscosity) with `Math.max(0.92, Math.min(0.992, 1.0 - (0.018 * viscosity)))`.
+  - Added a defensive velocity safety cap (`curSpeedSq > 0.09` -> cap to 0.3) to guarantee particles never blow away or get erased when moving the viscosity slider down and back up.
+- **Four-Mirror SHA-256 Parity**:
+  - All 3 visualizer mirrors and brain artifact verified with identical SHA-256 `D1D88F03D9428201C4AAC08B877D01E27F2DDA4B9C4999E9E9FD8043C800A8C9`.
+
