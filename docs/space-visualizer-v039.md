@@ -1139,4 +1139,22 @@ All 10 milestone rows across the 3D Space Visualizer roadmap are now **100% COMP
 - **Four-Mirror SHA-256 Parity**:
   - All 3 visualizer mirrors and brain artifact verified with identical SHA-256 `47962CE6392B5D1417ACF38F66CDC71625937B8B5EAB7930F31EBB452F9F676E`.
 
+### 18.18 Fast Comet Modal Close Lighting & Tag Balance, Central Sun Hit Sphere & Fallback, and Human Pill Cyan Theme (`v043.16` / `v043.17`)
+- **Fast-Moving Comet Modal Close Lighting & Reliable Click Closure**:
+  - Re-engineered `#close-comet-modal-btn` on `#comet-info-modal` with high-visibility purple illumination (`text-purple-200 hover:text-white border-purple-400/80 hover:border-purple-200 bg-purple-950/90 hover:bg-purple-600 focus:bg-purple-600 focus:ring-2 focus:ring-purple-300 shadow hover:shadow-[0_0_22px_rgba(179,136,255,0.95)]`).
+  - Added explicit `type="button"`, `pointer-events-auto`, and inline `event.stopPropagation(); closeCometModal();` to both the primary close button and the modal Dismiss button.
+  - Attached explicit click listener in `setupUI()` with `e.preventDefault()` and `e.stopPropagation()`.
+  - Resolved missing closing `</div>` tag on `#comet-info-modal` container, restoring complete DOM structural integrity and preventing subsequent `<script>` elements from being parsed as children of the modal overlay.
+- **Central Sun Core Hit Target Sphere & Ray Distance Fallback**:
+  - Added dedicated invisible collision sphere `sunHitSphere` (`THREE.SphereGeometry(1.85, 24, 24)`, `transparent: true, opacity: 0.0, depthWrite: false, side: THREE.DoubleSide`) to `sunGroup` with `userData.isSunCore = true`, ensuring generous 3D intersection volume across all angles regardless of wireframe gaps.
+  - In `onMouseDown`, called `cubeGroup.updateMatrixWorld(true)` and `sunGroup.updateMatrixWorld(true)` prior to raycasting, and computed direct ray-to-sun distance `raycaster.ray.distanceToPoint(sunWorldPos) <= 1.85` to give immediate priority to the Sun when clicking its glowing coronal aura.
+  - In `onMouseUp`, expanded drag threshold tolerance to 24px for Sun clicks, and added a release fallback check: if `pendingClickObject` was null on mousedown, a clean click release within 20px drag pointing at the Sun center automatically opens `#solar-core-graph-modal`.
+  - In `onMouseMove`, added `distToSun <= 1.85` check to immediately switch cursor to `pointer` when hovering over the Sun's coronal volume.
+- **Human Executive Pill Button Theme Alignment**:
+  - Converted `#btn-human-dock` in the bottom HUD dock to cyan styling (`bg-cyan-950/80 border-cyan-500/60 text-cyan-300 hover:bg-cyan-900 focus:ring-cyan-400` with cyan indicator dot `bg-cyan-400`).
+  - Converted `#btn-human-pill` in the Agent Chamber to matching cyan theme (`border-cyan-500/30`, `text-cyan-400`, `bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-300 border-cyan-400/40`), reserving amber/gold, purple, and emerald exclusively for the autonomous agents (Roy, Ava, Guz).
+- **Four-Mirror SHA-256 Parity**:
+  - All 3 visualizer mirrors and brain artifact verified with identical SHA-256 `7DA0138E4468EA9F3087CCC3EB95FBD7FF05EDABA2F6819667FDC450B0A8399D`.
+
+
 
