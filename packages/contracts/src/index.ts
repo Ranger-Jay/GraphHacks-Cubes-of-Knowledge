@@ -59,6 +59,13 @@ export interface UnavailableAnalysis {
   proposedActions: [];
 }
 export type AnalysisResponse = AvailableAnalysis | UnavailableAnalysis;
+/** Generated explanation is separate from authoritative graph facts and recorded voice clips. */
+export interface TalkResponse {
+  status: 'AVAILABLE'; requestId: string; persona: AgentId;
+  releaseId: string; cutId: string; revision: string; clearance: ClearanceStatus;
+  explanation: string; sourceRefIds: string[]; model: string; providerRequestId: string;
+  usage: { promptTokens: number; completionTokens: number; totalTokens: number };
+}
 export interface ApprovalRequest {
   releaseId: string;
   cutId: string;
