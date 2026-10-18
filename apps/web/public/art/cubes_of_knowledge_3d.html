@@ -1717,6 +1717,7 @@ REV: rel-wad@r2
             window.addEventListener('mousemove', onMouseMove);
             window.addEventListener('mousedown', onMouseDown);
             window.addEventListener('mouseup', onMouseUp);
+            window.addEventListener('click', onWindowClick);
             window.addEventListener('wheel', onWheel, { passive: true });
             window.addEventListener('dblclick', onDoubleClick);
             window.addEventListener('contextmenu', (e) => e.preventDefault()); // Seamless right-click 360° cosmos orbit
@@ -6274,6 +6275,25 @@ REV: rel-wad@r2
         }
         window.isSunObject = isSunObject;
 
+        // Dynamic 2D screen-space calculation for 100% reliable Solar Core hit-testing & hover feedback
+        function getSunScreenMetrics() {
+            if (!sunGroup || !camera) return null;
+            const sunWorldPos = new THREE.Vector3();
+            sunGroup.getWorldPosition(sunWorldPos);
+            const p = sunWorldPos.clone().project(camera);
+            if (p.z >= 1.0) return null; // Behind camera
+            const sx = (p.x * 0.5 + 0.5) * window.innerWidth;
+            const sy = (-(p.y * 0.5) + 0.5) * window.innerHeight;
+
+            // Dynamic visible radius from 3D corona extent (2.4 AU) projected to screen pixels
+            const edgePos = sunWorldPos.clone().add(new THREE.Vector3(2.4, 0, 0));
+            const edgeP = edgePos.project(camera);
+            const edgeX = (edgeP.x * 0.5 + 0.5) * window.innerWidth;
+            const radiusPx = Math.max(90, Math.min(280, Math.abs(edgeX - sx)));
+            return { x: sx, y: sy, radiusPx, worldPos: sunWorldPos };
+        }
+        window.getSunScreenMetrics = getSunScreenMetrics;
+
         // --- 10. Event Handlers & Fluid Mechanics ---
         function onWindowResize() {
             camera.aspect = window.innerWidth / window.innerHeight;
@@ -6359,19 +6379,31 @@ REV: rel-wad@r2
             }
 
             if (camera && !isDragging) {
-                raycaster.setFromCamera(mouse, camera);
                 let hitInteractive = false;
                 let hoveredKey = null;
 
-                if (sunGroup) {
-                    const sunWorldPos = new THREE.Vector3();
-                    sunGroup.getWorldPosition(sunWorldPos);
-                    if (raycaster.ray.distanceToPoint(sunWorldPos) <= 1.85) {
+                // Priority 1: Screen-space Sun Core Hover Check (instant feedback, zero raycast drop)
+                const sunMetrics = getSunScreenMetrics();
+                if (sunMetrics) {
+                    const distToSunPx = Math.hypot(event.clientX - sunMetrics.x, event.clientY - sunMetrics.y);
+                    if (distToSunPx <= sunMetrics.radiusPx) {
                         hitInteractive = true;
                     }
                 }
 
                 if (!hitInteractive) {
+                    raycaster.setFromCamera(mouse, camera);
+                    if (sunGroup) {
+                        const sunWorldPos = new THREE.Vector3();
+                        sunGroup.getWorldPosition(sunWorldPos);
+                        if (raycaster.ray.distanceToPoint(sunWorldPos) <= 2.2) {
+                            hitInteractive = true;
+                        }
+                    }
+                }
+
+                if (!hitInteractive) {
+                    raycaster.setFromCamera(mouse, camera);
                     const hoverHits = raycaster.intersectObjects(scene.children, true);
                     for (let h of hoverHits) {
                         const u = h.object.userData;
@@ -6435,12 +6467,20 @@ REV: rel-wad@r2
             raycaster.setFromCamera(mouse, camera);
             const intersects = raycaster.intersectObjects(scene.children, true);
 
-            // Calculate distance from ray to central Sun core
+            // Dual Check: Screen-space projection AND 3D ray distance to Sun Core
             let isRayTargetingSun = false;
-            if (sunGroup) {
+            const sunMetrics = getSunScreenMetrics();
+            if (sunMetrics) {
+                const distPx = Math.hypot(event.clientX - sunMetrics.x, event.clientY - sunMetrics.y);
+                if (distPx <= sunMetrics.radiusPx) {
+                    isRayTargetingSun = true;
+                }
+            }
+
+            if (!isRayTargetingSun && sunGroup) {
                 const sunWorldPos = new THREE.Vector3();
                 sunGroup.getWorldPosition(sunWorldPos);
-                if (raycaster.ray.distanceToPoint(sunWorldPos) <= 1.85) {
+                if (raycaster.ray.distanceToPoint(sunWorldPos) <= 2.2) {
                     isRayTargetingSun = true;
                 }
             }
@@ -6483,12 +6523,22 @@ REV: rel-wad@r2
             const clientY = (event && typeof event.clientY === 'number') ? event.clientY : previousMousePosition.y;
             const dragDist = Math.hypot(clientX - startMousePosition.x, clientY - startMousePosition.y);
 
+            // Screen-space verification for the central Sun
+            let isSunScreenTarget = false;
+            const sunMetrics = getSunScreenMetrics();
+            if (sunMetrics) {
+                const distPx = Math.hypot(clientX - sunMetrics.x, clientY - sunMetrics.y);
+                if (distPx <= sunMetrics.radiusPx) {
+                    isSunScreenTarget = true;
+                }
+            }
+
             if (pendingClickObject) {
                 const obj = pendingClickObject;
                 const isCometClick = obj.userData && obj.userData.isComet;
-                const isSunClick = isSunObject(obj) || (obj.userData && obj.userData.isSunCore) || (obj === sunGroup);
-                // Allow up to 24px drag tolerance for moving comets or central sun core, 10px for stationary nodes
-                const maxDragThreshold = (isCometClick || isSunClick) ? 24 : 10;
+                const isSunClick = isSunScreenTarget || isSunObject(obj) || (obj.userData && obj.userData.isSunCore) || (obj === sunGroup);
+                // Allow up to 32px drag tolerance for moving comets or central sun core, 12px for stationary nodes
+                const maxDragThreshold = (isCometClick || isSunClick) ? 32 : 12;
 
                 if (dragDist <= maxDragThreshold) {
                     if (isCometClick) {
@@ -6506,16 +6556,20 @@ REV: rel-wad@r2
                         openAgentChamber(key);
                     }
                 }
-            } else if (dragDist <= 20) {
-                // Fallback check on mouse up in case mousedown raycast was slightly off or missed
-                mouse.x = (clientX / window.innerWidth) * 2 - 1;
-                mouse.y = -(clientY / window.innerHeight) * 2 + 1;
-                raycaster.setFromCamera(mouse, camera);
-                if (sunGroup) {
-                    const sunWorldPos = new THREE.Vector3();
-                    sunGroup.getWorldPosition(sunWorldPos);
-                    if (raycaster.ray.distanceToPoint(sunWorldPos) <= 1.85) {
-                        openSolarCoreGraphModal();
+            } else if (dragDist <= 32) {
+                // Direct release check: if user released mouse over the Sun, open modal!
+                if (isSunScreenTarget) {
+                    openSolarCoreGraphModal();
+                } else {
+                    mouse.x = (clientX / window.innerWidth) * 2 - 1;
+                    mouse.y = -(clientY / window.innerHeight) * 2 + 1;
+                    raycaster.setFromCamera(mouse, camera);
+                    if (sunGroup) {
+                        const sunWorldPos = new THREE.Vector3();
+                        sunGroup.getWorldPosition(sunWorldPos);
+                        if (raycaster.ray.distanceToPoint(sunWorldPos) <= 2.2) {
+                            openSolarCoreGraphModal();
+                        }
                     }
                 }
             }
@@ -6531,6 +6585,22 @@ REV: rel-wad@r2
                 document.body.style.cursor = 'grab';
             }
         }
+
+        // Dedicated Global Click Handler for Central Core Sun
+        function onWindowClick(event) {
+            if (event.target.closest('.interactive')) return;
+            if (isAnyModalOpen()) return;
+            if (hasMovedDuringDrag) return; // Do not trigger if user actively tumbled/dragged the cube
+
+            const sunMetrics = getSunScreenMetrics();
+            if (sunMetrics) {
+                const distPx = Math.hypot(event.clientX - sunMetrics.x, event.clientY - sunMetrics.y);
+                if (distPx <= sunMetrics.radiusPx) {
+                    openSolarCoreGraphModal();
+                }
+            }
+        }
+        window.onWindowClick = onWindowClick;
 
         function onWheel(event) {
             cameraTargetDistance += event.deltaY * 0.006;
@@ -6610,7 +6680,21 @@ REV: rel-wad@r2
             }
         }
 
-        function onTouchEnd() {
+        function onTouchEnd(event) {
+            if (event && event.changedTouches && event.changedTouches.length > 0) {
+                const endX = event.changedTouches[0].clientX;
+                const endY = event.changedTouches[0].clientY;
+                const dist = Math.hypot(endX - touchStartX, endY - touchStartY);
+                if (dist <= 28) {
+                    const sunMetrics = getSunScreenMetrics();
+                    if (sunMetrics) {
+                        const distPx = Math.hypot(endX - sunMetrics.x, endY - sunMetrics.y);
+                        if (distPx <= sunMetrics.radiusPx) {
+                            openSolarCoreGraphModal();
+                        }
+                    }
+                }
+            }
             isDragging = false;
             dragMode = null;
         }
