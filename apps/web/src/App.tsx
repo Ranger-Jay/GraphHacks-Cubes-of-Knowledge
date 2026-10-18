@@ -42,7 +42,7 @@ export function Shell({ route, health, graph, analysis, Scene, reducedMotion, se
               <p>Open a release analysis: <a href={`#/releases/${SEEDED_RELEASE_ID}`}>{SEEDED_RELEASE_ID}</a>. Results come only from the API.</p></section>)}
           {route.name === 'release' && (
             <div className="stage-grid">
-              <SceneMount Scene={Scene} data={toSceneData(current, selected)} onSelectNode={onSelect} reducedMotion={reducedMotion} runtime={toRuntimeContext(phase ?? 'CHECKING')} />
+              <SceneMount Scene={Scene} data={toSceneData(current, selected)} onSelectNode={onSelect} reducedMotion={reducedMotion} runtime={toRuntimeContext(phase ?? 'CHECKING')} space={{ generation: generation ?? 0, analysis: current, recovered, ...(onRequery ? { onRefresh: onRequery } : {}), ...(studio ? { studio } : {}) }} />
               <div className="side-col">
                 <StatusArea phase={phase ?? 'CHECKING'} releaseId={route.releaseId} analysis={analysis} recovered={recovered} />
                 <AnalysisView releaseId={route.releaseId} result={analysis} phase={phase} />

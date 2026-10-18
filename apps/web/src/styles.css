@@ -101,3 +101,10 @@ blockquote { border-left: 3px solid #2c3442; margin: .25rem 0; padding-left: .75
 .idea-card-help { margin: .2rem 0; font-size: .8rem; opacity: .9; }
 .idea-card[data-import-phase="present"] .idea-card-status { border-left: 4px solid #3fb27f; padding-left: .5rem; }
 .idea-card[data-import-phase="unconfirmed"] .idea-card-status, .idea-card[data-import-phase="checking"] .idea-card-status { border-left: 4px dashed #ffd166; padding-left: .5rem; }
+
+/* Mechanical space mount; the final renderer remains independently replaceable. */
+.mounted-space-canvas { position: relative; width: 100%; height: min(72dvh, 800px); min-height: 500px; }
+.agent-preview { margin-top: .5rem; }
+.agent-preview h3 { margin: 0; }
+.agent-preview button { margin: .15rem; }
+.voice-caption { border-left: 3px solid #b388ff; padding-left: .5rem; }
