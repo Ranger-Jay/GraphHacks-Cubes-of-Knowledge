@@ -1117,4 +1117,26 @@ All 10 milestone rows across the 3D Space Visualizer roadmap are now **100% COMP
 - **Four-Mirror SHA-256 Parity**:
   - All 3 visualizer mirrors and brain artifact verified with identical SHA-256 `537EDBD1C64CE36346CBDAB637D9A7DE511A5DDFDD0FF553F2ECDE683997174C`.
 
+### 18.17 Solar Core Raycast Lockout Fix, Human Modal Affordance, Controls Cleanup, and Zoom Deduplication (`v043.14` / `v043.15`)
+- **Comet Diversity Architecture Preserved**:
+  - Maintained intentional dual-system comet architecture:
+    1. Periodic *Idea-Verse Metadata Flyby Comet* (`launchIdeaVerseComet`) sweeping across the upper viewing plane over 7–8.5 seconds with live HTML metadata tag (`#comet-badge`), slowing by 95% on hover and allowing interactive markdown ingestion.
+    2. Continuous *Transverse Deep-Space Background Comets* (`spawnComet`) providing high-speed celestial kinetic energy without text labels.
+- **Human Executive Modal Close Affordance & Focus Trapping**:
+  - Elevated `#human-modal` to `z-[70]` with explicit `pointer-events-auto` on open and `pointer-events-none` on close.
+  - Re-engineered `#close-human-btn` with high-contrast amber hover and keyboard focus styling (`hover:bg-amber-400 hover:text-black focus:bg-amber-400 focus:text-black focus:ring-2 focus:ring-amber-300`).
+  - Added programmatic focus management: focusing `#close-human-btn` upon opening, and restoring focus back to `#btn-human-dock` upon modal closure.
+- **Controls Section Header Cleanup**:
+  - Removed `[FOR JAY]` from Section 2 in `#guide-modal`, standardizing title to `Interactive Element Inspection Guide`.
+- **Solar Core Button & Central Sun Raycast Lockout Elimination**:
+  - Converted `#solar-core-badge` in top HUD from `<div>` to a semantic `<button type="button">` with `pointer-events-auto`.
+  - Fixed outage state toggles in `setLatticeIntegrityState` / `outage-toggle-btn`: preserved `interactive pointer-events-auto cursor-pointer` classes on `#solar-core-badge` so clicking remains active during both Fusion Active and Cold Dwarf states.
+  - Implemented `isSunObject(obj)` helper traversing object hierarchy up to `sunGroup`, and tagged all coronal rings, torus loops, prominence arcs, and Eldritch Cypher mandala discs with `userData.isSunCore = true`.
+  - Upgraded `onMouseUp` drag cancellation tolerance from 5px to 18px for central sun and comet clicks (10px for stationary nodes), eliminating accidental drag cancellation when clicking the Sun after orbit navigation.
+  - Attached explicit click event listener in `setupUI()`.
+- **Bottom Dock Zoom Deduplication**:
+  - Removed duplicate `<button id="cam-zoom-toggle">` from bottom dock, retaining single primary zoom toggle `#cube-zoom-toggle-btn` in the top HUD.
+- **Four-Mirror SHA-256 Parity**:
+  - All 3 visualizer mirrors and brain artifact verified with identical SHA-256 `47962CE6392B5D1417ACF38F66CDC71625937B8B5EAB7930F31EBB452F9F676E`.
+
 
