@@ -5,7 +5,7 @@ import { spawn } from 'node:child_process';
 import { createHash, randomBytes } from 'node:crypto';
 import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { request as httpRequest } from 'node:http';
-import { createServer } from 'node:net';
+import { createConnection, createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createApiServer } from '../../apps/api/dist/app.js';
@@ -234,6 +234,27 @@ function freePort() {
     server.listen(0, '127.0.0.1', () => { const { port } = server.address(); server.close(() => resolve(port)); });
   });
 }
+
+// Probes only the owned disposable server's loopback port. Mirrors the
+// waitUntilClosed helper in startup-read.test.mjs, with one deliberate
+// divergence: only ECONNREFUSED counts as closed (any other error retries),
+// and a timeout throws instead of proceeding, because the outage assertion
+// below requires the server to be genuinely stopped.
+function probePort(port) {
+  return new Promise(resolve => {
+    const socket = createConnection({ host: '127.0.0.1', port });
+    socket.once('connect', () => { socket.destroy(); resolve('open'); });
+    socket.once('error', error => resolve(error?.code === 'ECONNREFUSED' ? 'closed' : 'retry'));
+  });
+}
+async function waitUntilClosed(port, timeoutMs = 10000) {
+  const deadline = Date.now() + timeoutMs;
+  for (;;) {
+    if ((await probePort(port)) === 'closed') return;
+    if (Date.now() >= deadline) throw new Error(`disposable graph server on 127.0.0.1:${port} did not stop within ${timeoutMs}ms`);
+    await new Promise(resolve => setTimeout(resolve, 50));
+  }
+}
 const pythonLauncher = `
 import os, signal, sys, time
 path, port, flag = sys.argv[1:]
@@ -281,6 +302,10 @@ async function openGraph(selected) {
     active = null;
     await writeFile(flag, 'stop');
     await Promise.race([once(child, 'exit'), new Promise(resolve => { const timer = setTimeout(() => { child.kill(); resolve(); }, 8000); timer.unref(); })]);
+    // The launcher exits after signalling the server, not after the server
+    // has stopped. Wait until the owned port refuses connections, so the
+    // outage assertion observes a genuinely stopped server.
+    await waitUntilClosed(port);
   };
   await start();
   return { port, start, stop };
