@@ -150,6 +150,33 @@ test('live import reconciles on a disposable FalkorDB before success', { skip: k
   }
 });
 
+test('waitUntilClosed waits for a listening port to close and throws while it stays open', async () => {
+  const server = createServer();
+  await new Promise((resolve, reject) => { server.once('error', reject); server.listen(0, '127.0.0.1', resolve); });
+  const { port } = server.address();
+  let closed = false;
+  const closeServer = () => { if (!closed) { closed = true; server.close(); } };
+  try {
+    await assert.rejects(() => waitUntilClosed(port, 200), /did not stop/);
+    const closing = waitUntilClosed(port, 5000);
+    closeServer();
+    await closing;
+  } finally {
+    closeServer();
+  }
+});
+
+test('graph.stop() returns only after the disposable server port is closed', { skip: kind === null && process.env.CUBES_STARTUP_GRAPH !== '1' ? 'falkordblite is not installed here' : false, timeout: 60000 }, async () => {
+  if (kind === null) throw new Error('CUBES_STARTUP_GRAPH=1 but no disposable FalkorDB launcher is available');
+  const graph = await openGraph(kind);
+  try {
+    await graph.stop();
+    assert.equal(await probePort(graph.port), 'closed');
+  } finally {
+    await graph.stop();
+  }
+});
+
 function countingGateway() {
   const calls = [];
   return {
