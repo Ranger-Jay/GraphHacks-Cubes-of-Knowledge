@@ -1036,6 +1036,13 @@ All 10 milestone rows across the 3D Space Visualizer roadmap are now **100% COMP
 - **Interactive Dynamic Zoom Labels**: Updated zoom button labels to dynamically display `🔍 Zoom In [C]` when zoomed out and `🔍 Zoom Out [C]` when zoomed into the Core Sanctuary. Synchronized across `toggleCubeZoom()`, bottom dock `#cam-zoom-toggle`, and the continuous camera distance tracker in `animate()`.
 - **Three-Mirror Synchronization**: All 3 visualizer mirrors verified with identical SHA-256 `3EFFCD5CC0DBD4B83FBCC73166FA5A23468155C5A4AA6935B19802CFB9DF8789`.
 
+### 18.13 IdeaVerse Comet Flow, Guaranteed Dismissal Unpause, Window-Bounded Agent Eye Gaze, and Glowing Human Close Target (`v043.06` / `v043.07`)
+- **Increased IdeaVerse Comet Frequency**: Enhanced the background deep-space comet spawn probability in `animate()` from `0.016` to `0.045` and increased max concurrent cosmic comets from 3 to 5. Added an immediate spawn trigger whenever `comets.length === 0`, ensuring a fresh cosmic idea traverses the celestial cosmos every ~15–25 seconds while keeping the camera flyby comet sequence (`nextFlybyAutoTime`) distinct and untouched.
+- **Guaranteed Comet Motion on Dismissal**: Resolved the issue where comets remained frozen in place after being intercepted and dismissed. Implemented an explicit sweep across all active comets in `closeCometModal()` and `closeModals()` (`for (let i = 0; i < comets.length; i++) comets[i].userData.paused = false; IdeaVerseCometState.paused = false; activeComet = null;`), guaranteeing that dismissed comets smoothly resume their celestial flight path.
+- **Window-Bounded Agent Pupil & Head Tracking**: Enhanced the 2D canvas face rig in `renderAgentFaceRig()` with window-border bounds checking (`isMouseInsideWindow`). When the mouse cursor is inside `#agent-chamber`'s bounding rectangle, the agent's pupils and head smoothly track cursor coordinates with `0.18` lerp damping. When the cursor exits the chamber, the gaze smoothly re-centers forward to attentively face the user and the Company Cube with natural, subtle micro-saccades (`microSaccadeX = Math.sin(nowMs * 0.0012) * 0.45; microSaccadeY = Math.cos(nowMs * 0.0009) * 0.25;`).
+- **Repaired Human Governance Close Target & Hover Glow**: Upgraded `#close-human-btn` in `#human-modal` with an amber glowing hover state (`hover:bg-amber-950/90 hover:border-amber-400 hover:shadow-[0_0_20px_rgba(245,158,11,0.6)] hover:scale-105 active:scale-95 cursor-pointer`) matching the Agent Chamber's close button, added `event.stopPropagation()`, and bound dedicated click dismissal handlers.
+- **Three-Mirror Synchronization**: All 3 visualizer mirrors verified with identical SHA-256 `43CF760561812CB69998B2F85AE35B2D9D564C9136A12A9CA563D554B45CD7EE`.
+
 
 
 
