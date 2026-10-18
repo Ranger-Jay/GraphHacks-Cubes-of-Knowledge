@@ -397,17 +397,26 @@
                 <span id="drawer-status-pill" class="text-[9px] px-1.5 py-0.5 rounded bg-emerald-950 text-emerald-300 border border-emerald-500/50">CONNECTED</span>
             </div>
             <div class="grid grid-cols-3 gap-1.5 text-[10px]">
-                <button id="btn-drawer-ready" class="p-1.5 rounded-xl bg-cyan-950/80 border border-cyan-500/70 text-cyan-200 font-bold hover:bg-cyan-900 transition flex flex-col items-center justify-center gap-0.5">
-                    <span>🟢 READY</span>
-                    <span class="text-[9px] text-cyan-400">Protected</span>
+                <button id="btn-drawer-ready" class="p-2 rounded-xl bg-cyan-950/80 border border-cyan-500/70 text-cyan-200 font-bold hover:bg-cyan-900 transition flex flex-col items-center justify-center gap-0.5 min-h-[52px]">
+                    <div class="flex items-center justify-center gap-1.5 text-[11px] leading-tight">
+                        <span class="text-xs">🟢</span>
+                        <span class="font-bold">Ready</span>
+                    </div>
+                    <span class="text-[9px] text-cyan-400 font-medium">Protected</span>
                 </button>
-                <button id="btn-drawer-simulate" class="p-1.5 rounded-xl bg-slate-900 border border-slate-700 text-slate-400 font-bold hover:bg-amber-950 hover:text-amber-200 hover:border-amber-500 transition flex flex-col items-center justify-center gap-0.5">
-                    <span>🟡 SIMULATE</span>
-                    <span class="text-[9px] text-amber-400">Vulnerable</span>
+                <button id="btn-drawer-simulate" class="p-2 rounded-xl bg-slate-900 border border-slate-700 text-slate-400 font-bold hover:bg-amber-950 hover:text-amber-200 hover:border-amber-500 transition flex flex-col items-center justify-center gap-0.5 min-h-[52px]">
+                    <div class="flex items-center justify-center gap-1.5 text-[11px] leading-tight">
+                        <span class="text-xs">🟡</span>
+                        <span class="font-bold">Breach</span>
+                    </div>
+                    <span class="text-[9px] text-amber-400 font-medium">Vulnerable</span>
                 </button>
-                <button id="btn-drawer-outage" class="p-1.5 rounded-xl bg-slate-900 border border-slate-700 text-slate-400 font-bold hover:bg-rose-950 hover:text-rose-200 hover:border-rose-600 transition flex flex-col items-center justify-center gap-0.5">
-                    <span>🔴 OUTAGE</span>
-                    <span class="text-[9px] text-rose-400">Failing</span>
+                <button id="btn-drawer-outage" class="p-2 rounded-xl bg-slate-900 border border-slate-700 text-slate-400 font-bold hover:bg-rose-950 hover:text-rose-200 hover:border-rose-600 transition flex flex-col items-center justify-center gap-0.5 min-h-[52px]">
+                    <div class="flex items-center justify-center gap-1.5 text-[11px] leading-tight">
+                        <span class="text-xs">🔴</span>
+                        <span class="font-bold">Fail</span>
+                    </div>
+                    <span class="text-[9px] text-rose-400 font-medium">Outage</span>
                 </button>
             </div>
             <p class="text-[10px] text-slate-400 leading-relaxed">
@@ -641,15 +650,17 @@
                 <!-- Floating Holographic Stat Cards ABOVE Head -->
                 <div class="w-full flex justify-between gap-3 mb-3">
                     <!-- Card 1: Matrix CLI Rain Card -->
-                    <div class="flex-1 matrix-card rounded-xl p-2.5 text-left font-mono overflow-hidden h-20 relative border border-emerald-500/40">
-                        <div class="text-[9px] uppercase tracking-wider text-emerald-400 font-bold mb-1 flex items-center justify-between">
-                            <span>◈ CLI NEURAL STREAM</span>
-                            <span class="text-[8px] text-emerald-300">OK</span>
+                    <div class="flex-1 matrix-card rounded-xl p-2.5 text-left font-mono overflow-hidden h-20 relative border border-emerald-500/40 bg-slate-950/85 shadow-inner">
+                        <!-- Matrix Falling Glyphs Canvas (Animated Item 1) -->
+                        <canvas id="matrix-rain-canvas" class="absolute inset-0 w-full h-full pointer-events-none rounded-xl opacity-75"></canvas>
+                        
+                        <div class="relative z-10 text-[9px] uppercase tracking-wider text-emerald-400 font-bold mb-1 flex items-center justify-between drop-shadow">
+                            <span class="flex items-center gap-1">◈ <span>CLI NEURAL STREAM</span></span>
+                            <span class="text-[8px] px-1.5 py-0.2 rounded bg-emerald-950/90 text-emerald-300 border border-emerald-500/50 font-bold shadow-[0_0_8px_rgba(16,185,129,0.3)]">OK</span>
                         </div>
-                        <div id="matrix-code-stream" class="text-[8px] leading-tight text-emerald-300 opacity-90 font-mono whitespace-pre font-light select-none">
-01010100 01100001
-[AUTH: OK] SES_RW
+                        <div id="matrix-code-stream" class="relative z-10 text-[8px] leading-tight text-emerald-200/95 font-mono whitespace-pre font-light select-none drop-shadow">
 > CYPHER WITNESS
+AUTH: SES_RW [OK]
 REV: rel-wad@r2
                         </div>
                     </div>
@@ -3597,8 +3608,122 @@ REV: rel-wad@r2
         }
         window.triggerCoronalMassEjection = triggerCoronalMassEjection;
 
-        // --- 4. Three Orbiting Protector Pyramids INSIDE the Cube (Item 5: Electron Shells & Cyber Patrol) ---
+        // --- 4a. Procedural Blacklight UV Glyphs Texture for Orbiting Pyramids (Concept Art Match) ---
+        function createPyramidGlyphsTexture() {
+            const canvas = document.createElement('canvas');
+            canvas.width = 1024;
+            canvas.height = 512;
+            const ctx = canvas.getContext('2d');
+            ctx.clearRect(0, 0, 1024, 512);
+
+            // 4 Faces (Columns 0..3, each 256px wide x 512px tall)
+            for (let f = 0; f < 4; f++) {
+                const colLeft = f * 256;
+                const colCenter = colLeft + 128;
+
+                ctx.save();
+
+                // UV Blacklight with Luminous White Shadow
+                ctx.shadowColor = '#ffffff';
+                ctx.shadowBlur = 10;
+                ctx.strokeStyle = '#e879f9'; // Neon violet-magenta
+                ctx.fillStyle = '#ffffff';   // White inner core
+                ctx.lineWidth = 2.0;
+
+                // Tier 0: Triangular Face Boundary Inset
+                ctx.beginPath();
+                ctx.moveTo(colCenter, 55);
+                ctx.lineTo(colLeft + 225, 475);
+                ctx.lineTo(colLeft + 31, 475);
+                ctx.closePath();
+                ctx.stroke();
+
+                // Corner Inset Framing
+                ctx.lineWidth = 1.0;
+                ctx.beginPath();
+                ctx.moveTo(colCenter, 80);
+                ctx.lineTo(colLeft + 210, 460);
+                ctx.lineTo(colLeft + 46, 460);
+                ctx.closePath();
+                ctx.stroke();
+
+                // Tier 1: Iconic Apex Ancient Rune (Centered near apex)
+                ctx.font = 'bold 32px serif';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                const apexRunes = ['𓊽', 'ᚹ', '⌆', 'ᛉ'];
+                ctx.fillText(apexRunes[f], colCenter, 135);
+
+                // Tier 2: Binary Code Stream & Circuit Hash
+                ctx.font = 'bold 11px monospace';
+                const binaryRows = [
+                    '1010110001010',
+                    '0110100110101',
+                    '1100101001110'
+                ];
+                binaryRows.forEach((row, rIdx) => {
+                    ctx.fillText(row, colCenter, 185 + rIdx * 14);
+                });
+
+                // Tier 3: Ancient Block Runes (Large, Prominent, glowing with white shadow)
+                ctx.font = 'bold 26px serif';
+                const mainRunes = [
+                    ['ᛗ', 'ᚾ', 'ᛏ', 'ᛒ'],
+                    ['Σ', 'π', 'ᚱ', '𓊽'],
+                    ['ᛖ', 'ᛉ', 'ᛞ', 'ᛈ'],
+                    ['∢', 'ᚦ', 'ᛟ', 'ᚷ']
+                ];
+                const rowRunes = mainRunes[f];
+                const startX = colCenter - 54;
+                const stepX = 36;
+                rowRunes.forEach((r, idx) => {
+                    ctx.fillText(r, startX + idx * stepX, 260);
+                });
+
+                // Tier 4: Second Row of Concept Art Runes (Blocky Cyber Glyphs: K, E, R, etc.)
+                ctx.font = 'bold 22px monospace';
+                const subRunes = [
+                    ['ᚲ', 'ᛖ', 'ᚱ', '𓊽', 'ᚺ'],
+                    ['K', 'E', 'R', 'Δ', 'Ω'],
+                    ['ᛃ', 'ᛇ', 'ᛈ', 'ᛉ', 'ᛋ'],
+                    ['0', '1', 'F', 'B', '4']
+                ];
+                const sRunes = subRunes[f];
+                const sStartX = colCenter - 64;
+                const sStepX = 32;
+                sRunes.forEach((r, idx) => {
+                    ctx.fillText(r, sStartX + idx * sStepX, 320);
+                });
+
+                // Tier 5: Micro-Circuit Horizontal Ladder
+                ctx.lineWidth = 1.2;
+                ctx.beginPath();
+                ctx.moveTo(colLeft + 45, 360);
+                ctx.lineTo(colLeft + 211, 360);
+                ctx.moveTo(colLeft + 40, 395);
+                ctx.lineTo(colLeft + 216, 395);
+                ctx.stroke();
+
+                // Micro Circuit Text & FalkorDB Ledger Hashes
+                ctx.font = '8px monospace';
+                ctx.fillText(`[FALKORDB v4.22.0] HASH:${f}A7B`, colCenter, 375);
+                ctx.fillText('10100101 11010010 01101111', colCenter, 415);
+                ctx.fillText('SEC_CIRCUIT_PATROL // AUTH_OK', colCenter, 435);
+
+                ctx.restore();
+            }
+
+            const tex = new THREE.CanvasTexture(canvas);
+            tex.wrapS = THREE.ClampToEdgeWrapping;
+            tex.wrapT = THREE.ClampToEdgeWrapping;
+            tex.needsUpdate = true;
+            return tex;
+        }
+
+        // --- 4b. Three Orbiting Protector Pyramids INSIDE the Cube (Item 5: Electron Shells & Cyber Patrol) ---
         function createOrbitingPyramids() {
+            const pyramidGlyphsTexture = createPyramidGlyphsTexture();
+
             Object.keys(AGENTS).forEach(key => {
                 const agent = AGENTS[key];
                 const orbitGroup = new THREE.Group();
@@ -3654,9 +3779,9 @@ REV: rel-wad@r2
                 const colorHex = parseInt(agent.accent.replace('#', '0x'));
 
                 const wireMat = new THREE.LineBasicMaterial({
-                    color: colorHex,
+                    color: 0xd946ef, // Radiant UV magenta/violet wireframe as in concept art
                     transparent: true,
-                    opacity: 0.92,
+                    opacity: 0.95,
                     blending: THREE.AdditiveBlending
                 });
                 const pyrWire = new THREE.LineSegments(wireGeo, wireMat);
@@ -3665,13 +3790,26 @@ REV: rel-wad@r2
                 const faceMat = new THREE.MeshBasicMaterial({
                     color: colorHex,
                     transparent: true,
-                    opacity: 0.34,
+                    opacity: 0.28,
                     side: THREE.DoubleSide,
                     blending: THREE.AdditiveBlending
                 });
                 const pyrMesh = new THREE.Mesh(pyrGeo, faceMat);
                 pyrMesh.userData = { isPyramid: true, agentKey: key };
                 pyrRig.add(pyrMesh);
+
+                // 3b. Concept-Art Ancient / Cybernetic Glyphs Mesh (Blacklight UV with White Shadow)
+                const glyphGeo = new THREE.ConeGeometry(0.465, 0.785, 4);
+                const glyphMat = new THREE.MeshBasicMaterial({
+                    map: pyramidGlyphsTexture,
+                    transparent: true,
+                    opacity: 0.38,
+                    side: THREE.DoubleSide,
+                    blending: THREE.AdditiveBlending,
+                    depthWrite: false
+                });
+                const glyphMesh = new THREE.Mesh(glyphGeo, glyphMat);
+                pyrRig.add(glyphMesh);
 
                 // Inner Pulsing Glyph Core inside the Pyramid
                 const glyphCoreGeo = new THREE.OctahedronGeometry(0.16);
@@ -3743,6 +3881,8 @@ REV: rel-wad@r2
                     orbitLine: orbitLine,
                     wireMat: wireMat,
                     faceMat: faceMat,
+                    glyphMesh: glyphMesh,
+                    glyphMat: glyphMat,
                     glyphCore: glyphCore,
                     glyphCoreMat: glyphCoreMat,
                     crystal: crystal,
@@ -5189,6 +5329,9 @@ REV: rel-wad@r2
 
             const chamber = document.getElementById('agent-chamber');
             chamber.classList.remove('hidden');
+            if (typeof MatrixRainState !== 'undefined' && MatrixRainState.resize) {
+                MatrixRainState.resize();
+            }
 
             // Stow telemetry matrix drawer so it never overlaps or covers chamber
             if (typeof closeMatrixDrawer === 'function') {
@@ -5659,6 +5802,91 @@ REV: rel-wad@r2
                 setTimeout(triggerBlink, nextBlink);
             }
             setTimeout(triggerBlink, 1800);
+        }
+
+        // --- Matrix CLI Neural Stream Animated Canvas (Item 1) ---
+        const MatrixRainState = {
+            canvas: null,
+            ctx: null,
+            drops: [],
+            lastTime: 0,
+            chars: 'ｦｱｳｴｵｶｷｹｺｻｼｽｾｿﾀﾂﾃﾅﾆﾇﾈﾊﾋﾎﾏﾐﾑﾒﾓﾔﾕﾗﾘﾜ0123456789λΔΣΩΨΞ01AF'
+        };
+
+        function initMatrixRainCanvas() {
+            const canvas = document.getElementById('matrix-rain-canvas');
+            if (!canvas) return;
+            MatrixRainState.canvas = canvas;
+            MatrixRainState.ctx = canvas.getContext('2d');
+
+            function resize() {
+                if (!canvas) return;
+                const rect = canvas.getBoundingClientRect();
+                canvas.width = Math.round(rect.width) || 190;
+                canvas.height = Math.round(rect.height) || 80;
+                const fontSize = 10;
+                const cols = Math.floor(canvas.width / fontSize);
+                MatrixRainState.drops = [];
+                for (let i = 0; i < cols; i++) {
+                    MatrixRainState.drops[i] = Math.random() * -15;
+                }
+            }
+            resize();
+            window.addEventListener('resize', resize);
+            MatrixRainState.resize = resize;
+        }
+
+        function renderMatrixRain(nowMs) {
+            const s = MatrixRainState;
+            if (!s.ctx || !s.canvas) return;
+
+            // Only render when agent chamber is open
+            const chamber = document.getElementById('agent-chamber');
+            if (chamber && chamber.classList.contains('hidden')) return;
+
+            // Authentic ~24-30 fps terminal cadence
+            if (nowMs - s.lastTime < 38) return;
+            s.lastTime = nowMs;
+
+            const ctx = s.ctx;
+            const w = s.canvas.width;
+            const h = s.canvas.height;
+            const fontSize = 10;
+
+            // Semi-transparent fade layer to create cascading trails
+            ctx.fillStyle = 'rgba(2, 8, 6, 0.22)';
+            ctx.fillRect(0, 0, w, h);
+
+            ctx.font = 'bold 9px monospace';
+            const chars = s.chars;
+
+            for (let i = 0; i < s.drops.length; i++) {
+                const char = chars[Math.floor(Math.random() * chars.length)];
+                const x = i * fontSize + 2;
+                const y = s.drops[i] * fontSize;
+
+                // Leading glyph is bright glowing white/lime
+                ctx.fillStyle = '#ffffff';
+                ctx.shadowColor = '#4ade80';
+                ctx.shadowBlur = 6;
+                ctx.fillText(char, x, y);
+
+                // Trailing glyph in vivid neon emerald
+                if (s.drops[i] > 1) {
+                    const trailChar = chars[Math.floor(Math.random() * chars.length)];
+                    ctx.fillStyle = '#10b981';
+                    ctx.shadowColor = '#059669';
+                    ctx.shadowBlur = 3;
+                    ctx.fillText(trailChar, x, y - fontSize);
+                }
+                ctx.shadowBlur = 0;
+
+                // Reset drop to top with randomized delay once off screen
+                if (y > h + 10 && Math.random() > 0.94) {
+                    s.drops[i] = 0;
+                }
+                s.drops[i] += 0.85 + Math.random() * 0.35;
+            }
         }
 
         function renderAgentFaceRig(nowMs) {
@@ -6463,6 +6691,9 @@ REV: rel-wad@r2
         window.setLatticeIntegrityState = setLatticeIntegrityState;
 
         function setupUI() {
+            if (typeof initMatrixRainCanvas === 'function') {
+                initMatrixRainCanvas();
+            }
             document.getElementById('close-chamber-btn').addEventListener('click', closeAgentChamber);
             document.getElementById('close-evidence-btn').addEventListener('click', closeModals);
             document.getElementById('close-human-btn').addEventListener('click', closeModals);
@@ -6575,10 +6806,10 @@ REV: rel-wad@r2
                         telGravity.textContent = 'Newtonian Gravity (-18 m/s²)';
                     }
                     if (btnDrawerReady) {
-                        btnDrawerReady.className = 'p-2 rounded-xl bg-slate-900 border border-slate-700 text-slate-400 font-bold hover:bg-cyan-950 hover:text-cyan-200 transition flex items-center justify-center gap-1.5';
+                        btnDrawerReady.className = 'p-2 rounded-xl bg-slate-900 border border-slate-700 text-slate-400 font-bold hover:bg-cyan-950 hover:text-cyan-200 transition flex flex-col items-center justify-center gap-0.5 min-h-[52px]';
                     }
                     if (btnDrawerOutage) {
-                        btnDrawerOutage.className = 'p-2 rounded-xl bg-rose-950 border border-rose-500 text-rose-200 font-bold shadow-[0_0_15px_rgba(244,63,94,0.3)] transition flex items-center justify-center gap-1.5';
+                        btnDrawerOutage.className = 'p-2 rounded-xl bg-rose-950 border border-rose-500 text-rose-200 font-bold shadow-[0_0_15px_rgba(244,63,94,0.3)] transition flex flex-col items-center justify-center gap-0.5 min-h-[52px]';
                     }
                     
                     // Damaged / broken cube appearance
@@ -6689,6 +6920,10 @@ REV: rel-wad@r2
                                 b.mesh.material.opacity = 0.25;
                             });
                         }
+                        if (pyr.glyphMat) {
+                            pyr.glyphMat.opacity = 0.12;
+                            pyr.glyphMat.color.setHex(0x551015);
+                        }
                     });
 
                     // Liquid Starlight particles remain brilliantly visible and energetic during outage
@@ -6735,10 +6970,10 @@ REV: rel-wad@r2
                         telGravity.textContent = 'Zero-G Levitation';
                     }
                     if (btnDrawerReady) {
-                        btnDrawerReady.className = 'p-2 rounded-xl bg-cyan-950/80 border border-cyan-500/70 text-cyan-200 font-bold hover:bg-cyan-900 transition flex items-center justify-center gap-1.5';
+                        btnDrawerReady.className = 'p-2 rounded-xl bg-cyan-950/80 border border-cyan-500/70 text-cyan-200 font-bold hover:bg-cyan-900 transition flex flex-col items-center justify-center gap-0.5 min-h-[52px]';
                     }
                     if (btnDrawerOutage) {
-                        btnDrawerOutage.className = 'p-2 rounded-xl bg-slate-900 border border-slate-700 text-slate-400 font-bold hover:bg-rose-950 hover:text-rose-200 hover:border-rose-600 transition flex items-center justify-center gap-1.5';
+                        btnDrawerOutage.className = 'p-2 rounded-xl bg-slate-900 border border-slate-700 text-slate-400 font-bold hover:bg-rose-950 hover:text-rose-200 hover:border-rose-600 transition flex flex-col items-center justify-center gap-0.5 min-h-[52px]';
                     }
                     
                     // Restored intact cube appearance
@@ -6826,6 +7061,11 @@ REV: rel-wad@r2
                                 b.mesh.material.color.setHex(0xe0f7ff);
                                 b.mesh.material.opacity = 0.95;
                             });
+                        }
+                        if (pyr.wireMat) pyr.wireMat.color.setHex(0xd946ef);
+                        if (pyr.glyphMat) {
+                            pyr.glyphMat.opacity = 0.38;
+                            pyr.glyphMat.color.setHex(0xa855f7);
                         }
                     });
 
@@ -6972,10 +7212,30 @@ REV: rel-wad@r2
                 });
             }
 
-            // Drawer Runtime Simulator Buttons
+            // Drawer Runtime Simulator Buttons (Synchronized 2-line status alignment)
             const btnDrawerReady = document.getElementById('btn-drawer-ready');
             const btnDrawerSimulate = document.getElementById('btn-drawer-simulate');
             const btnDrawerOutage = document.getElementById('btn-drawer-outage');
+
+            function updateDrawerStateButtons(activeState) {
+                if (btnDrawerReady) {
+                    btnDrawerReady.className = activeState === 'ready'
+                        ? 'p-2 rounded-xl bg-cyan-950/80 border border-cyan-500/70 text-cyan-200 font-bold hover:bg-cyan-900 transition flex flex-col items-center justify-center gap-0.5 min-h-[52px]'
+                        : 'p-2 rounded-xl bg-slate-900 border border-slate-700 text-slate-400 font-bold hover:bg-cyan-950 hover:text-cyan-200 transition flex flex-col items-center justify-center gap-0.5 min-h-[52px]';
+                }
+                if (btnDrawerSimulate) {
+                    btnDrawerSimulate.className = activeState === 'simulate'
+                        ? 'p-2 rounded-xl bg-amber-950/80 border border-amber-500/70 text-amber-200 font-bold shadow-[0_0_15px_rgba(245,158,11,0.3)] transition flex flex-col items-center justify-center gap-0.5 min-h-[52px]'
+                        : 'p-2 rounded-xl bg-slate-900 border border-slate-700 text-slate-400 font-bold hover:bg-amber-950 hover:text-amber-200 hover:border-amber-500 transition flex flex-col items-center justify-center gap-0.5 min-h-[52px]';
+                }
+                if (btnDrawerOutage) {
+                    btnDrawerOutage.className = activeState === 'outage'
+                        ? 'p-2 rounded-xl bg-rose-950 border border-rose-500 text-rose-200 font-bold shadow-[0_0_15px_rgba(244,63,94,0.3)] transition flex flex-col items-center justify-center gap-0.5 min-h-[52px]'
+                        : 'p-2 rounded-xl bg-slate-900 border border-slate-700 text-slate-400 font-bold hover:bg-rose-950 hover:text-rose-200 hover:border-rose-600 transition flex flex-col items-center justify-center gap-0.5 min-h-[52px]';
+                }
+            }
+            window.updateDrawerStateButtons = updateDrawerStateButtons;
+
             if (btnDrawerReady) {
                 btnDrawerReady.addEventListener('click', () => {
                     if (isDatabaseOutage) {
@@ -6983,6 +7243,7 @@ REV: rel-wad@r2
                         if (outBtn) outBtn.click();
                     }
                     setLatticeIntegrityState('protected');
+                    updateDrawerStateButtons('ready');
                 });
             }
             if (btnDrawerSimulate) {
@@ -6992,6 +7253,7 @@ REV: rel-wad@r2
                         if (outBtn) outBtn.click();
                     }
                     setLatticeIntegrityState('vulnerable');
+                    updateDrawerStateButtons('simulate');
                 });
             }
             if (btnDrawerOutage) {
@@ -7001,6 +7263,7 @@ REV: rel-wad@r2
                         if (outBtn) outBtn.click();
                     }
                     setLatticeIntegrityState('failing');
+                    updateDrawerStateButtons('outage');
                 });
             }
 
@@ -7741,6 +8004,30 @@ REV: rel-wad@r2
                         item.glyphCore.scale.set(glyphPulse, glyphPulse, glyphPulse);
                     }
 
+                    // Periodic Blacklight UV Resonance Surge with White Shadow Luminescence (Concept Art Match)
+                    if (item.glyphMesh && item.glyphMesh.material) {
+                        const keyOffset = key === 'roy' ? 0.0 : (key === 'ava' ? 2.1 : 4.2);
+                        const blacklightCycle = (time * 0.75 + keyOffset) % 6.0;
+                        let uvPulse = 0.0;
+                        if (blacklightCycle < 1.7) {
+                            uvPulse = Math.sin((blacklightCycle / 1.7) * Math.PI);
+                            uvPulse = Math.pow(uvPulse, 1.4);
+                        }
+
+                        const gMat = item.glyphMesh.material;
+                        if (isDatabaseOutage) {
+                            gMat.opacity = 0.12;
+                            gMat.color.setHex(0x551015);
+                        } else {
+                            // Ambient translucent etching (0.35) -> sweeps up to brilliant blacklight UV (0.98) with glowing white shadow
+                            gMat.opacity = 0.35 + uvPulse * 0.63 + (item.hoverAmount || 0) * 0.15;
+                            const rVal = 0.65 + uvPulse * 0.35;
+                            const gVal = 0.35 + uvPulse * 0.65;
+                            const bVal = 0.98 + uvPulse * 0.02;
+                            gMat.color.setRGB(rVal, gVal, bVal);
+                        }
+                    }
+
                     // Apex Sensor Crystal strobe
                     if (item.crystalMat && !isDatabaseOutage) {
                         item.crystalMat.opacity = 0.82 + Math.sin(time * 6.5 + item.angle) * 0.18;
@@ -7765,6 +8052,11 @@ REV: rel-wad@r2
 
             // Real-Time 2D Canvas Facial Warp Rig (Jaw Split, Lip Sync, Natural Eyelid Blink & Mouse Tracking)
             renderAgentFaceRig(performance.now());
+
+            // Real-Time 2D Canvas Matrix Rain on Agent Chamber Card (Item 1)
+            if (typeof renderMatrixRain === 'function') {
+                renderMatrixRain(performance.now());
+            }
 
             // Internal Antigravity Liquid Starlight (Faceted Gem Particles with Clean Exclusions)
             if (liquidParticlesInside && liquidPositions && !reducedMotion) {
