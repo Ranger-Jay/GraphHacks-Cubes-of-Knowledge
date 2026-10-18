@@ -849,7 +849,10 @@ REV: rel-wad@r2
                     <span class="w-3 h-3 rounded-full bg-amber-400 animate-pulse shadow-[0_0_8px_#ffb300]"></span>
                     <h2 class="text-lg font-bold text-amber-300">Human Executive Governance</h2>
                 </div>
-                <button id="close-human-btn" onclick="closeHumanModal()" class="interactive text-slate-300 hover:text-white font-mono text-xs px-3 py-1.5 rounded-lg border border-slate-700/80 hover:border-amber-400 bg-slate-900/90 shadow transition-all cursor-pointer">✕ CLOSE or ESC</button>
+                <button id="close-human-btn" onclick="event.stopPropagation(); closeHumanModal();" class="interactive relative z-10 text-slate-200 hover:text-amber-200 font-mono text-xs px-3 py-1.5 rounded-xl border border-slate-700/80 hover:border-amber-400 bg-slate-900/95 hover:bg-amber-950/90 shadow hover:shadow-[0_0_20px_rgba(245,158,11,0.6)] hover:scale-105 active:scale-95 transition-all duration-200 cursor-pointer flex items-center gap-1.5" title="Close Governance [ESC]">
+                    <span>✕</span>
+                    <span>CLOSE or ESC</span>
+                </button>
             </div>
             <div class="space-y-4 text-xs font-mono text-slate-300">
                 <div class="p-3 rounded-xl bg-amber-950/40 border border-amber-500/30">
@@ -3886,7 +3889,7 @@ REV: rel-wad@r2
 
         // --- 6b. Deep-Space 3D Ideaverse Comets (Item 3 & Row 8: 360° Celestial Cosmos Vector Alignment) ---
         function spawnComet() {
-            if (comets.length > 3 || !showComets) return;
+            if (comets.length >= 5 || !showComets) return;
 
             const cometGroup = new THREE.Group();
             
@@ -4037,10 +4040,16 @@ REV: rel-wad@r2
                 modal.classList.add('hidden');
                 modal.classList.remove('flex');
             }
-            if (activeComet) {
-                activeComet.userData.paused = false;
-                activeComet = null;
+            // Guarantee all background comets resume cosmic flight
+            for (let i = 0; i < comets.length; i++) {
+                if (comets[i] && comets[i].userData) {
+                    comets[i].userData.paused = false;
+                }
             }
+            if (IdeaVerseCometState) {
+                IdeaVerseCometState.paused = false;
+            }
+            activeComet = null;
         }
 
         // Unified Celestial Consuming Ingestion Effect (Item 1 / v042.00)
@@ -5297,20 +5306,43 @@ REV: rel-wad@r2
                 const avatarCenterX = canvasRect.left + canvasRect.width / 2;
                 const avatarCenterY = canvasRect.top + canvasRect.height / 2;
 
-                // Relative normalized mouse vector across screen (-1.0 to 1.0)
-                const normX = Math.max(-1.0, Math.min(1.0, (FaceRigState.mouseScreenX - avatarCenterX) / (window.innerWidth * 0.42)));
-                const normY = Math.max(-1.0, Math.min(1.0, (FaceRigState.mouseScreenY - avatarCenterY) / (window.innerHeight * 0.42)));
+                const chamberRect = chamber.getBoundingClientRect();
+                const isMouseInsideWindow = (
+                    FaceRigState.mouseScreenX >= chamberRect.left &&
+                    FaceRigState.mouseScreenX <= chamberRect.right &&
+                    FaceRigState.mouseScreenY >= chamberRect.top &&
+                    FaceRigState.mouseScreenY <= chamberRect.bottom
+                );
 
-                // Natural Eye Gaze Tracking (pupils smoothly track the cursor across screen)
-                const targetEyeGazeX = normX * 5.2;
-                const targetEyeGazeY = normY * 3.4;
+                let targetEyeGazeX = 0;
+                let targetEyeGazeY = 0;
+                let targetHeadX = 0;
+                let targetHeadY = 0;
+                let targetHeadAngle = 0;
+
+                if (isMouseInsideWindow) {
+                    // Relative normalized mouse vector inside chamber window (-1.0 to 1.0)
+                    const normX = Math.max(-1.0, Math.min(1.0, (FaceRigState.mouseScreenX - avatarCenterX) / (canvasRect.width * 0.95)));
+                    const normY = Math.max(-1.0, Math.min(1.0, (FaceRigState.mouseScreenY - avatarCenterY) / (canvasRect.height * 0.95)));
+
+                    targetEyeGazeX = normX * 5.2;
+                    targetEyeGazeY = normY * 3.4;
+                    targetHeadX = normX * 4.6;
+                    targetHeadY = normY * 3.0;
+                    targetHeadAngle = normX * 0.034;
+                } else {
+                    // Outside agent window: eyes look forward attentively with lifelike micro-saccades
+                    const microSaccadeX = Math.sin(nowMs * 0.0012) * 0.45;
+                    const microSaccadeY = Math.cos(nowMs * 0.0009) * 0.25;
+                    targetEyeGazeX = microSaccadeX;
+                    targetEyeGazeY = microSaccadeY;
+                    targetHeadX = 0;
+                    targetHeadY = 0;
+                    targetHeadAngle = 0;
+                }
+
                 FaceRigState.gazeX += (targetEyeGazeX - FaceRigState.gazeX) * 0.18;
                 FaceRigState.gazeY += (targetEyeGazeY - FaceRigState.gazeY) * 0.18;
-
-                // Subtle Head Follow & Tilt (clear and intentional, but not exaggerated)
-                const targetHeadX = normX * 4.6;
-                const targetHeadY = normY * 3.0;
-                const targetHeadAngle = normX * 0.034; // ~1.9 degrees max tilt
                 FaceRigState.headFollowX += (targetHeadX - FaceRigState.headFollowX) * 0.06;
                 FaceRigState.headFollowY += (targetHeadY - FaceRigState.headFollowY) * 0.06;
                 FaceRigState.headAngleFollow += (targetHeadAngle - FaceRigState.headAngleFollow) * 0.06;
@@ -7495,7 +7527,7 @@ REV: rel-wad@r2
 
             // 3D Deep-Space Ideaverse Comets Lifecycle (Item 3)
             if (showComets && !reducedMotion) {
-                if (Math.random() < 0.016 && comets.length < 3) {
+                if ((Math.random() < 0.045 && comets.length < 5) || comets.length === 0) {
                     spawnComet();
                 }
 
