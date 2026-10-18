@@ -153,6 +153,8 @@ async function postTalk(request: IncomingMessage, response: ServerResponse, requ
   const first = await analysis.analyze(r['releaseId'], requestId);
   if (first === null) return sendError(response, 404, 'NOT_FOUND', 'That release is not available in this server tenant. The model was not called.', requestId);
   if (first.status !== 'AVAILABLE') return sendError(response, 503, 'GRAPH_UNAVAILABLE', 'The graph analysis is unavailable. The model was not called.', requestId);
+  if (response.destroyed) return;
+  const evidenceContext = JSON.stringify(talkContext(first));
   const controller = new AbortController();
   const abort = () => { if (!response.writableEnded) controller.abort(); };
   response.once('close', abort);
@@ -162,7 +164,7 @@ async function postTalk(request: IncomingMessage, response: ServerResponse, requ
     const fresh = await analysis.analyze(r['releaseId'], requestId);
     if (controller.signal.aborted || response.destroyed) return;
     if (fresh === null || fresh.status !== 'AVAILABLE') return sendError(response, 503, 'GRAPH_UNAVAILABLE', 'The graph is no longer available. The model explanation was discarded.', requestId);
-    if (JSON.stringify(talkContext(first)) !== JSON.stringify(talkContext(fresh))) {
+    if (evidenceContext !== JSON.stringify(talkContext(fresh))) {
       return sendError(response, 409, 'STALE_REVISION', 'The graph evidence changed. Request a fresh analysis before another explanation.', requestId);
     }
     send(response, 200, answer);
