@@ -26,27 +26,27 @@ const SPACE_SCENE_ADAPTER_STYLES = `
 }
 
 .space-scene-root *,
-.solar-core-modal-overlay * {
+.space-scene-root .solar-core-modal-overlay * {
   box-sizing: border-box;
 }
 
 .space-scene-root [hidden],
 .space-scene-root .hidden,
-.solar-core-modal-overlay[hidden],
-.solar-core-modal-overlay.hidden,
-.solar-panel-phase-overlay[hidden],
-.solar-panel-phase-overlay.hidden {
+.space-scene-root .solar-core-modal-overlay[hidden],
+.space-scene-root .solar-core-modal-overlay.hidden,
+.space-scene-root .solar-panel-phase-overlay[hidden],
+.space-scene-root .solar-panel-phase-overlay.hidden {
   display: none !important;
 }
 
-.space-scene-viewport {
+.space-scene-root .space-scene-viewport {
   position: absolute;
   inset: 0;
   z-index: 0;
   overflow: hidden;
 }
 
-.space-scene-hud {
+.space-scene-root .space-scene-hud {
   position: absolute;
   inset: 0;
   z-index: 10;
@@ -57,8 +57,8 @@ const SPACE_SCENE_ADAPTER_STYLES = `
   padding: 1rem;
 }
 
-.space-hud-topbar,
-.space-hud-bottombar {
+.space-scene-root .space-hud-topbar,
+.space-scene-root .space-hud-bottombar {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -66,14 +66,14 @@ const SPACE_SCENE_ADAPTER_STYLES = `
   pointer-events: auto;
 }
 
-.space-hud-group {
+.space-scene-root .space-hud-group {
   display: flex;
   align-items: center;
   gap: 0.5rem;
 }
 
 /* Badges */
-.space-phase-badge {
+.space-scene-root .space-phase-badge {
   display: flex;
   align-items: center;
   gap: 0.375rem;
@@ -84,14 +84,14 @@ const SPACE_SCENE_ADAPTER_STYLES = `
   box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3);
 }
 
-.space-phase-dot {
+.space-scene-root .space-phase-dot {
   width: 0.5rem;
   height: 0.5rem;
   border-radius: 9999px;
 }
 
 /* Outage Banner */
-.outage-banner {
+.space-scene-root .outage-banner {
   align-self: center;
   display: flex;
   align-items: center;
@@ -108,7 +108,7 @@ const SPACE_SCENE_ADAPTER_STYLES = `
 }
 
 /* Buttons */
-.btn-solar-core {
+.space-scene-root .btn-solar-core {
   display: flex;
   align-items: center;
   gap: 0.375rem;
@@ -122,12 +122,12 @@ const SPACE_SCENE_ADAPTER_STYLES = `
   transition: all 0.15s ease;
   cursor: pointer;
 }
-.btn-solar-core:hover {
+.space-scene-root .btn-solar-core:hover {
   background: rgba(120, 53, 15, 0.95);
   border-color: #fbbf24;
 }
 
-.btn-mute-toggle {
+.space-scene-root .btn-mute-toggle {
   padding: 0.375rem 0.75rem;
   border-radius: 0.75rem;
   background: rgba(15, 23, 42, 0.9);
@@ -138,12 +138,12 @@ const SPACE_SCENE_ADAPTER_STYLES = `
   transition: all 0.15s ease;
   cursor: pointer;
 }
-.btn-mute-toggle:hover {
+.space-scene-root .btn-mute-toggle:hover {
   color: #ffffff;
   border-color: #64748b;
 }
 
-.btn-refresh {
+.space-scene-root .btn-refresh {
   padding: 0.375rem 0.75rem;
   border-radius: 0.75rem;
   background: rgba(22, 78, 99, 0.8);
@@ -154,12 +154,14 @@ const SPACE_SCENE_ADAPTER_STYLES = `
   transition: all 0.15s ease;
   cursor: pointer;
 }
-.btn-refresh:hover {
+.space-scene-root .btn-refresh:hover {
   background: rgba(21, 94, 117, 0.9);
   border-color: #22d3ee;
 }
 
-.btn-agent-roy, .btn-agent-ava, .btn-agent-guz {
+.space-scene-root .btn-agent-roy,
+.space-scene-root .btn-agent-ava,
+.space-scene-root .btn-agent-guz {
   padding: 0.375rem 0.75rem;
   border-radius: 0.75rem;
   font-size: 0.75rem;
@@ -167,29 +169,29 @@ const SPACE_SCENE_ADAPTER_STYLES = `
   transition: all 0.15s ease;
   cursor: pointer;
 }
-.btn-agent-roy {
+.space-scene-root .btn-agent-roy {
   background: rgba(69, 26, 3, 0.8);
   border: 1px solid rgba(245, 158, 11, 0.6);
   color: #fcd34d;
 }
-.btn-agent-roy:hover { background: rgba(120, 53, 15, 0.9); }
+.space-scene-root .btn-agent-roy:hover { background: rgba(120, 53, 15, 0.9); }
 
-.btn-agent-ava {
+.space-scene-root .btn-agent-ava {
   background: rgba(59, 7, 100, 0.8);
   border: 1px solid rgba(168, 85, 247, 0.6);
   color: #d8b4fe;
 }
-.btn-agent-ava:hover { background: rgba(88, 28, 135, 0.9); }
+.space-scene-root .btn-agent-ava:hover { background: rgba(88, 28, 135, 0.9); }
 
-.btn-agent-guz {
+.space-scene-root .btn-agent-guz {
   background: rgba(6, 78, 59, 0.8);
   border: 1px solid rgba(16, 185, 129, 0.6);
   color: #6ee7b7;
 }
-.btn-agent-guz:hover { background: rgba(4, 120, 87, 0.9); }
+.space-scene-root .btn-agent-guz:hover { background: rgba(4, 120, 87, 0.9); }
 
 /* Solar Core Modal Overlay (Fixed, centered, backdrop blurred) */
-.solar-core-modal-overlay {
+.space-scene-root .solar-core-modal-overlay {
   position: fixed;
   inset: 0;
   z-index: 9999;
@@ -201,7 +203,7 @@ const SPACE_SCENE_ADAPTER_STYLES = `
   backdrop-filter: blur(8px);
 }
 
-.solar-core-modal-content {
+.space-scene-root .solar-core-modal-content {
   position: relative;
   width: 100%;
   max-width: 900px;
@@ -219,7 +221,7 @@ const SPACE_SCENE_ADAPTER_STYLES = `
   overflow: hidden;
 }
 
-.solar-panel-header {
+.space-scene-root .solar-panel-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -227,7 +229,7 @@ const SPACE_SCENE_ADAPTER_STYLES = `
   padding-bottom: 0.75rem;
 }
 
-.solar-panel-close-btn {
+.space-scene-root .solar-panel-close-btn {
   padding: 0.375rem 0.75rem;
   border-radius: 0.75rem;
   border: 1px solid #334155;
@@ -240,12 +242,12 @@ const SPACE_SCENE_ADAPTER_STYLES = `
   align-items: center;
   gap: 0.375rem;
 }
-.solar-panel-close-btn:hover {
+.space-scene-root .solar-panel-close-btn:hover {
   border-color: #f59e0b;
   color: #ffffff;
 }
 
-.solar-panel-body {
+.space-scene-root .solar-panel-body {
   display: grid;
   grid-template-columns: 2fr 1fr;
   gap: 1rem;
@@ -254,12 +256,12 @@ const SPACE_SCENE_ADAPTER_STYLES = `
   min-height: 360px;
 }
 @media (max-width: 768px) {
-  .solar-panel-body {
+  .space-scene-root .solar-panel-body {
     grid-template-columns: 1fr;
   }
 }
 
-.solar-panel-svg-container {
+.space-scene-root .solar-panel-svg-container {
   background: rgba(15, 23, 42, 0.8);
   border-radius: 1rem;
   border: 1px solid #1e293b;
@@ -271,14 +273,14 @@ const SPACE_SCENE_ADAPTER_STYLES = `
   overflow: hidden;
 }
 
-.solar-panel-svg {
+.space-scene-root .solar-panel-svg {
   width: 100%;
   height: 100%;
   max-height: 420px;
   user-select: none;
 }
 
-.solar-panel-phase-overlay {
+.space-scene-root .solar-panel-phase-overlay {
   position: absolute;
   inset: 0;
   background: rgba(2, 6, 23, 0.95);
@@ -290,7 +292,7 @@ const SPACE_SCENE_ADAPTER_STYLES = `
   text-align: center;
 }
 
-.solar-panel-sidebar {
+.space-scene-root .solar-panel-sidebar {
   background: rgba(15, 23, 42, 0.6);
   border-radius: 1rem;
   border: 1px solid rgba(30, 41, 59, 0.8);
@@ -303,7 +305,7 @@ const SPACE_SCENE_ADAPTER_STYLES = `
   font-size: 0.75rem;
 }
 
-.solar-source-btn {
+.space-scene-root .solar-source-btn {
   width: 100%;
   text-align: left;
   padding: 0.5rem;
@@ -314,7 +316,7 @@ const SPACE_SCENE_ADAPTER_STYLES = `
   cursor: pointer;
   margin-bottom: 0.375rem;
 }
-.solar-source-btn:hover {
+.space-scene-root .solar-source-btn:hover {
   background: rgba(51, 65, 85, 0.8);
   border-color: #22d3ee;
 }

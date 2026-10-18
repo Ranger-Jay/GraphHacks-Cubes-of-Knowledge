@@ -5,6 +5,7 @@ import { bearerInjector, TOKEN_PATTERN } from './dev-proxy';
 
 export const OWNER_REHEARSAL_PREFIX = '/api/owner-rehearsal';
 const UPSTREAM_PREFIX = '/api/studio/ideas';
+const SESSION_ACCESS_UPSTREAM = '/api/session/access';
 
 /** An explicit operator opt-in. Missing/malformed credentials fail startup, never fall back to reader. */
 export function rehearsalTokenFrom(env: Record<string, string | undefined>): string | null {
@@ -23,6 +24,7 @@ export function rehearsalTarget(method: string | undefined, url: string | undefi
   const suffix = url.slice(OWNER_REHEARSAL_PREFIX.length);
   if (method === 'GET' && /^\/studio\/ideas(?:\/[A-Za-z0-9._~-]{1,128})?$/.test(suffix)) return `/api${suffix}`;
   if (method === 'POST' && /^\/studio\/ideas\/[A-Za-z0-9._~-]{1,128}\/(?:import|import-status)$/.test(suffix)) return `/api${suffix}`;
+  if (method === 'GET' && suffix === '/session/access') return SESSION_ACCESS_UPSTREAM;
   return null;
 }
 
@@ -75,7 +77,9 @@ export function ownerRehearsalProxy(token: string | null): Record<string, ProxyO
   return {
     [OWNER_REHEARSAL_PREFIX]: {
       target: 'http://127.0.0.1:8787', changeOrigin: false,
-      rewrite: path => path.replace(`${OWNER_REHEARSAL_PREFIX}/studio/ideas`, UPSTREAM_PREFIX),
+      rewrite: path => path === `${OWNER_REHEARSAL_PREFIX}/session/access`
+        ? SESSION_ACCESS_UPSTREAM
+        : path.replace(`${OWNER_REHEARSAL_PREFIX}/studio/ideas`, UPSTREAM_PREFIX),
       configure: bearerInjector(token),
     },
   };
