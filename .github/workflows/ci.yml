@@ -1,0 +1,62 @@
+name: Bootstrap checks
+on: [push, pull_request]
+permissions:
+  contents: read
+concurrency:
+  group: bootstrap-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  inventory:
+    runs-on: ubuntu-latest
+    outputs:
+      graph: ${{ steps.suites.outputs.graph }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: suites
+        run: |
+          python3 - <<'PY'
+          import os, re
+          from pathlib import Path
+          directory = Path('tests/graph')
+          files = [p for p in directory.iterdir() if p.is_file() and re.search(r'\.test\.(mjs|js|ts|tsx)$', p.name)] if directory.exists() else []
+          if directory.exists() and not files:
+              raise SystemExit('Graph suite exists but is empty; refusing a skipped green gate')
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
+              output.write('graph=' + ('true' if files else 'false') + '\n')
+          PY
+  bootstrap:
+    strategy:
+      matrix:
+        node: [22, 24]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+      - run: npm ci
+      - run: npm run verify
+      - name: Record scope
+        run: echo "Branch-present unit suites executed. Live graph, browser E2E and model acceptance remain separate."
+  graph-live:
+    needs: inventory
+    if: needs.inventory.outputs.graph == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: npm ci
+      - run: python -m pip install falkordblite==0.10.0
+      - run: npm run build -w @cubes/api
+      - name: Require shipped API startup and reconnect proof
+        run: CUBES_STARTUP_GRAPH=1 npm run test:api
+      - name: Real graph tests on isolated vendor server
+        run: python scripts/ci-graph-tests.py

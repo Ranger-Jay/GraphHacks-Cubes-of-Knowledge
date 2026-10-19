@@ -1,0 +1,8 @@
+{
+  "name": "@cubes/contracts",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {".": {"types": "./src/index.ts", "default": "./dist/index.js"}},
+  "scripts": {"check": "tsc --noEmit", "build": "tsc"}
+}
