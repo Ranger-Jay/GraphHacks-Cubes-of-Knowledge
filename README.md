@@ -3,7 +3,7 @@
 ## Open the working demo
 
 - **Live demo:** [Click to open the working release analysis](https://graphhacks-cubes-of-knowledge.vercel.app/#/releases/rel-wad).
-- **Demo video:** [Watch the walkthrough on YouTube](https://youtu.be/2Uja4ZloU0U).
+- **Demo video:** [Watch the walkthrough on YouTube](https://youtu.be/2Uja4ZIoU0U).
 - **Blog post:** [Read the Graph Hacks project write-up](https://www.linkedin.com/pulse/hackathon-falkordb-jay-r-gq5xe).
 
 **Click this link to open the live release analysis: [Open rel-wad — working demo](https://graphhacks-cubes-of-knowledge.vercel.app/#/releases/rel-wad).**
