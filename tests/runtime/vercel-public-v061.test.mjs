@@ -9,6 +9,7 @@ import { createApiServer } from '../../apps/api/dist/app.js';
 import { witnessedWrite, readChain } from '@cubes/graph';
 import { createPublicHandler } from '../../hosting/public-handler.mjs';
 import { prepareWitnessSnapshot } from '../../hosting/witness-snapshot.mjs';
+import { bindPublicPath, bindIdeaDetail } from '../../hosting/vercel-entry.mjs';
 
 async function serve(t, handler) {
   const server = createServer(handler);
@@ -27,21 +28,30 @@ test('hosted health is liveness only and does not create a graph connection', as
   assert.equal(calls, 0);
 });
 
-test('Vercel rewrite restores a scoped reader path and refuses ambiguous/additional route parameters', async t => {
+test('physical Vercel entrypoint binds one route regardless of rewrite/protection/caller query parameters', async t => {
   const readerToken = 'private-test-reader';
   const server = createApiServer({ sessions: { authenticate: token => token === readerToken ? { id: 'serena', kind: 'reader' } : null } });
-  const url = await serve(t, createPublicHandler({ createRuntime: async () => ({ server, readerToken }) }));
-  assert.equal((await fetch(`${url}/api/index?__cubes_path=health`)).status, 200);
-  assert.equal((await fetch(`${url}/api/health?__cubes_path=health`)).status, 200);
-  assert.equal((await fetch(`${url}/api/health?__vercel_share=test-only-transport-value`)).status, 200);
-  assert.equal((await fetch(`${url}/api/index?__cubes_path=health&x-vercel-protection-bypass=test-only-transport-value`)).status, 200);
-  assert.equal((await fetch(`${url}/api/health?__cubes_path=session%2Faccess`)).status, 404);
-  const result = await fetch(`${url}/api/index?__cubes_path=session%2Faccess`);
-  assert.equal((await result.json()).access, 'READER');
-  for (const suffix of ['__cubes_path=health&__cubes_path=session%2Faccess', '__cubes_path=health&extra=1', '__cubes_path=..%2Fapprovals']) {
-    assert.equal((await fetch(`${url}/api/index?${suffix}`)).status, 404);
+  const url = await serve(t, bindPublicPath('/api/session/access', { createRuntime: async () => ({ server, readerToken }) }));
+  for (const path of ['/api/index?__cubes_path=approvals', '/api/session/access?__vercel_share=test-only-transport-value', '/api/health?__cubes_path=session%2Faccess&__cubes_path=approvals']) {
+    const result = await fetch(url + path, { headers: { Authorization: 'Bearer owner-attempt' } });
+    assert.deepEqual(await result.json(), { access: 'READER', canReadIdeas: true, canImportIdeas: false });
   }
-  assert.equal((await fetch(`${url}/api/index?__cubes_path=approvals`, { method: 'POST' })).status, 403);
+  assert.equal((await fetch(`${url}/api/session/access`, { method: 'POST' })).status, 403);
+  assert.throws(() => bindPublicPath('/api/approvals'));
+});
+
+test('dynamic idea entrypoint refuses duplicate, traversing, or missing identifiers before dispatch', async t => {
+  let calls = 0;
+  const handler = bindIdeaDetail({ createRuntime: () => { calls++; throw new Error(); } });
+  const url = await serve(t, (request, response) => {
+    const values = new URL(request.url, 'http://test.invalid').searchParams.getAll('ideaId');
+    request.query = { ideaId: values.length > 1 ? values : values[0] };
+    return handler(request, response);
+  });
+  for (const query of ['', '?ideaId=..%2Fsecret', '?ideaId=idea-001&ideaId=idea-002']) {
+    assert.equal((await fetch(url + '/' + query)).status, 400);
+  }
+  assert.equal(calls, 0);
 });
 
 test('owner/import/approval/unknown paths cannot reach the underlying API', async t => {

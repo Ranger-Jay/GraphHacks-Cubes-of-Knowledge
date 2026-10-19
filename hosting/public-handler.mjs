@@ -13,19 +13,7 @@ export function createPublicHandler({ createRuntime, env = process.env }) {
   let pending;
   return async (request, response) => {
     const requestId = randomUUID();
-    let path = request.url ?? '';
-    // Vercel may retain the original path and append rewrite/protection transport parameters.
-    // These parameters never authorize anything; every resulting route still uses the reader allowlist.
-    const rewritten = new URL(path, 'http://internal.invalid');
-    const route = rewritten.searchParams.getAll('__cubes_path');
-    const transportKeys = new Set(['__cubes_path', '__vercel_share', '__vercel_protection_bypass', '__vercel_set_bypass_cookie', 'x-vercel-protection-bypass', 'x-vercel-set-bypass-cookie']);
-    const transportOnly = [...rewritten.searchParams.keys()].every(key => transportKeys.has(key));
-    const routedPath = route.length === 1 ? `/api/${route[0]}` : null;
-    if (transportOnly && (route.length === 0 || (routedPath !== null
-      && (rewritten.pathname === '/api/index' || rewritten.pathname === routedPath)))) {
-      path = routedPath ?? rewritten.pathname;
-      request.url = path;
-    }
+    const path = request.url ?? '';
     if (request.method === 'GET' && path === '/api/health') {
       return json(response, 200, { status: 'BOOTSTRAP', ready: false, message: 'Hosted process alive; graph readiness is separate.' });
     }
