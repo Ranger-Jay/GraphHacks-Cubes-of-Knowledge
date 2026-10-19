@@ -13,7 +13,16 @@ export function createPublicHandler({ createRuntime, env = process.env }) {
   let pending;
   return async (request, response) => {
     const requestId = randomUUID();
-    const path = request.url ?? '';
+    let path = request.url ?? '';
+    // Vercel passes the rewritten destination URL. Restore only the bounded route parameter;
+    // duplicate values or additional query fields remain invalid rather than selecting a route.
+    const rewritten = new URL(path, 'http://internal.invalid');
+    const route = rewritten.searchParams.getAll('__cubes_path');
+    if (rewritten.pathname === '/api/index' && route.length === 1
+      && [...rewritten.searchParams.keys()].every(key => key === '__cubes_path')) {
+      path = `/api/${route[0]}`;
+      request.url = path;
+    }
     if (request.method === 'GET' && path === '/api/health') {
       return json(response, 200, { status: 'BOOTSTRAP', ready: false, message: 'Hosted process alive; graph readiness is separate.' });
     }

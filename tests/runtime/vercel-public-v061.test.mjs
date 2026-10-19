@@ -27,6 +27,19 @@ test('hosted health is liveness only and does not create a graph connection', as
   assert.equal(calls, 0);
 });
 
+test('Vercel rewrite restores a scoped reader path and refuses ambiguous/additional route parameters', async t => {
+  const readerToken = 'private-test-reader';
+  const server = createApiServer({ sessions: { authenticate: token => token === readerToken ? { id: 'serena', kind: 'reader' } : null } });
+  const url = await serve(t, createPublicHandler({ createRuntime: async () => ({ server, readerToken }) }));
+  assert.equal((await fetch(`${url}/api/index?__cubes_path=health`)).status, 200);
+  const result = await fetch(`${url}/api/index?__cubes_path=session%2Faccess`);
+  assert.equal((await result.json()).access, 'READER');
+  for (const suffix of ['__cubes_path=health&__cubes_path=session%2Faccess', '__cubes_path=health&extra=1', '__cubes_path=..%2Fapprovals']) {
+    assert.equal((await fetch(`${url}/api/index?${suffix}`)).status, 404);
+  }
+  assert.equal((await fetch(`${url}/api/index?__cubes_path=approvals`, { method: 'POST' })).status, 403);
+});
+
 test('owner/import/approval/unknown paths cannot reach the underlying API', async t => {
   let calls = 0;
   const url = await serve(t, createPublicHandler({ createRuntime: () => { calls++; throw new Error(); } }));
