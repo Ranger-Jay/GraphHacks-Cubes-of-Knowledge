@@ -63,6 +63,10 @@ Graph and model credentials stay server-side. The default local proxy uses a rea
 
 ## Run locally
 
+For Vercel, use the [short hosting steps](docs/deploy-vercel.md). The hosting adapter is a public synthetic-data reader. Its Cloud credentials and existing signed witness must be configured privately before graph-backed hosting can work. Owner imports remain local.
+
+The [Cypher queries and graph algorithms](docs/graph-queries.md) document prints the actual evidence-snapshot query, named query catalog, IdeaVerse reads and guarded import statement, and clearance decision steps.
+
 Requires **Node 22.12+** (24 recommended), npm, and a reachable FalkorDB instance.
 
 ```sh
