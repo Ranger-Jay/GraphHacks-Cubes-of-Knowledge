@@ -48,6 +48,8 @@ export class SceneThreeRenderer {
   private wireframeCube: THREE.LineSegments | null = null;
   private wireframeCubeAura: THREE.LineSegments | null = null;
   private purpleFrameGroup: THREE.Group | null = null;
+  private purpleStruts: THREE.Mesh[] = [];
+  private purpleBeacons: THREE.Mesh[] = [];
   private cornerSpheres: THREE.Mesh[] = [];
   private electronBeads: Array<{ mesh: THREE.Mesh; orbitRadius: number; baseAngle: number; speed: number; tilt: THREE.Euler }> = [];
   private starfield: THREE.Points | null = null;
@@ -260,6 +262,8 @@ export class SceneThreeRenderer {
     this.purpleFrameGroup = new THREE.Group();
     this.purpleFrameGroup.userData = { isMainCube: true };
     this.cubeGroup.add(this.purpleFrameGroup);
+    this.purpleStruts = [];
+    this.purpleBeacons = [];
 
     const pSize = outerSize * 0.82; // ~5.25 inside 6.4
     const pHalf = pSize / 2;
@@ -280,11 +284,12 @@ export class SceneThreeRenderer {
       [0, pHalf, pHalf],
     ];
     xConfigs.forEach(([x, y, z]) => {
-      const strut = new THREE.Mesh(strutGeo, strutMat);
+      const strut = new THREE.Mesh(strutGeo, strutMat.clone());
       strut.rotation.z = Math.PI / 2;
       strut.position.set(x, y, z);
       strut.userData = { isMainCube: true };
       this.purpleFrameGroup?.add(strut);
+      this.purpleStruts.push(strut);
     });
 
     // 4 Y-parallel struts
@@ -295,10 +300,11 @@ export class SceneThreeRenderer {
       [pHalf, 0, pHalf],
     ];
     yConfigs.forEach(([x, y, z]) => {
-      const strut = new THREE.Mesh(strutGeo, strutMat);
+      const strut = new THREE.Mesh(strutGeo, strutMat.clone());
       strut.position.set(x, y, z);
       strut.userData = { isMainCube: true };
       this.purpleFrameGroup?.add(strut);
+      this.purpleStruts.push(strut);
     });
 
     // 4 Z-parallel struts
@@ -309,11 +315,12 @@ export class SceneThreeRenderer {
       [pHalf, pHalf, 0],
     ];
     zConfigs.forEach(([x, y, z]) => {
-      const strut = new THREE.Mesh(strutGeo, strutMat);
+      const strut = new THREE.Mesh(strutGeo, strutMat.clone());
       strut.rotation.x = Math.PI / 2;
       strut.position.set(x, y, z);
       strut.userData = { isMainCube: true };
       this.purpleFrameGroup?.add(strut);
+      this.purpleStruts.push(strut);
     });
 
     // 8 Purple Inner Corner Beacons
@@ -328,10 +335,11 @@ export class SceneThreeRenderer {
     bCoords.forEach((x) => {
       bCoords.forEach((y) => {
         bCoords.forEach((z) => {
-          const beacon = new THREE.Mesh(beaconGeo, beaconMat);
+          const beacon = new THREE.Mesh(beaconGeo, beaconMat.clone());
           beacon.position.set(x, y, z);
           beacon.userData = { isMainCube: true };
           this.purpleFrameGroup?.add(beacon);
+          this.purpleBeacons.push(beacon);
         });
       });
     });
@@ -730,10 +738,41 @@ export class SceneThreeRenderer {
       if (isOutage) {
         // Cold dwarf collapse / Crimson Outage warning
         (this.wireframeCube.material as THREE.LineBasicMaterial).color.setHex(0xe11d48);
+        (this.wireframeCube.material as THREE.LineBasicMaterial).opacity = 0.85;
+        if (this.wireframeCubeAura) {
+          (this.wireframeCubeAura.material as THREE.LineBasicMaterial).color.setHex(0x881337);
+          (this.wireframeCubeAura.material as THREE.LineBasicMaterial).opacity = 0.35;
+        }
+
+        // Mute Purple Containment Frame
+        this.purpleStruts.forEach((s) => {
+          (s.material as THREE.MeshBasicMaterial).color.setHex(0x4c1d95);
+          (s.material as THREE.MeshBasicMaterial).opacity = 0.30;
+        });
+        this.purpleBeacons.forEach((b) => {
+          (b.material as THREE.MeshBasicMaterial).color.setHex(0x581c87);
+          (b.material as THREE.MeshBasicMaterial).opacity = 0.35;
+        });
+
+        // Sun & Plasma: Collapsed Slate Dwarf
         (this.sunSphere.material as THREE.MeshBasicMaterial).color.setHex(0x334155);
         (this.innerSun.material as THREE.MeshBasicMaterial).color.setHex(0x1e293b);
-        if (this.coronaRing1) (this.coronaRing1.material as THREE.MeshBasicMaterial).color.setHex(0x334155);
-        if (this.coronaRing2) (this.coronaRing2.material as THREE.MeshBasicMaterial).color.setHex(0x1e293b);
+        if (this.sunPlasmaShroud) {
+          (this.sunPlasmaShroud.material as THREE.MeshBasicMaterial).color.setHex(0x1e293b);
+          (this.sunPlasmaShroud.material as THREE.MeshBasicMaterial).opacity = 0.25;
+        }
+        if (this.coronaRing1) {
+          (this.coronaRing1.material as THREE.MeshBasicMaterial).color.setHex(0x334155);
+          (this.coronaRing1.material as THREE.MeshBasicMaterial).opacity = 0.25;
+        }
+        if (this.coronaRing2) {
+          (this.coronaRing2.material as THREE.MeshBasicMaterial).color.setHex(0x1e293b);
+          (this.coronaRing2.material as THREE.MeshBasicMaterial).opacity = 0.20;
+        }
+        if (this.torusProminence) {
+          (this.torusProminence.material as THREE.MeshBasicMaterial).color.setHex(0x1e293b);
+          (this.torusProminence.material as THREE.MeshBasicMaterial).opacity = 0.20;
+        }
         if (this.sunLight) this.sunLight.intensity = 0.2;
         this.cornerSpheres.forEach((s) => {
           (s.material as THREE.MeshBasicMaterial).color.setHex(0xe11d48);
@@ -742,25 +781,87 @@ export class SceneThreeRenderer {
       } else if (!isReady) {
         // Checking / Blocked non-ready
         (this.wireframeCube.material as THREE.LineBasicMaterial).color.setHex(0x64748b);
+        (this.wireframeCube.material as THREE.LineBasicMaterial).opacity = 0.70;
+        if (this.wireframeCubeAura) {
+          (this.wireframeCubeAura.material as THREE.LineBasicMaterial).color.setHex(0x334155);
+          (this.wireframeCubeAura.material as THREE.LineBasicMaterial).opacity = 0.35;
+        }
+
+        // Mute Purple Containment Frame
+        this.purpleStruts.forEach((s) => {
+          (s.material as THREE.MeshBasicMaterial).color.setHex(0x64748b);
+          (s.material as THREE.MeshBasicMaterial).opacity = 0.40;
+        });
+        this.purpleBeacons.forEach((b) => {
+          (b.material as THREE.MeshBasicMaterial).color.setHex(0x94a3b8);
+          (b.material as THREE.MeshBasicMaterial).opacity = 0.45;
+        });
+
+        // Sun & Plasma: Dim amber / dormant
         (this.sunSphere.material as THREE.MeshBasicMaterial).color.setHex(0xd97706);
         (this.innerSun.material as THREE.MeshBasicMaterial).color.setHex(0x78350f);
-        if (this.coronaRing1) (this.coronaRing1.material as THREE.MeshBasicMaterial).color.setHex(0xd97706);
-        if (this.coronaRing2) (this.coronaRing2.material as THREE.MeshBasicMaterial).color.setHex(0x78350f);
+        if (this.sunPlasmaShroud) {
+          (this.sunPlasmaShroud.material as THREE.MeshBasicMaterial).color.setHex(0x78350f);
+          (this.sunPlasmaShroud.material as THREE.MeshBasicMaterial).opacity = 0.40;
+        }
+        if (this.coronaRing1) {
+          (this.coronaRing1.material as THREE.MeshBasicMaterial).color.setHex(0xd97706);
+          (this.coronaRing1.material as THREE.MeshBasicMaterial).opacity = 0.30;
+        }
+        if (this.coronaRing2) {
+          (this.coronaRing2.material as THREE.MeshBasicMaterial).color.setHex(0x78350f);
+          (this.coronaRing2.material as THREE.MeshBasicMaterial).opacity = 0.25;
+        }
+        if (this.torusProminence) {
+          (this.torusProminence.material as THREE.MeshBasicMaterial).color.setHex(0x92400e);
+          (this.torusProminence.material as THREE.MeshBasicMaterial).opacity = 0.35;
+        }
         if (this.sunLight) this.sunLight.intensity = 0.8;
         this.cornerSpheres.forEach((s) => {
           (s.material as THREE.MeshBasicMaterial).color.setHex(0x64748b);
-          (s.material as THREE.MeshBasicMaterial).opacity = 0.7;
+          (s.material as THREE.MeshBasicMaterial).opacity = 0.70;
         });
       } else {
         // Active Fusion & Electric Cyan
         (this.wireframeCube.material as THREE.LineBasicMaterial).color.setHex(0x00e5ff);
+        (this.wireframeCube.material as THREE.LineBasicMaterial).opacity = 0.95;
+        if (this.wireframeCubeAura) {
+          (this.wireframeCubeAura.material as THREE.LineBasicMaterial).color.setHex(0x0088ff);
+          (this.wireframeCubeAura.material as THREE.LineBasicMaterial).opacity = 0.75;
+        }
+
+        // Radiant Purple Containment Frame
+        this.purpleStruts.forEach((s) => {
+          (s.material as THREE.MeshBasicMaterial).color.setHex(0xc084fc);
+          (s.material as THREE.MeshBasicMaterial).opacity = 0.88;
+        });
+        this.purpleBeacons.forEach((b) => {
+          (b.material as THREE.MeshBasicMaterial).color.setHex(0xd8b4fe);
+          (b.material as THREE.MeshBasicMaterial).opacity = 0.95;
+        });
+
+        // Sun & Plasma: Incandescent Glory
         (this.sunSphere.material as THREE.MeshBasicMaterial).color.setHex(0xffb300);
         (this.innerSun.material as THREE.MeshBasicMaterial).color.setHex(0xffd54f);
-        if (this.coronaRing1) (this.coronaRing1.material as THREE.MeshBasicMaterial).color.setHex(0xffb300);
-        if (this.coronaRing2) (this.coronaRing2.material as THREE.MeshBasicMaterial).color.setHex(0xffd54f);
+        if (this.sunPlasmaShroud) {
+          (this.sunPlasmaShroud.material as THREE.MeshBasicMaterial).color.setHex(0xff6d00);
+          (this.sunPlasmaShroud.material as THREE.MeshBasicMaterial).opacity = 0.65;
+        }
+        if (this.coronaRing1) {
+          (this.coronaRing1.material as THREE.MeshBasicMaterial).color.setHex(0xffb300);
+          (this.coronaRing1.material as THREE.MeshBasicMaterial).opacity = 0.45;
+        }
+        if (this.coronaRing2) {
+          (this.coronaRing2.material as THREE.MeshBasicMaterial).color.setHex(0xff6d00);
+          (this.coronaRing2.material as THREE.MeshBasicMaterial).opacity = 0.35;
+        }
+        if (this.torusProminence) {
+          (this.torusProminence.material as THREE.MeshBasicMaterial).color.setHex(0xffe082);
+          (this.torusProminence.material as THREE.MeshBasicMaterial).opacity = 0.65;
+        }
         if (this.sunLight) this.sunLight.intensity = 2.2;
         this.cornerSpheres.forEach((s) => {
-          (s.material as THREE.MeshBasicMaterial).color.setHex(0xff1744);
+          (s.material as THREE.MeshBasicMaterial).color.setHex(0x00ffff);
           (s.material as THREE.MeshBasicMaterial).opacity = 0.95;
         });
       }
@@ -772,14 +873,25 @@ export class SceneThreeRenderer {
     // 3. Rebuild IdeaVerse Comets from snapshot.ideaIds
     this.rebuildComets(snapshot.ideaIds, isReady);
 
-    // If reduced motion is requested, render a static frame
-    if (this.reducedMotion && this.renderer && this.scene && this.camera) {
-      if (this.cubeGroup) this.cubeGroup.rotation.set(0.18, 0.28, 0);
-      if (this.disconnectedCubeGroup) this.disconnectedCubeGroup.rotation.set(-0.15, 0.22, 0);
-      this.camera.position.copy(this.cameraTargetPosition);
-      this.currentLookAt.copy(this.cameraTargetLookAt);
-      this.camera.lookAt(this.currentLookAt);
-      this.renderer.render(this.scene, this.camera);
+    // If reduced motion is requested, render a static frame with electron beads positioned statically
+    if (this.reducedMotion) {
+      this.electronBeads.forEach((bead) => {
+        const p = new THREE.Vector3(
+          Math.cos(bead.baseAngle) * bead.orbitRadius,
+          0,
+          Math.sin(bead.baseAngle) * bead.orbitRadius
+        );
+        p.applyEuler(bead.tilt);
+        bead.mesh.position.copy(p);
+      });
+      if (this.renderer && this.scene && this.camera) {
+        if (this.cubeGroup) this.cubeGroup.rotation.set(0.18, 0.28, 0);
+        if (this.disconnectedCubeGroup) this.disconnectedCubeGroup.rotation.set(-0.15, 0.22, 0);
+        this.camera.position.copy(this.cameraTargetPosition);
+        this.currentLookAt.copy(this.cameraTargetLookAt);
+        this.camera.lookAt(this.currentLookAt);
+        this.renderer.render(this.scene, this.camera);
+      }
     }
   }
 
@@ -1002,6 +1114,15 @@ export class SceneThreeRenderer {
         this.camera.position.copy(this.cameraTargetPosition);
         this.currentLookAt.copy(this.cameraTargetLookAt);
         this.camera.lookAt(this.currentLookAt);
+        this.electronBeads.forEach((bead) => {
+          const p = new THREE.Vector3(
+            Math.cos(bead.baseAngle) * bead.orbitRadius,
+            0,
+            Math.sin(bead.baseAngle) * bead.orbitRadius
+          );
+          p.applyEuler(bead.tilt);
+          bead.mesh.position.copy(p);
+        });
       }
 
       if (this.renderer && this.scene && this.camera) {
@@ -1387,6 +1508,8 @@ export class SceneThreeRenderer {
     this.wireframeCube = null;
     this.wireframeCubeAura = null;
     this.purpleFrameGroup = null;
+    this.purpleStruts = [];
+    this.purpleBeacons = [];
     this.cornerSpheres = [];
     this.electronBeads = [];
     this.starfield = null;
