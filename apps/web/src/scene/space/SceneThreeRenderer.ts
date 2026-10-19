@@ -58,7 +58,7 @@ export class SceneThreeRenderer {
   private starfieldNear: THREE.Points | null = null;
   private starLayers: THREE.Points[] = [];
 
-  // Parallax & Inertia (BRL-Style Studio Visualizer Depth)
+  // Parallax & Inertia (Dynamic Visualizer Depth)
   private mouseParallax = {
     x: 0,
     y: 0,
@@ -1260,7 +1260,7 @@ export class SceneThreeRenderer {
           this.camera.lookAt(this.currentLookAt);
         }
 
-        // Opposing Starfield Parallax Damping & Inertial Momentum (Approved BRL Style)
+        // Opposing Starfield Parallax Damping & Inertial Momentum
         if (performance.now() - this.mouseParallax.lt > 50) {
           const decay = Math.exp(-0.016 / 0.28);
           this.mouseParallax.vx *= decay;
@@ -1735,7 +1735,7 @@ export class SceneThreeRenderer {
     this.mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
     this.mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
 
-    // Opposing Inertial Parallax (Approved BRL style velocity & momentum integration)
+    // Opposing Inertial Parallax (Velocity & Momentum Integration)
     if (!this.reducedMotion) {
       const tx = this.mouse.x * 0.45;
       const ty = this.mouse.y * 0.45;
