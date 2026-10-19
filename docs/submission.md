@@ -8,16 +8,17 @@ Cubes of Knowledge turns a fictional film studio's connected evidence into an in
 
 ## Candidate
 
-Code commit: **fd71b7bcc94c417b3d3677fcb79d647cc9306ea8**.  
-Branch: **gem/visual-preservation-v054**.  
-Release review: [PR #65](https://github.com/Ranger-Jay/GraphHacks-Cubes-of-Knowledge/pull/65).
+Final reviewed code commit: **33cd3ae56428c283f6ce38ed17fefdc2b20ebada**.  
+Branch: **buddy/approved-art-integration-v058**.  
+Release review: [PR #66](https://github.com/Ranger-Jay/GraphHacks-Cubes-of-Knowledge/pull/66).
 
-The later b5b2f61 documentation commit and v056 packaging commit change docs only. Human approval, final video link and final submission remain separate from technical review.
+The visual lane is frozen at this commit. Final packaging edits are documentation only and need a separate diff review; they do not establish a new runtime verdict. Human appearance/release approval, final video link and actual submission remain separate from technical review. Earlier evidence is retained below with its original scope. The independently accepted `e05e3c56e06e2bf2efdf97b275a8fdd677ebe9d2` remains a fallback.
 
 ## Independent review
 
 | Evidence | Scope |
 | --- | --- |
+| [Claude final visual-candidate GO](https://github.com/Ranger-Jay/Hackathon-Tome-of-Knowledge/issues/2#issuecomment-6257616404) | Exact 33cd3ae tree: 349 files; typecheck/build, 198/198 web tests, 63/63 scene tests; real Chromium with software WebGL. Motion/lifecycle 6/6, outage/recovery 10/10, agent cancellation/isolation 33/33. Orbit/drag 16/17: release outside the canvas leaves drag active until a click; nonblocking for filming with drags kept inside. No paid provider call. |
 | [Claude combined GO](https://github.com/Ranger-Jay/Hackathon-Tome-of-Knowledge/issues/2#issuecomment-6250501222) | 302/302 verification, 108/108 real-graph cases, 49/49 owner journey; code fd71b7b. |
 | [Cora filming journey](https://github.com/Ranger-Jay/Hackathon-Tome-of-Knowledge/issues/2#issuecomment-6250622141) | Real headless Chrome, source highlighting, graph stop/restart, owner/reader behavior, IdeaVerse and comparison cube. Three initial harness assertions were corrected by explicit follow-up checks in that report. |
 | [Claude docs carry-forward](https://github.com/Ranger-Jay/Hackathon-Tome-of-Knowledge/issues/2#issuecomment-6251808531) | b5b2f61 is README only over fd71b7b. |

@@ -68,7 +68,7 @@ Requires **Node 22.12+** (24 recommended), npm, and a reachable FalkorDB instanc
 ```sh
 git clone https://github.com/Ranger-Jay/GraphHacks-Cubes-of-Knowledge.git
 cd GraphHacks-Cubes-of-Knowledge
-git switch gem/visual-preservation-v054
+git switch buddy/approved-art-integration-v058
 npm ci
 cp .env.example .env
 ```
@@ -83,8 +83,10 @@ Open **http://127.0.0.1:5173/#/releases/rel-wad**. Use this origin for optional 
 
 ## Verification and limits
 
-The independently reviewed code is **`fd71b7bcc94c417b3d3677fcb79d647cc9306ea8`**. Later packaging changes are documentation only and require a diff review.
+The final independently reviewed visual candidate is **`33cd3ae56428c283f6ce38ed17fefdc2b20ebada`** on `buddy/approved-art-integration-v058` ([PR #66](https://github.com/Ranger-Jay/GraphHacks-Cubes-of-Knowledge/pull/66)). [Claude's final review](https://github.com/Ranger-Jay/Hackathon-Tome-of-Knowledge/issues/2#issuecomment-6257616404) covers the combined graph-backed scene, deep-space parallax, zero-gravity particles, independent cosmos orbit and selected-agent explanations. The earlier backend and owner-rehearsal evidence below remains scoped to its recorded commits; it was not all repeated for the renderer-only final delta.
 
+- On the final candidate, typecheck, **198/198 web tests**, **63/63 scene tests** and the build passed. Independent browser checks covered outage/recovery, comparison isolation, agent cancellation and tab-return motion.
+- A known drag-release issue remains: releasing outside the canvas can leave dragging active until the next click. Keep demonstration drags inside the canvas. Final human appearance, real-GPU frame rate and other-browser behavior remain unverified by the software-WebGL review.
 - **302/302** verification tests and **108/108** real-graph cases passed in Claude's review.
 - **49/49** owner-rehearsal journey checks passed, including import/read-back, access loss, reader denial and real database stop/restart.
 - Cora independently reproduced the filming journey in real headless Chrome, including keyboard navigation, source highlighting and comparison-cube isolation.
