@@ -21,6 +21,33 @@ Built with FalkorDB, React and Three.js for the **Graph Hacks Company Brain** tr
 | **Optional explanation** | A low-cost OpenRouter text model explains scoped graph evidence. Citation ids are checked; the model cannot grant access, change clearance or approve a release. Disabled by default. |
 | **Voices** | Recorded ElevenLabs agent clips plus separate optional browser read-aloud. Audio starts muted. Outage and recovery clips follow guarded graph states. |
 
+## Graph map: where the answer comes from
+
+```mermaid
+flowchart TD
+  R["Release"] -->|CURRENT_CUT| C["Cut: current edit"]
+  C -->|USES_TRACK| T["Track"]
+  L["License"] -->|COVERS| T
+  L -->|VALID_FOR| V["Cut: licensed edit"]
+  L -->|EVIDENCED_BY| S["Source file"]
+  Q["SourceRef: exact excerpt"] -->|EXCERPT_OF| S
+  C -->|LISTED_IN| S
+```
+
+The licensed edit must match the current edit. In the default story, *Basement Hum* has evidence for Cut v3 while the release's current cut is v4: **STALE**, contributing a **GAP**. *Night Drive* has valid v4 evidence: **VERIFIED**. A track title or an approval alone cannot establish clearance.
+
+**How the agent uses FalkorDB:** the API chooses fixed, tenant-scoped query paths; the model never writes Cypher. Analysis reads one evidence snapshot from FalkorDB, checks it against the separate signed witness, then follows current cut → used tracks → covering licenses → licensed cuts and cited excerpts within that same snapshot. It verifies source hashes, excerpts and version scope before deriving the clearance. The [named query catalog](packages/graph/src/queries.ts) and [snapshot traversal](packages/graph/src/snapshot-rows.ts) show the implementation.
+
+For example, the current-cut query begins with this parameterized traversal:
+
+```cypher
+MATCH (r:Release {id: $releaseId, tenantId: $tenantId})
+      -[:CURRENT_CUT]->(c:Cut {tenantId: $tenantId})
+RETURN r.id AS releaseId, c.id AS cutId, c.version AS cutVersion
+```
+
+This shortened example illustrates the catalog's traversal; the actual query returns provenance fields too. The optional explanation receives the resulting scoped facts and citation ids, and the API rechecks current graph evidence before accepting the model response. **FalkorDB and verified source scope determine the result; generated prose explains it.** When the graph cannot be read, the system withholds the answer.
+
 ## Architecture
 
 ```mermaid
