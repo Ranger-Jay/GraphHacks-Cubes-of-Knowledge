@@ -115,6 +115,11 @@ export class SceneThreeRenderer {
   private reducedMotion = false;
   private currentSnapshot: SpaceSceneSnapshot | null = null;
 
+  // 360° Celestial Cosmos Orbit & Dual-Rotation
+  private dragMode: 'cube' | 'orbit' | null = null;
+  private cameraOrbit = { theta: 0.0, phi: 0.251 };
+  private cameraDistance = 12.903;
+
   // Bound Event Handlers for Reliable Removal
   private handleResizeBound: () => void;
   private handlePointerDownBound: (e: PointerEvent) => void;
@@ -122,6 +127,7 @@ export class SceneThreeRenderer {
   private handlePointerUpBound: (e: PointerEvent) => void;
   private handleClickBound: (e: MouseEvent) => void;
   private handleVisibilityChangeBound: () => void;
+  private handleContextMenuBound: (e: MouseEvent) => void;
 
   constructor(container: HTMLElement, callbacks: SceneThreeCallbacks) {
     this.container = container;
@@ -132,6 +138,7 @@ export class SceneThreeRenderer {
     this.handlePointerUpBound = this.handlePointerUp.bind(this);
     this.handleClickBound = this.handleClick.bind(this);
     this.handleVisibilityChangeBound = this.handleVisibilityChange.bind(this);
+    this.handleContextMenuBound = (e: MouseEvent) => e.preventDefault();
 
     this.init();
   }
@@ -182,12 +189,17 @@ export class SceneThreeRenderer {
       this.scene.add(this.cometsGroup);
 
       // Attach Listeners
-      window.addEventListener('resize', this.handleResizeBound);
-      document.addEventListener('visibilitychange', this.handleVisibilityChangeBound);
+      if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
+        window.addEventListener('resize', this.handleResizeBound);
+      }
+      if (typeof document !== 'undefined' && typeof document.addEventListener === 'function') {
+        document.addEventListener('visibilitychange', this.handleVisibilityChangeBound);
+      }
       this.canvas.addEventListener('pointerdown', this.handlePointerDownBound);
       this.canvas.addEventListener('pointermove', this.handlePointerMoveBound);
       this.canvas.addEventListener('pointerup', this.handlePointerUpBound);
       this.canvas.addEventListener('click', this.handleClickBound);
+      this.canvas.addEventListener('contextmenu', this.handleContextMenuBound);
 
       // Start Render Loop
       this.startLoop();
@@ -275,6 +287,7 @@ export class SceneThreeRenderer {
       opacity: opacity,
       blending: THREE.AdditiveBlending,
       depthWrite: false,
+      fog: false,
     });
 
     const points = new THREE.Points(geo, mat);
@@ -1233,11 +1246,17 @@ export class SceneThreeRenderer {
       const elapsed = (now - this.startTime) / 1000;
 
       if (!this.reducedMotion) {
-        // Smooth Camera Transition (Lerp towards active cube target)
+        // 360° Spherical Celestial Camera Orbit (Rotation 2: Entire 360° Cosmos)
         if (this.camera) {
           const lerpFactor = Math.min(delta * 4.0, 0.25);
-          this.camera.position.lerp(this.cameraTargetPosition, lerpFactor);
           this.currentLookAt.lerp(this.cameraTargetLookAt, lerpFactor);
+
+          const targetCamX = this.currentLookAt.x + this.cameraDistance * Math.cos(this.cameraOrbit.phi) * Math.sin(this.cameraOrbit.theta);
+          const targetCamY = this.currentLookAt.y + this.cameraDistance * Math.sin(this.cameraOrbit.phi);
+          const targetCamZ = this.currentLookAt.z + this.cameraDistance * Math.cos(this.cameraOrbit.phi) * Math.cos(this.cameraOrbit.theta);
+          this.cameraTargetPosition.set(targetCamX, targetCamY, targetCamZ);
+
+          this.camera.position.lerp(this.cameraTargetPosition, lerpFactor);
           this.camera.lookAt(this.currentLookAt);
         }
 
@@ -1531,8 +1550,12 @@ export class SceneThreeRenderer {
           if (colAttr) colAttr.needsUpdate = true;
         }
       } else if (this.camera) {
-        this.camera.position.copy(this.cameraTargetPosition);
         this.currentLookAt.copy(this.cameraTargetLookAt);
+        const targetCamX = this.currentLookAt.x + this.cameraDistance * Math.cos(this.cameraOrbit.phi) * Math.sin(this.cameraOrbit.theta);
+        const targetCamY = this.currentLookAt.y + this.cameraDistance * Math.sin(this.cameraOrbit.phi);
+        const targetCamZ = this.currentLookAt.z + this.cameraDistance * Math.cos(this.cameraOrbit.phi) * Math.cos(this.cameraOrbit.theta);
+        this.cameraTargetPosition.set(targetCamX, targetCamY, targetCamZ);
+        this.camera.position.copy(this.cameraTargetPosition);
         this.camera.lookAt(this.currentLookAt);
         this.electronBeads.forEach((bead) => {
           const p = new THREE.Vector3(
@@ -1626,6 +1649,13 @@ export class SceneThreeRenderer {
     if (this.sunGroup) this.sunGroup.updateMatrixWorld(true);
     if (this.disconnectedCubeGroup) this.disconnectedCubeGroup.updateMatrixWorld(true);
 
+    // Right-click drag OR Shift-click drag ALWAYS orbits the 360° celestial cosmos!
+    if (event.button === 2 || event.shiftKey) {
+      this.dragMode = 'orbit';
+      if (this.canvas) this.canvas.style.cursor = 'move';
+      return;
+    }
+
     this.raycaster.setFromCamera(this.mouse, this.camera);
 
     let isTargetingSun = false;
@@ -1648,6 +1678,8 @@ export class SceneThreeRenderer {
     }
 
     const hits = this.raycaster.intersectObjects(this.scene.children, true);
+    let hitInteractiveTarget = false;
+
     if (hits.length > 0) {
       const discHit = hits.find((h) => h.object.userData && h.object.userData.isDisconnectedCube);
       const mainHit = hits.find(
@@ -1663,26 +1695,36 @@ export class SceneThreeRenderer {
       if (this.cubeFocus === 'disconnected') {
         if (mainHit) {
           this.pendingClickObj = mainHit.object;
+          hitInteractiveTarget = true;
         } else if (discHit) {
           this.pendingClickObj = discHit.object;
+          hitInteractiveTarget = true;
         }
       } else {
         if (discHit) {
           this.pendingClickObj = discHit.object;
+          hitInteractiveTarget = true;
         } else if (cometHit) {
           this.pendingClickObj = cometHit.object;
+          hitInteractiveTarget = true;
         } else if (isTargetingSun) {
           this.pendingClickObj = this.sunHitSphere || this.sunGroup;
+          hitInteractiveTarget = true;
         } else if (mainHit) {
           this.pendingClickObj = mainHit.object;
+          hitInteractiveTarget = true;
         }
       }
     } else if (isTargetingSun) {
       this.pendingClickObj = this.sunHitSphere || this.sunGroup;
+      hitInteractiveTarget = true;
     }
 
+    // Left-click on cube spins cube; left-click in empty space orbits 360° celestial cosmos!
+    this.dragMode = hitInteractiveTarget ? 'cube' : 'orbit';
+
     if (this.canvas) {
-      this.canvas.style.cursor = 'grabbing';
+      this.canvas.style.cursor = this.dragMode === 'orbit' ? 'move' : 'grabbing';
     }
   }
 
@@ -1729,13 +1771,23 @@ export class SceneThreeRenderer {
       if (this.reducedMotion) return;
       const deltaX = event.clientX - this.previousMousePos.x;
       const deltaY = event.clientY - this.previousMousePos.y;
-      if (this.cubeFocus === 'main' && this.cubeGroup) {
-        this.cubeGroup.rotation.y += deltaX * 0.008;
-        this.cubeGroup.rotation.x += deltaY * 0.008;
-      } else if (this.cubeFocus === 'disconnected' && this.disconnectedCubeGroup) {
-        this.disconnectedCubeGroup.rotation.y += deltaX * 0.008;
-        this.disconnectedCubeGroup.rotation.x += deltaY * 0.008;
+
+      if (this.dragMode === 'cube') {
+        // ROTATION 1: Spin Company Cube on local axes
+        if (this.cubeFocus === 'main' && this.cubeGroup) {
+          this.cubeGroup.rotation.y += deltaX * 0.008;
+          this.cubeGroup.rotation.x += deltaY * 0.008;
+        } else if (this.cubeFocus === 'disconnected' && this.disconnectedCubeGroup) {
+          this.disconnectedCubeGroup.rotation.y += deltaX * 0.008;
+          this.disconnectedCubeGroup.rotation.x += deltaY * 0.008;
+        }
+      } else if (this.dragMode === 'orbit') {
+        // ROTATION 2: Orbit Camera 360° around Celestial Cosmos
+        this.cameraOrbit.theta -= deltaX * 0.005;
+        this.cameraOrbit.phi += deltaY * 0.005;
+        this.cameraOrbit.phi = Math.max(-1.35, Math.min(1.35, this.cameraOrbit.phi));
       }
+
       this.previousMousePos = { x: event.clientX, y: event.clientY };
       return;
     }
@@ -1854,6 +1906,7 @@ export class SceneThreeRenderer {
     }
 
     this.isDragging = false;
+    this.dragMode = null;
     this.pendingClickObj = null;
 
     if (this.canvas) {
@@ -1874,12 +1927,22 @@ export class SceneThreeRenderer {
     if (focus === 'main') {
       this.cameraTargetLookAt.copy(MAIN_CUBE_LOOK_AT);
       this.cameraTargetPosition.copy(MAIN_CUBE_CAM_POS);
+      this.cameraDistance = 12.903;
+      this.cameraOrbit.theta = 0.0;
+      this.cameraOrbit.phi = 0.251;
     } else {
       this.cameraTargetLookAt.copy(DISCONNECTED_LOOK_AT);
       this.cameraTargetPosition.copy(DISCONNECTED_CAM_POS);
+      this.cameraDistance = 8.462;
+      this.cameraOrbit.theta = 0.5605;
+      this.cameraOrbit.phi = 0.214;
     }
 
     if (this.reducedMotion && this.camera) {
+      const targetCamX = this.cameraTargetLookAt.x + this.cameraDistance * Math.cos(this.cameraOrbit.phi) * Math.sin(this.cameraOrbit.theta);
+      const targetCamY = this.cameraTargetLookAt.y + this.cameraDistance * Math.sin(this.cameraOrbit.phi);
+      const targetCamZ = this.cameraTargetLookAt.z + this.cameraDistance * Math.cos(this.cameraOrbit.phi) * Math.cos(this.cameraOrbit.theta);
+      this.cameraTargetPosition.set(targetCamX, targetCamY, targetCamZ);
       this.camera.position.copy(this.cameraTargetPosition);
       this.currentLookAt.copy(this.cameraTargetLookAt);
       this.camera.lookAt(this.currentLookAt);
@@ -1923,11 +1986,11 @@ export class SceneThreeRenderer {
       this.rafId = null;
     }
 
-    if (typeof window !== 'undefined') {
+    if (typeof window !== 'undefined' && typeof window.removeEventListener === 'function') {
       window.removeEventListener('resize', this.handleResizeBound);
     }
 
-    if (typeof document !== 'undefined') {
+    if (typeof document !== 'undefined' && typeof document.removeEventListener === 'function') {
       document.removeEventListener('visibilitychange', this.handleVisibilityChangeBound);
     }
 
@@ -1936,6 +1999,7 @@ export class SceneThreeRenderer {
       this.canvas.removeEventListener('pointermove', this.handlePointerMoveBound);
       this.canvas.removeEventListener('pointerup', this.handlePointerUpBound);
       this.canvas.removeEventListener('click', this.handleClickBound);
+      this.canvas.removeEventListener('contextmenu', this.handleContextMenuBound);
       if (this.canvas.parentNode) {
         this.canvas.parentNode.removeChild(this.canvas);
       }
