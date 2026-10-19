@@ -1,12 +1,14 @@
-import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import { useEffect, useId, useRef, useState, useSyncExternalStore } from 'react';
 import type { AgentId, AvailableAnalysis, TalkResponse } from '@cubes/contracts';
 import { requestTalk } from '../talk';
 import { focusSource } from './AnalysisView';
 import { isAudioMuted, localReadAloudVoices, readCurrentExplanation, subscribeAudioMuted } from '../scene/audio';
 
 /** Mounted only with current READY analysis, keyed by shell generation/revision. No request on mount. */
-export function TalkPanel({ analysis }: { analysis: AvailableAnalysis }) {
-  const [persona, setPersona] = useState<AgentId>('roy');
+export function TalkPanel({ analysis, agent }: { analysis: AvailableAnalysis; agent?: AgentId }) {
+  const headingId = useId();
+  const [selectedPersona, setPersona] = useState<AgentId>('roy');
+  const persona = agent ?? selectedPersona;
   const [state, setState] = useState<'idle' | 'pending' | 'done' | 'unavailable'>('idle');
   const [answer, setAnswer] = useState<TalkResponse | null>(null);
   const active = useRef<ReturnType<typeof requestTalk> | null>(null);
@@ -37,10 +39,10 @@ export function TalkPanel({ analysis }: { analysis: AvailableAnalysis }) {
     active.current = null;
     setAnswer(result); setState(result ? 'done' : 'unavailable');
   };
-  return <section className="panel talk-panel" aria-labelledby="talk-h">
-    <h2 id="talk-h">Explain this release</h2>
+  return <section className="panel talk-panel" aria-labelledby={headingId}>
+    <h2 id={headingId}>Explain this release</h2>
     <p>Ask for a text explanation of the current music-clearance evidence.</p>
-    <label>Agent style <select value={persona} disabled={state === 'pending'} onChange={e => { stopReading(); setSpeechMessage(''); setPersona(e.target.value as AgentId); setAnswer(null); setState('idle'); }}>
+    <label>Agent style <select value={persona} disabled={state === 'pending' || agent !== undefined} onChange={e => { stopReading(); setSpeechMessage(''); setPersona(e.target.value as AgentId); setAnswer(null); setState('idle'); }}>
       <option value="roy">Roy</option><option value="ava">Ava</option><option value="guz">Guz</option>
     </select></label>{' '}
     <button type="button" disabled={state === 'pending'} onClick={() => { void ask(); }}>Explain the current clearance</button>
