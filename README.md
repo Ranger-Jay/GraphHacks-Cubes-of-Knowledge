@@ -1,5 +1,17 @@
 # Cubes of Knowledge
 
+## Open the working demo
+
+**Click this link to open the live release analysis: [Open rel-wad — working demo](https://graphhacks-cubes-of-knowledge.vercel.app/#/releases/rel-wad).**
+
+The link opens the application directly at the release analysis. Results come from the live API and FalkorDB. Expect **GAP**: *Basement Hum* is **STALE** for Cut v4; *Night Drive* is **VERIFIED**. Hosted model explanations and imports are disabled.
+
+**Judges and developers:** the deployed source and current setup instructions are in the [reviewed release README](https://github.com/Ranger-Jay/GraphHacks-Cubes-of-Knowledge/blob/9dde52540f9557a58d30b1587634d27a10563052/README.md). The deployed commit is `9dde52540f9557a58d30b1587634d27a10563052`. The default branch below still contains the early scaffold; use the linked release for the working implementation.
+
+---
+
+## Earlier scaffold documentation
+
 **A company brain built on FalkorDB, with traceable decisions and persistent agent memory.**
 
 Canonical product description; implementation status and acceptance gates are recorded below.
