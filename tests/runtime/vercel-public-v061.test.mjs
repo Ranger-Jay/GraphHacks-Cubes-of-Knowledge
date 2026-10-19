@@ -32,6 +32,10 @@ test('Vercel rewrite restores a scoped reader path and refuses ambiguous/additio
   const server = createApiServer({ sessions: { authenticate: token => token === readerToken ? { id: 'serena', kind: 'reader' } : null } });
   const url = await serve(t, createPublicHandler({ createRuntime: async () => ({ server, readerToken }) }));
   assert.equal((await fetch(`${url}/api/index?__cubes_path=health`)).status, 200);
+  assert.equal((await fetch(`${url}/api/health?__cubes_path=health`)).status, 200);
+  assert.equal((await fetch(`${url}/api/health?__vercel_share=test-only-transport-value`)).status, 200);
+  assert.equal((await fetch(`${url}/api/index?__cubes_path=health&x-vercel-protection-bypass=test-only-transport-value`)).status, 200);
+  assert.equal((await fetch(`${url}/api/health?__cubes_path=session%2Faccess`)).status, 404);
   const result = await fetch(`${url}/api/index?__cubes_path=session%2Faccess`);
   assert.equal((await result.json()).access, 'READER');
   for (const suffix of ['__cubes_path=health&__cubes_path=session%2Faccess', '__cubes_path=health&extra=1', '__cubes_path=..%2Fapprovals']) {

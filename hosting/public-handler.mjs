@@ -14,13 +14,16 @@ export function createPublicHandler({ createRuntime, env = process.env }) {
   return async (request, response) => {
     const requestId = randomUUID();
     let path = request.url ?? '';
-    // Vercel passes the rewritten destination URL. Restore only the bounded route parameter;
-    // duplicate values or additional query fields remain invalid rather than selecting a route.
+    // Vercel may retain the original path and append rewrite/protection transport parameters.
+    // These parameters never authorize anything; every resulting route still uses the reader allowlist.
     const rewritten = new URL(path, 'http://internal.invalid');
     const route = rewritten.searchParams.getAll('__cubes_path');
-    if (rewritten.pathname === '/api/index' && route.length === 1
-      && [...rewritten.searchParams.keys()].every(key => key === '__cubes_path')) {
-      path = `/api/${route[0]}`;
+    const transportKeys = new Set(['__cubes_path', '__vercel_share', '__vercel_protection_bypass', '__vercel_set_bypass_cookie', 'x-vercel-protection-bypass', 'x-vercel-set-bypass-cookie']);
+    const transportOnly = [...rewritten.searchParams.keys()].every(key => transportKeys.has(key));
+    const routedPath = route.length === 1 ? `/api/${route[0]}` : null;
+    if (transportOnly && (route.length === 0 || (routedPath !== null
+      && (rewritten.pathname === '/api/index' || rewritten.pathname === routedPath)))) {
+      path = routedPath ?? rewritten.pathname;
       request.url = path;
     }
     if (request.method === 'GET' && path === '/api/health') {
