@@ -1,16 +1,26 @@
 # Cubes of Knowledge
 
-## Open the working demo
+**A source-linked studio evidence workspace built on FalkorDB.**
 
-- **Live demo:** [Click to open the working release analysis](https://graphhacks-cubes-of-knowledge.vercel.app/#/releases/rel-wad).
+## Explore the live demo
+
+- **Live demo:** [Open the interactive release analysis](https://graphhacks-cubes-of-knowledge.vercel.app/#/releases/rel-wad).
 - **Demo video:** [Watch the walkthrough on YouTube](https://youtu.be/2Uja4ZloU0U).
-- **Blog post:** [Read the Graph Hacks project write-up](https://www.linkedin.com/pulse/hackathon-falkordb-jay-r-gq5xe).
+- **Project write-up:** [Read the Graph Hacks story](https://www.linkedin.com/pulse/hackathon-falkordb-jay-r-gq5xe).
 
-**Click this link to open the live release analysis: [Open rel-wad — working demo](https://graphhacks-cubes-of-knowledge.vercel.app/#/releases/rel-wad).**
+Explore the Company Cube, inspect its Solar Core graph and follow the returned paths to source records. The red comparison cube shows a disconnected workspace. Zoom with the mouse wheel, touch pinch or **+ / −** controls; **Show both cubes** restores the overview. Audio starts muted; select **MUTED** to enable recorded voices and interaction sounds.
 
-The link opens the application directly at the release analysis. Results come from the live API and FalkorDB. Expect **GAP**: *Basement Hum* is **STALE** for Cut v4; *Night Drive* is **VERIFIED**. Hosted model explanations and imports are disabled.
+The synthetic release intentionally reports **GAP**: *Basement Hum* is **STALE** for Cut v4, while *Night Drive* is **VERIFIED**. These results come from the live API and FalkorDB, not the visual effects.
 
-**Judges and developers:** the deployed source and current setup instructions are in the [reviewed release README](https://github.com/Ranger-Jay/GraphHacks-Cubes-of-Knowledge/blob/9dde52540f9557a58d30b1587634d27a10563052/README.md). The deployed commit is `9dde52540f9557a58d30b1587634d27a10563052`. The default branch below still contains the early scaffold; use the linked release for the working implementation.
+**Hosted explanations are enabled:** select **Explain the current clearance** to request an optional explanation of the current evidence. Opening an agent does not automatically call a model. Explanations cannot change clearance or permissions. The public demo remains read-only; imports are disabled.
+
+## Production source and verification
+
+The [reviewed production implementation](https://github.com/Ranger-Jay/GraphHacks-Cubes-of-Knowledge/tree/a57bca5702863155ce24accf934e972cf0a99baf) includes the restored hosted demo and presentation updates. The current release line is [`buddy/vercel-public-demo-v061`](https://github.com/Ranger-Jay/GraphHacks-Cubes-of-Knowledge/tree/buddy/vercel-public-demo-v061). See [camera, presentation and audio behavior](https://github.com/Ranger-Jay/GraphHacks-Cubes-of-Knowledge/blob/a57bca5702863155ce24accf934e972cf0a99baf/docs/design/presentation-v064.md) and [Explain configuration and boundaries](https://github.com/Ranger-Jay/GraphHacks-Cubes-of-Knowledge/blob/a57bca5702863155ce24accf934e972cf0a99baf/docs/talker-v052.md).
+
+Validation for this implementation: **315 offline tests passed**, **15 hosted-runtime regression tests passed**, independent review completed, and hosted Node 22/24 and live-graph checks passed. Visuals, cube separation, zoom and speaker quality were also confirmed by the project owner on a real device. These checks do not establish a live model-call result.
+
+**Developers:** use the release line above for the working implementation. The default branch retains the early scaffold; its historical documentation follows.
 
 ---
 
