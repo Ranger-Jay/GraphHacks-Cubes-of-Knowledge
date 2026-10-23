@@ -70,6 +70,32 @@ const SPACE_SCENE_ADAPTER_STYLES = `
   display: flex;
   align-items: center;
   gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.space-scene-root .space-camera-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  pointer-events: auto;
+}
+.space-scene-root .space-camera-controls button {
+  min-width: 2.75rem;
+  min-height: 2.75rem;
+  padding: 0.4rem 0.65rem;
+  border: 1px solid #64748b;
+  border-radius: 0.65rem;
+  background: rgba(15, 23, 42, 0.95);
+  color: #e2e8f0;
+  cursor: pointer;
+}
+.space-scene-root .space-camera-controls button:focus-visible {
+  outline: 2px solid #67e8f9;
+  outline-offset: 2px;
+}
+@media (max-width: 600px) {
+  .space-scene-root .space-hud-topbar,
+  .space-scene-root .space-hud-bottombar { flex-wrap: wrap; }
 }
 
 /* Badges & Scene Hints */
@@ -542,6 +568,11 @@ export class SpaceSceneAdapter implements SpaceSceneInstance {
         </div>
 
         <div class="text-[10px] text-slate-500">
+          <div class="space-camera-controls" role="group" aria-label="Camera zoom controls">
+            <button type="button" class="btn-zoom-in" aria-label="Zoom in" title="Zoom in (mouse wheel up)">+</button>
+            <button type="button" class="btn-zoom-out" aria-label="Zoom out" title="Zoom out (mouse wheel down)">−</button>
+            <button type="button" class="btn-show-both">Show both cubes</button>
+          </div>
           <span class="hud-generation">Gen: 0</span>
         </div>
       </div>
@@ -588,6 +619,10 @@ export class SpaceSceneAdapter implements SpaceSceneInstance {
 
   private wireHUDControls(): void {
     if (!this.hudEl) return;
+
+    this.hudEl.querySelector<HTMLButtonElement>('.btn-zoom-in')?.addEventListener('click', () => this.threeRenderer?.zoomIn());
+    this.hudEl.querySelector<HTMLButtonElement>('.btn-zoom-out')?.addEventListener('click', () => this.threeRenderer?.zoomOut());
+    this.hudEl.querySelector<HTMLButtonElement>('.btn-show-both')?.addEventListener('click', () => this.threeRenderer?.showBothCubes());
 
     // Focus Disconnected Cube Button
     const focusDiscBtn = this.hudEl.querySelector<HTMLButtonElement>('.btn-focus-disconnected');
