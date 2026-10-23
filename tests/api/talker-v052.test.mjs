@@ -173,3 +173,33 @@ test('API reader and owner can receive a fresh graph-bound explanation; persona 
     });
   }
 });
+
+test('provider-controlled Error.name cannot leak through the API response or diagnostic log', async t => {
+  const secret = 'fixture-private-provider-key-prompt-and-body';
+  const logs = [];
+  t.mock.method(console, 'error', (...args) => logs.push(args.join(' ')));
+  const talker = talkerFromEnv(env, async () => {
+    throw Object.assign(new Error(secret), { name: secret });
+  });
+  await withApi({ talker, analysis: { async analyze() { return analysis(); } } }, async origin => {
+    const response = await post(origin);
+    assert.equal(response.status, 503);
+    assert.doesNotMatch(await response.text(), new RegExp(secret));
+    assert.doesNotMatch(logs.join('\n'), new RegExp(secret));
+  });
+});
+
+test('diagnostics retain only fixed abort, timeout, network and parse labels', async () => {
+  for (const [error, label] of [
+    [new DOMException('private abort detail', 'AbortError'), 'AbortError'],
+    [new DOMException('private timeout detail', 'TimeoutError'), 'TimeoutError'],
+    [new TypeError('private network detail'), 'TypeError'],
+    [new SyntaxError('private response text'), 'SyntaxError'],
+    [new Error('private unknown detail'), 'UnknownError'],
+    ['private non-Error value', 'UnknownError'],
+  ]) {
+    const talker = talkerFromEnv(env, async () => { throw error; });
+    await assert.rejects(talker.explain(analysis(), 'roy', new AbortController().signal),
+      { message: `The model request failed (${label}). No generated answer is shown.` });
+  }
+});
