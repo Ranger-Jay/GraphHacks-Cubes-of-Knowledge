@@ -10,7 +10,6 @@ import { findClipByAgentRole } from './scene/audioClips';
 import type { StudioSnapshot } from './studio/studioController';
 import { AgentPortrait } from './scene/AgentPortrait';
 import { AGENT_CONFIGS } from './scene/dialogue';
-import './scene/scene.css';
 
 const EMPTY_STUDIO: StudioSnapshot = { env: { phase: 'CHECKING', access: 'UNKNOWN' }, pool: { status: 'idle', overview: null, ideas: [] }, open: null };
 const noSubscribe = () => () => {};
