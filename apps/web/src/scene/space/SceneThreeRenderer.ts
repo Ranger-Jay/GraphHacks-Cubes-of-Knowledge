@@ -3,13 +3,18 @@ import type { AgentId, GraphNode, GraphEdge, SpaceSceneSnapshot } from '@cubes/c
 
 export type CubeFocus = 'main' | 'disconnected';
 
+export const MAIN_CUBE_SIZE = 6.4;
+export const DISCONNECTED_CUBE_SIZE = 4.6;
+export const MIN_CUBE_GAP = 2 * MAIN_CUBE_SIZE;
 export const MAIN_CUBE_POS = new THREE.Vector3(0, 0, 0);
 export const MAIN_CUBE_CAM_POS = new THREE.Vector3(0, 3.2, 12.5);
 export const MAIN_CUBE_LOOK_AT = new THREE.Vector3(0, 0, 0);
 
-export const DISCONNECTED_CUBE_POS = new THREE.Vector3(5.6, 0.5, -2.0);
-export const DISCONNECTED_CAM_POS = new THREE.Vector3(10.0, 2.3, 5.0);
-export const DISCONNECTED_LOOK_AT = new THREE.Vector3(5.6, 0.5, -2.0);
+// Four main-cube widths between centers leaves at least two full widths of
+// empty space even when both cubes rotate their corners toward each other.
+export const DISCONNECTED_CUBE_POS = new THREE.Vector3(4 * MAIN_CUBE_SIZE, 0.5, -2.0);
+export const DISCONNECTED_CAM_POS = DISCONNECTED_CUBE_POS.clone().add(new THREE.Vector3(4.4, 1.8, 7.0));
+export const DISCONNECTED_LOOK_AT = DISCONNECTED_CUBE_POS.clone();
 
 export interface SceneThreeCallbacks {
   onSunClick: () => void;
@@ -412,7 +417,7 @@ export class SceneThreeRenderer {
     this.cubeGroup.userData = { isMainCube: true };
     this.scene.add(this.cubeGroup);
 
-    const size = 6.4;
+    const size = MAIN_CUBE_SIZE;
     const boxGeo = new THREE.BoxGeometry(size, size, size);
     const wireGeo = new THREE.WireframeGeometry(boxGeo);
 
@@ -533,7 +538,7 @@ export class SceneThreeRenderer {
 
   private buildCornerSpheres(): void {
     if (!this.cubeGroup) return;
-    const size = 6.4;
+    const size = MAIN_CUBE_SIZE;
     const half = size / 2;
     const coords = [-half, half];
     const geo = new THREE.SphereGeometry(0.18, 16, 16);
@@ -780,7 +785,7 @@ export class SceneThreeRenderer {
     this.scene.add(this.disconnectedCubeGroup);
 
     // 1. Red Damaged Wireframe Cube (Scale ~0.72 of main cube, size 4.6)
-    const size = 4.6;
+    const size = DISCONNECTED_CUBE_SIZE;
     const boxGeo = new THREE.BoxGeometry(size, size, size);
     const wireGeo = new THREE.WireframeGeometry(boxGeo);
     const wireMat = new THREE.LineBasicMaterial({
