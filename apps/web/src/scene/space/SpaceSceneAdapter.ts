@@ -596,8 +596,10 @@ export class SpaceSceneAdapter implements SpaceSceneInstance {
           <div class="space-camera-controls" role="group" aria-label="Camera zoom controls">
             <button type="button" class="btn-zoom-in" aria-label="Zoom in" title="Zoom in (mouse wheel up)">+</button>
             <button type="button" class="btn-zoom-out" aria-label="Zoom out" title="Zoom out (mouse wheel down)">−</button>
+            <button type="button" class="btn-focus-main">Main cube</button>
             <button type="button" class="btn-show-both">Show both cubes</button>
           </div>
+          <span class="hud-camera-hint">Wheel / pinch to zoom · Drag to turn</span>
           <span class="hud-generation">Gen: 0</span>
         </div>
       </div>
@@ -648,6 +650,7 @@ export class SpaceSceneAdapter implements SpaceSceneInstance {
     this.hudEl.querySelector<HTMLButtonElement>('.btn-zoom-in')?.addEventListener('click', () => { this.threeRenderer?.zoomIn(); this.soundEffects.play('chime'); });
     this.hudEl.querySelector<HTMLButtonElement>('.btn-zoom-out')?.addEventListener('click', () => { this.threeRenderer?.zoomOut(); this.soundEffects.play('chime'); });
     this.hudEl.querySelector<HTMLButtonElement>('.btn-show-both')?.addEventListener('click', () => { this.threeRenderer?.showBothCubes(); this.soundEffects.play('chime'); });
+    this.hudEl.querySelector<HTMLButtonElement>('.btn-focus-main')?.addEventListener('click', () => this.setCubeFocus('main'));
 
     // Focus Disconnected Cube Button
     const focusDiscBtn = this.hudEl.querySelector<HTMLButtonElement>('.btn-focus-disconnected');

@@ -2070,7 +2070,6 @@ export class SceneThreeRenderer {
   }
 
   public setCubeFocus(focus: CubeFocus): void {
-    if (this.cubeFocus === focus && !this.overview) return;
     this.overview = false;
     this.cubeFocus = focus;
 
