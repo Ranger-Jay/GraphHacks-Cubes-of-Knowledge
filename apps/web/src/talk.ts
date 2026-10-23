@@ -23,7 +23,9 @@ export function isTalkResponse(v: unknown, a: AvailableAnalysis, persona: AgentI
 /** One cancelable request, no retries, no browser credentials or provider configuration. */
 export function requestTalk(a: AvailableAnalysis, persona: AgentId, fetcher: Fetcher = fetch) {
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 20_000);
+  // Hosted work has a 27s total deadline inside the 30s function limit.
+  // Keep waiting long enough to receive that bounded answer or failure.
+  const timeout = setTimeout(() => controller.abort(), 28_000);
   const result = (async (): Promise<TalkResponse | null> => {
     try {
       const response = await fetcher('/api/talk', { method: 'POST', credentials: 'omit', cache: 'no-store',
