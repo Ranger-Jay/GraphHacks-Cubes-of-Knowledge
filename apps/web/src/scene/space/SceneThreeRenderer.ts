@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import type { AgentId, GraphNode, GraphEdge, SpaceSceneSnapshot } from '@cubes/contracts';
+import { FrameLights, pyramidDetails, solarDial } from './VisualDetails.js';
 
 export type CubeFocus = 'main' | 'disconnected';
 
@@ -69,6 +70,8 @@ export class SceneThreeRenderer {
   private purpleFrameGroup: THREE.Group | null = null;
   private purpleStruts: THREE.Mesh[] = [];
   private purpleBeacons: THREE.Mesh[] = [];
+  private solarDial: THREE.Group | null = null;
+  private frameLights: FrameLights | null = null;
   private cornerSpheres: THREE.Mesh[] = [];
   private electronBeads: Array<{ mesh: THREE.Mesh; orbitRadius: number; baseAngle: number; speed: number; tilt: THREE.Euler }> = [];
   private starfield: THREE.Points | null = null;
@@ -594,6 +597,10 @@ export class SceneThreeRenderer {
     this.sunGroup = new THREE.Group();
     this.sunGroup.userData = { isMainCube: true, isSunCore: true };
     this.cubeGroup.add(this.sunGroup);
+    this.solarDial = solarDial();
+    this.sunGroup.add(this.solarDial);
+    this.frameLights = new FrameLights(MAIN_CUBE_SIZE / 2);
+    this.cubeGroup.add(this.frameLights.group);
 
     // 1. Dynamic Turbulent Plasma Mantle Wireframe
     const sunGeo = new THREE.SphereGeometry(0.96, 32, 32);
@@ -797,6 +804,9 @@ export class SceneThreeRenderer {
       group.add(ringMesh);
 
       const r = 5.2;
+      const details = pyramidDetails(ag.color, ag.id.toUpperCase());
+      details.traverse(child => { child.userData = { isMainCube: true, isPyramid: true, agentId: ag.id }; });
+      group.add(details);
       group.position.set(Math.cos(ag.angle) * r, 0, Math.sin(ag.angle) * r);
       group.userData = { isMainCube: true, isPyramid: true, agentId: ag.id, baseAngle: ag.angle };
       this.pyramidsGroup?.add(group);
@@ -946,6 +956,9 @@ export class SceneThreeRenderer {
 
   public update(snapshot: SpaceSceneSnapshot): void {
     this.currentSnapshot = snapshot;
+    // Ornament is not proof: remove its ready-state glow when current evidence is unavailable.
+    if (this.solarDial) this.solarDial.visible = snapshot.runtime.phase === 'READY';
+    if (this.frameLights) this.frameLights.group.visible = snapshot.runtime.phase === 'READY';
     this.reducedMotion = snapshot.reducedMotion;
 
     const isReady = snapshot.runtime.phase === 'READY' && snapshot.data.status === 'AVAILABLE';
@@ -1278,6 +1291,8 @@ export class SceneThreeRenderer {
       const elapsed = (now - this.startTime) / 1000;
 
       if (!this.reducedMotion) {
+        if (this.solarDial) this.solarDial.rotation.z = elapsed * 0.1;
+        this.frameLights?.update(elapsed);
         // 360° Spherical Celestial Camera Orbit (Rotation 2: Entire 360° Cosmos)
         if (this.camera) {
           const lerpFactor = Math.min(delta * 4.0, 0.25);
@@ -2078,14 +2093,15 @@ export class SceneThreeRenderer {
         child instanceof THREE.Mesh ||
         child instanceof THREE.LineSegments ||
         child instanceof THREE.Line ||
-        child instanceof THREE.Points
+        child instanceof THREE.Points ||
+        child instanceof THREE.Sprite
       ) {
         if (child.geometry) child.geometry.dispose();
         if (child.material) {
-          if (Array.isArray(child.material)) {
-            child.material.forEach((m) => m.dispose());
-          } else {
-            child.material.dispose();
+          const materials = Array.isArray(child.material) ? child.material : [child.material];
+          for (const material of materials) {
+            if ('map' in material && material.map instanceof THREE.Texture) material.map.dispose();
+            material.dispose();
           }
         }
       }
