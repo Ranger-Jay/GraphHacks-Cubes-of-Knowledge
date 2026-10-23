@@ -85,3 +85,21 @@ test('two-finger pinch zooms without selecting an object on release or cancellat
   assert.equal(state.pendingClickObj, null); assert.equal(state.isDragging, false);
   state.handlePointerCancel(pointer(1, 200)); assert.equal(state.touchPointers.size, 0);
 });
+
+test('overview agent and node picks do not get swallowed by the solar click target', () => {
+  for (const type of ['agent', 'node']) for (const angle of [0, Math.PI * 2 / 3, Math.PI * 4 / 3]) {
+    const { renderer, state } = navigation(); let selected = 0;
+    state.callbacks.onAgentClick = () => selected++;
+    state.callbacks.onNodeClick = () => selected++;
+    state.sunGroup = new THREE.Group(); state.scene.add(state.sunGroup);
+    const target = new THREE.Mesh(new THREE.SphereGeometry(0.35), new THREE.MeshBasicMaterial());
+    target.position.set(Math.cos(angle) * 5.2, 0, Math.sin(angle) * 5.2);
+    target.userData = type === 'agent' ? { isPyramid: true, agentId: 'ava' } : { isGraphNode: true, nodeId: 'actual-node' };
+    state.scene.add(target); renderer.showBothCubes(); state.camera.updateMatrixWorld(); state.scene.updateMatrixWorld(true);
+    const p = target.position.clone().project(state.camera);
+    const event = { clientX: (p.x * 0.5 + 0.5) * 800, clientY: (-p.y * 0.5 + 0.5) * 600, button: 0 };
+    state.handlePointerDown(event); state.handlePointerUp(event); state.handleClick(event);
+    assert.equal(selected, 1, `${type} angle ${angle}`);
+    target.geometry.dispose(); (target.material as THREE.Material).dispose();
+  }
+});
