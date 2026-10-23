@@ -28,30 +28,39 @@ export function createPublicHandler({ createRuntime, env = process.env }) {
     if (talk && (!env.WEB_ORIGIN || request.headers.origin !== env.WEB_ORIGIN || request.headers['sec-fetch-site'] === 'cross-site')) {
       return json(response, 403, { error: { code: 'FORBIDDEN', message: 'The request origin was refused. The model was not called.', requestId } });
     }
+    const controller = new AbortController();
+    let timer;
     try {
-      pending ??= Promise.resolve().then(createRuntime).catch(error => { pending = undefined; throw error; });
-      const runtime = await pending;
-      if (response.destroyed || request.aborted) return;
-      // Replace every caller-provided credential. This token is process-local and never returned.
-      request.headers.authorization = `Bearer ${runtime.readerToken}`;
-      await new Promise((resolve, reject) => {
-        const cleanup = () => {
-          response.removeListener('finish', done);
-          response.removeListener('close', done);
-          response.removeListener('error', failed);
-        };
-        const done = () => { cleanup(); resolve(); };
-        const failed = error => { cleanup(); reject(error); };
-        response.once('finish', done);
-        response.once('close', done);
-        response.once('error', failed);
-        try { runtime.server.emit('request', request, response); }
-        catch (error) { failed(error); }
-      });
+      const dispatch = async () => {
+        pending ??= Promise.resolve().then(createRuntime).catch(error => { pending = undefined; throw error; });
+        const runtime = await pending;
+        if (controller.signal.aborted || response.destroyed || request.aborted) return;
+        // Replace every caller-provided credential. This token never leaves the process.
+        request.headers.authorization = `Bearer ${runtime.readerToken}`;
+        await runtime.handleRequest(request, response, controller.signal);
+      };
+      if (talk) {
+        // Includes runtime setup, both graph reads and the 25s provider budget.
+        // Leave time to send a bounded failure before Vercel's 30s hard limit.
+        const deadline = new Promise(resolve => {
+          timer = setTimeout(() => {
+            controller.abort(new DOMException('Hosted talk deadline exceeded', 'TimeoutError'));
+            if (!response.headersSent && !response.destroyed) {
+              const message = 'The explanation request timed out. No generated answer is shown.';
+              console.error('talk request failed:', requestId, message);
+              json(response, 503, { error: { code: 'NOT_IMPLEMENTED', message, requestId } });
+            }
+            resolve();
+          }, 27_000);
+        });
+        await Promise.race([dispatch(), deadline]);
+      } else {
+        await dispatch();
+      }
     } catch {
       if (!response.headersSent && !response.destroyed) {
         json(response, 503, { error: { code: 'GRAPH_UNAVAILABLE', message: 'Hosted graph configuration or evidence verification is unavailable.', requestId } });
       }
-    }
+    } finally { clearTimeout(timer); }
   };
 }

@@ -2,7 +2,7 @@ import { randomBytes, timingSafeEqual } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { FalkorDB } from 'falkordb';
 import { analyzeRelease, configFromEnv, GraphClient, graphHealth } from '@cubes/graph';
-import { createApiServer } from '../apps/api/dist/app.js';
+import { createApiHandler } from '../apps/api/dist/app.js';
 import { createGraphIdeaverse } from '../apps/api/dist/ideaverse.js';
 import { talkerFromEnv } from '../apps/api/dist/talker.js';
 import { prepareWitnessSnapshot } from './witness-snapshot.mjs';
@@ -41,7 +41,7 @@ export async function createHostedRuntime(env = process.env) {
       { requestId, sourceRoot: root, evidenceKey: witness.key, witness }),
   };
   const talker = env.PUBLIC_DEMO_TALK_ENABLED === 'true' ? talkerFromEnv(env) : undefined;
-  const server = createApiServer({ sessions, status, analysis,
+  const handleRequest = createApiHandler({ sessions, status, analysis,
     ideaverse: createGraphIdeaverse(client, root, env.API_TENANT_ID), ...(talker ? { talker } : {}) });
-  return { server, readerToken };
+  return { handleRequest, readerToken };
 }
