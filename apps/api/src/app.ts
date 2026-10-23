@@ -2,7 +2,7 @@ import { createServer, type IncomingMessage, type Server, type ServerResponse } 
 import { randomUUID } from 'node:crypto';
 import type { AnalysisResponse, ApiError, ApprovalResponse, GraphStatusResponse } from '@cubes/contracts';
 import { dispatchStudio, type IdeaverseGateway } from './ideaverse.js';
-import { talkContext, type Talker } from './talker.js';
+import { talkContext, TalkUnavailable, type Talker } from './talker.js';
 
 export interface Principal {
   id: 'kanny' | 'serena' | 'roy' | 'ava' | 'guz';
@@ -155,9 +155,10 @@ async function postTalk(request: IncomingMessage, response: ServerResponse, requ
   if (first.status !== 'AVAILABLE') return sendError(response, 503, 'GRAPH_UNAVAILABLE', 'The graph analysis is unavailable. The model was not called.', requestId);
   if (response.destroyed) return;
   const evidenceContext = JSON.stringify(talkContext(first));
+  // The explanation call is bounded by the talker's own timeout, its busy
+  // guard and the provider key cap — not by this response's close event,
+  // which the hosted adapter can raise before the call has finished.
   const controller = new AbortController();
-  const abort = () => { if (!response.writableEnded) controller.abort(); };
-  response.once('close', abort);
   try {
     const answer = await talker.explain(first, r['persona'] as 'roy' | 'ava' | 'guz', controller.signal);
     // A completion cannot turn old evidence into a current answer after an outage or revision change.
@@ -168,9 +169,14 @@ async function postTalk(request: IncomingMessage, response: ServerResponse, requ
       return sendError(response, 409, 'STALE_REVISION', 'The graph evidence changed. Request a fresh analysis before another explanation.', requestId);
     }
     send(response, 200, answer);
-  } catch {
-    if (!response.destroyed) sendError(response, 503, 'NOT_IMPLEMENTED', 'Model explanation unavailable. Check the provider configuration, capped key and availability. No generated answer is shown.', requestId);
-  } finally { response.removeListener('close', abort); }
+  } catch (error) {
+    // TalkUnavailable messages are static, operator-safe strings; surface the
+    // specific one so a dark explanation says why. Unknown errors stay generic.
+    const message = error instanceof TalkUnavailable ? error.message
+      : 'Model explanation unavailable. Check the provider configuration, capped key and availability. No generated answer is shown.';
+    console.error('talk request failed:', message);
+    if (!response.destroyed) sendError(response, 503, 'NOT_IMPLEMENTED', message, requestId);
+  }
 }
 
 async function getGraphStatus(response: ServerResponse, requestId: string, status?: GraphStatusProbe): Promise<void> {
