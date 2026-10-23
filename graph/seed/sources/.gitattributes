@@ -1,0 +1,5 @@
+# Evidence sources are byte-exact anchors: the SHA-256 hashes recorded in the
+# graph were computed over these files as authored (CRLF line endings). Pin
+# CRLF checkout so every environment, including hosted builds, reproduces
+# those exact bytes and the read-time hash checks can pass.
+*.txt text eol=crlf
