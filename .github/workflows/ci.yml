@@ -37,6 +37,8 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run verify
+      - name: Hosted adapter regression checks
+        run: node --test tests/runtime/vercel-public-v061.test.mjs
       - name: Record scope
         run: echo "Branch-present unit suites executed. Live graph, browser E2E and model acceptance remain separate."
   graph-live:
