@@ -2,7 +2,7 @@ import { createServer, type IncomingMessage, type Server, type ServerResponse } 
 import { randomUUID } from 'node:crypto';
 import type { AnalysisResponse, ApiError, ApprovalResponse, GraphStatusResponse } from '@cubes/contracts';
 import { dispatchStudio, type IdeaverseGateway } from './ideaverse.js';
-import { talkContext, type Talker } from './talker.js';
+import { talkContext, TalkUnavailable, type Talker } from './talker.js';
 
 export interface Principal {
   id: 'kanny' | 'serena' | 'roy' | 'ava' | 'guz';
@@ -76,19 +76,23 @@ interface ApprovalBody {
   evidenceSourceIds: string[];
 }
 
-export function createApiServer(options?: { sessions?: SessionStore; graph?: ApprovalGraph; analysis?: ReleaseReader; status?: GraphStatusProbe; ideaverse?: IdeaverseGateway; talker?: Talker }): Server {
+export function createApiHandler(options?: { sessions?: SessionStore; graph?: ApprovalGraph; analysis?: ReleaseReader; status?: GraphStatusProbe; ideaverse?: IdeaverseGateway; talker?: Talker }) {
   const sessions = options?.sessions ?? denyAllSessions;
   const graph = options?.graph ?? unavailableGraph;
   const analysis = options?.analysis ?? unconfiguredAnalysis;
   const status = options?.status;
   const ideaverse = options?.ideaverse;
-  return createServer((request, response) => {
-    void route(request, response, sessions, graph, analysis, status, ideaverse, options?.talker);
-  });
+  // Hosted adapters must await real route completion, not a transport event.
+  return (request: IncomingMessage, response: ServerResponse, signal?: AbortSignal): Promise<void> =>
+    route(request, response, sessions, graph, analysis, status, ideaverse, options?.talker, signal);
+}
+
+export function createApiServer(options?: Parameters<typeof createApiHandler>[0]): Server {
+  return createServer(createApiHandler(options));
 }
 
 async function route(
-  request: IncomingMessage, response: ServerResponse, sessions: SessionStore, graph: ApprovalGraph, analysis: ReleaseReader, status?: GraphStatusProbe, ideaverse?: IdeaverseGateway, talker?: Talker,
+  request: IncomingMessage, response: ServerResponse, sessions: SessionStore, graph: ApprovalGraph, analysis: ReleaseReader, status?: GraphStatusProbe, ideaverse?: IdeaverseGateway, talker?: Talker, signal?: AbortSignal,
 ): Promise<void> {
   const requestId = randomUUID();
   response.setHeader('Content-Type', 'application/json; charset=utf-8');
@@ -107,7 +111,7 @@ async function route(
       return;
     }
     if (request.method === 'POST' && request.url === '/api/talk') {
-      await postTalk(request, response, requestId, sessions, analysis, talker);
+      await postTalk(request, response, requestId, sessions, analysis, talker, signal);
       return;
     }
     if (typeof request.url === 'string' && request.url.startsWith('/api/studio')) {
@@ -125,12 +129,13 @@ async function route(
     }
     sendError(response, 404, 'NOT_FOUND', 'Route not implemented.', requestId);
   } catch {
+    if (signal?.aborted || response.destroyed || response.writableEnded) return;
     sendError(response, 503, 'GRAPH_UNAVAILABLE', 'Approval was not recorded. The request failed closed.', requestId);
   }
 }
 
 async function postTalk(request: IncomingMessage, response: ServerResponse, requestId: string,
-  sessions: SessionStore, analysis: ReleaseReader, talker?: Talker): Promise<void> {
+  sessions: SessionStore, analysis: ReleaseReader, talker?: Talker, signal = new AbortController().signal): Promise<void> {
   const principal = principalFrom(request, sessions);
   if (principal === null) return sendError(response, 401, 'UNAUTHENTICATED', 'No server session was presented. The model was not called.', requestId);
   if (!((principal.id === 'kanny' && principal.kind === 'owner') || (principal.id === 'serena' && principal.kind === 'reader'))) {
@@ -141,6 +146,7 @@ async function postTalk(request: IncomingMessage, response: ServerResponse, requ
     return sendError(response, 403, 'FORBIDDEN', 'The request origin was refused. The model was not called.', requestId);
   }
   const body = await readJson(request);
+  if (signal.aborted || response.destroyed) return;
   if (!request.headers['content-type']?.startsWith('application/json') || body === null || typeof body !== 'object' || Array.isArray(body)) {
     return sendError(response, 400, 'VALIDATION_ERROR', 'Expected a bounded JSON talk request. The model was not called.', requestId);
   }
@@ -150,27 +156,34 @@ async function postTalk(request: IncomingMessage, response: ServerResponse, requ
     return sendError(response, 400, 'VALIDATION_ERROR', 'The talk request did not match the supported release-gap intent. The model was not called.', requestId);
   }
   if (!talker) return sendError(response, 503, 'NOT_IMPLEMENTED', 'Model explanations are not configured. The model was not called.', requestId);
+  if (signal.aborted || response.destroyed) return;
   const first = await analysis.analyze(r['releaseId'], requestId);
+  if (signal.aborted || response.destroyed) return;
   if (first === null) return sendError(response, 404, 'NOT_FOUND', 'That release is not available in this server tenant. The model was not called.', requestId);
   if (first.status !== 'AVAILABLE') return sendError(response, 503, 'GRAPH_UNAVAILABLE', 'The graph analysis is unavailable. The model was not called.', requestId);
   if (response.destroyed) return;
   const evidenceContext = JSON.stringify(talkContext(first));
-  const controller = new AbortController();
-  const abort = () => { if (!response.writableEnded) controller.abort(); };
-  response.once('close', abort);
+  // Hosted lifecycle owns the outer deadline; response close is not cancellation.
   try {
-    const answer = await talker.explain(first, r['persona'] as 'roy' | 'ava' | 'guz', controller.signal);
+    const answer = await talker.explain(first, r['persona'] as 'roy' | 'ava' | 'guz', signal);
+    if (signal.aborted || response.destroyed) return;
     // A completion cannot turn old evidence into a current answer after an outage or revision change.
     const fresh = await analysis.analyze(r['releaseId'], requestId);
-    if (controller.signal.aborted || response.destroyed) return;
+    if (signal.aborted || response.destroyed) return;
     if (fresh === null || fresh.status !== 'AVAILABLE') return sendError(response, 503, 'GRAPH_UNAVAILABLE', 'The graph is no longer available. The model explanation was discarded.', requestId);
     if (evidenceContext !== JSON.stringify(talkContext(fresh))) {
       return sendError(response, 409, 'STALE_REVISION', 'The graph evidence changed. Request a fresh analysis before another explanation.', requestId);
     }
     send(response, 200, answer);
-  } catch {
-    if (!response.destroyed) sendError(response, 503, 'NOT_IMPLEMENTED', 'Model explanation unavailable. Check the provider configuration, capped key and availability. No generated answer is shown.', requestId);
-  } finally { response.removeListener('close', abort); }
+  } catch (error) {
+    if (signal.aborted || response.destroyed) return;
+    // TalkUnavailable messages are static, operator-safe strings; surface the
+    // specific one so a dark explanation says why. Unknown errors stay generic.
+    const message = error instanceof TalkUnavailable ? error.message
+      : 'Model explanation unavailable. Check the provider configuration, capped key and availability. No generated answer is shown.';
+    console.error('talk request failed:', message);
+    if (!response.destroyed) sendError(response, 503, 'NOT_IMPLEMENTED', message, requestId);
+  }
 }
 
 async function getGraphStatus(response: ServerResponse, requestId: string, status?: GraphStatusProbe): Promise<void> {

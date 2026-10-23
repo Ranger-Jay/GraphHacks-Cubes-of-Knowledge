@@ -8,6 +8,8 @@ import { mount, type SpaceSceneInstance } from './scene/space';
 import { cancelSpeech, cancelSpeechForAgent, enforcePhaseGate, setAudioMuted, speakAuthorizedClip, speakRecoveryClip } from './scene/audio';
 import { findClipByAgentRole } from './scene/audioClips';
 import type { StudioSnapshot } from './studio/studioController';
+import { AgentPortrait } from './scene/AgentPortrait';
+import { AGENT_CONFIGS } from './scene/dialogue';
 
 const EMPTY_STUDIO: StudioSnapshot = { env: { phase: 'CHECKING', access: 'UNKNOWN' }, pool: { status: 'idle', overview: null, ideas: [] }, open: null };
 const noSubscribe = () => () => {};
@@ -100,7 +102,8 @@ export function MountedSpaceScene(props: SceneProps) {
   return <div className="mounted-space-experience">
     <div ref={container} className="mounted-space-canvas" data-testid="mounted-space-scene" />
     {mountError && <p role="alert">3D rendering is unavailable. Use Solar Core and the graph text view to inspect current information.</p>}
-    {agent && <section className="panel agent-preview" aria-label={`${agent} voice preview`} onKeyDown={e => { if (e.key === 'Escape') closeAgent(); }}>
+    {agent && <section className="panel agent-preview" data-agent={agent} aria-label={`${agent} voice preview`} onKeyDown={e => { if (e.key === 'Escape') closeAgent(); }}>
+      <div className="agent-hologram" aria-hidden="true"><AgentPortrait agent={AGENT_CONFIGS[agent]} viseme="smile" expression="smile" reducedMotion={props.reducedMotion} isSpeaking={false} /></div>
       <h3 ref={agentHeading} tabIndex={-1}>{agent.toUpperCase()}</h3>
       <p>Recorded voice preview. Ask this agent to explain the current graph evidence below; source records remain in the analysis panel.</p>
       {currentAnalysis && <TalkPanel key={`${props.space?.generation ?? 0}:${currentAnalysis.revision}:${agent}`} analysis={currentAnalysis} agent={agent} />}

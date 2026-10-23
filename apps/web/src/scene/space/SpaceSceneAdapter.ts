@@ -8,6 +8,7 @@ import type {
 import type { SpaceSceneBridge, SpaceSceneInstance, SpaceSceneMountOptions } from './types.js';
 import { SolarCorePanel } from './SolarCorePanel.js';
 import { SceneThreeRenderer } from './SceneThreeRenderer.js';
+import { SceneSoundEffects } from './SceneSoundEffects.js';
 
 const SPACE_SCENE_ADAPTER_STYLES = `
 /* Scoped Space Scene & Solar Core Styles (Self-Contained, Zero Tailwind Dependency) */
@@ -70,7 +71,56 @@ const SPACE_SCENE_ADAPTER_STYLES = `
   display: flex;
   align-items: center;
   gap: 0.5rem;
+  flex-wrap: wrap;
 }
+
+.space-scene-root .space-camera-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  pointer-events: auto;
+}
+.space-scene-root .space-camera-controls button {
+  min-width: 2.75rem;
+  min-height: 2.75rem;
+  padding: 0.4rem 0.65rem;
+  border: 1px solid #64748b;
+  border-radius: 0.65rem;
+  background: rgba(15, 23, 42, 0.95);
+  color: #e2e8f0;
+  cursor: pointer;
+}
+.space-scene-root .space-camera-controls button:focus-visible {
+  outline: 2px solid #67e8f9;
+  outline-offset: 2px;
+}
+@media (max-width: 600px) {
+  .space-scene-root .space-hud-topbar,
+  .space-scene-root .space-hud-bottombar { flex-wrap: wrap; }
+}
+
+/* Cinematic glass HUD and a non-interactive cosmic vignette. */
+.space-scene-root { background: radial-gradient(ellipse at 45% 38%, #0a1430, #010207 72%); border-radius: .7rem; }
+.space-scene-root .space-scene-viewport::after {
+  content: ''; position: absolute; inset: 0; pointer-events: none;
+  box-shadow: inset 0 0 110px 30px #071025aa; border-radius: inherit;
+  animation: cosmic-breath 8s ease-in-out infinite alternate;
+}
+.space-scene-root[data-phase="GRAPH_UNAVAILABLE"] .space-scene-viewport::after { box-shadow: inset 0 0 110px 30px #4c051955; }
+.space-scene-root .space-hud-topbar { align-items: flex-start; flex-wrap: wrap; }
+.space-scene-root .space-hud-bottombar { align-items: flex-end; flex-wrap: wrap; }
+.space-scene-root .space-hud-topbar .space-hud-group,
+.space-scene-root .space-hud-bottombar > .space-hud-group,
+.space-scene-root .space-camera-controls {
+  background: rgba(8,12,28,.78); border: 1px solid #3e678555; border-radius: .85rem;
+  padding: .45rem; backdrop-filter: blur(16px); box-shadow: inset 0 0 20px #00e5ff06, 0 8px 28px #0006;
+}
+.space-scene-root button { min-height: 44px; letter-spacing: .025em; }
+.space-scene-root button:focus-visible { outline: 3px solid #ffd166; outline-offset: 2px; }
+.space-scene-root .hud-generation { display: block; text-align: right; color: #9daec6; padding: .3rem; }
+.space-scene-root .solar-core-modal-content { background: #080c1cf5; border-color: #ffb30088; }
+@keyframes cosmic-breath { from { opacity: .6; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .space-scene-root *, .space-scene-root *::after { animation: none !important; transition: none !important; } }
 
 /* Badges & Scene Hints */
 .space-scene-root .space-phase-badge {
@@ -407,6 +457,7 @@ export class SpaceSceneAdapter implements SpaceSceneInstance {
 
   // Multi-Cube Focus State ('main' | 'disconnected')
   private currentCubeFocus: 'main' | 'disconnected' = 'main';
+  private readonly soundEffects = new SceneSoundEffects();
 
   constructor(
     container: HTMLElement,
@@ -542,6 +593,13 @@ export class SpaceSceneAdapter implements SpaceSceneInstance {
         </div>
 
         <div class="text-[10px] text-slate-500">
+          <div class="space-camera-controls" role="group" aria-label="Camera zoom controls">
+            <button type="button" class="btn-zoom-in" aria-label="Zoom in" title="Zoom in (mouse wheel up)">+</button>
+            <button type="button" class="btn-zoom-out" aria-label="Zoom out" title="Zoom out (mouse wheel down)">−</button>
+            <button type="button" class="btn-focus-main">Main cube</button>
+            <button type="button" class="btn-show-both">Show both cubes</button>
+          </div>
+          <span class="hud-camera-hint">Wheel / pinch to zoom · Drag to turn</span>
           <span class="hud-generation">Gen: 0</span>
         </div>
       </div>
@@ -588,6 +646,11 @@ export class SpaceSceneAdapter implements SpaceSceneInstance {
 
   private wireHUDControls(): void {
     if (!this.hudEl) return;
+
+    this.hudEl.querySelector<HTMLButtonElement>('.btn-zoom-in')?.addEventListener('click', () => { this.threeRenderer?.zoomIn(); this.soundEffects.play('chime'); });
+    this.hudEl.querySelector<HTMLButtonElement>('.btn-zoom-out')?.addEventListener('click', () => { this.threeRenderer?.zoomOut(); this.soundEffects.play('chime'); });
+    this.hudEl.querySelector<HTMLButtonElement>('.btn-show-both')?.addEventListener('click', () => { this.threeRenderer?.showBothCubes(); this.soundEffects.play('chime'); });
+    this.hudEl.querySelector<HTMLButtonElement>('.btn-focus-main')?.addEventListener('click', () => this.setCubeFocus('main'));
 
     // Focus Disconnected Cube Button
     const focusDiscBtn = this.hudEl.querySelector<HTMLButtonElement>('.btn-focus-disconnected');
@@ -654,6 +717,8 @@ export class SpaceSceneAdapter implements SpaceSceneInstance {
   public update(snapshot: SpaceSceneSnapshot): void {
     if (this.isDestroyed) return;
     this.snapshot = snapshot;
+    this.soundEffects.update(snapshot.runtime.phase);
+    this.rootEl?.setAttribute('data-phase', snapshot.runtime.phase);
 
     // Update Three.js scene
     if (this.threeRenderer) {
@@ -899,6 +964,7 @@ export class SpaceSceneAdapter implements SpaceSceneInstance {
 
   public openSolarPanel(opener?: HTMLElement | null): void {
     if (this.currentCubeFocus === 'disconnected') return;
+    this.soundEffects.play('aperture');
     this.lastSolarOpener = opener ?? null;
     this.solarPanel?.open(opener);
   }
@@ -926,6 +992,7 @@ export class SpaceSceneAdapter implements SpaceSceneInstance {
   public unmount(): void {
     if (this.isDestroyed) return;
     this.isDestroyed = true;
+    this.soundEffects.dispose();
 
     if (this.unbindAddedListener) {
       this.unbindAddedListener();

@@ -37,6 +37,34 @@ test('cancel discards a late successful transport even if fetch ignores AbortSig
   call.cancel(); finish(jsonResponse(200, answer())); assert.equal(await call.result, null);
 });
 
+test('client still accepts a current answer after the former 20-second cutoff', async t => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  let signal: AbortSignal | undefined;
+  let finish!: (value: Response) => void;
+  const call = requestTalk(a, 'roy', async (_url, init) => {
+    signal = init?.signal as AbortSignal;
+    return new Promise(resolve => { finish = resolve; });
+  });
+  t.mock.timers.tick(26_000);
+  finish(jsonResponse(200, answer()));
+  assert.ok(await call.result);
+  assert.equal(signal?.aborted, false);
+});
+
+test('client deadline still aborts and discards a late response from a cancellation-ignoring fetch', async t => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  let signal: AbortSignal | undefined;
+  let finish!: (value: Response) => void;
+  const call = requestTalk(a, 'roy', async (_url, init) => {
+    signal = init?.signal as AbortSignal;
+    return new Promise(resolve => { finish = resolve; });
+  });
+  t.mock.timers.tick(28_000);
+  assert.equal(signal?.aborted, true);
+  finish(jsonResponse(200, answer()));
+  assert.equal(await call.result, null);
+});
+
 test('non-200, malformed, refused and stale responses cannot become an answer', async () => {
   for (const status of [201, 401, 403, 409, 503]) {
     assert.equal(await requestTalk(a, 'roy', async () => jsonResponse(status, answer())).result, null);

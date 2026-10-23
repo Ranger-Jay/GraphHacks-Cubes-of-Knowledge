@@ -86,7 +86,7 @@ After authentication and validation:
 2. Read the release through the existing tenant-scoped named graph analysis.
    Missing release -> 404; unavailable -> 503, no provider call.
 3. At most one provider attempt runs at once, with a three-second cooldown and
-   15-second combined provider timeout. Context <= 24 KB; completion <= 320 tokens;
+   25-second combined provider timeout. Context <= 24 KB; completion <= 320 tokens;
    provider response <= 64 KB; no redirects, streaming or automatic retries.
 4. Verify provider key cap, then send the authorized synthetic evidence context.
    Ask for strict JSON schema with explanation and existing citation IDs. Provider
@@ -102,8 +102,24 @@ After authentication and validation:
 The second graph read is a freshness check, not an atomic guarantee that the world
 cannot change after the response. UI refresh/generation controls remain required.
 There is no success response on graph outage, no mutation and no new authority.
-Provider failures currently use 503 NOT_IMPLEMENTED with a generic explanation-
-unavailable message, not a graph-disconnected claim.
+Provider failures use 503 NOT_IMPLEMENTED with bounded diagnostics: fixed
+configuration/busy messages or an allowlisted AbortError, TimeoutError, TypeError,
+SyntaxError or UnknownError label. Arbitrary error names, messages, causes, stacks
+and provider bodies are not reflected or logged. The browser panel continues to
+show a generic unavailable message; detailed safe diagnostics are in the HTTP
+response and function logs, not the panel.
+
+In the v061 hosting adapter, the function awaits the API handler's actual promise.
+A response `close` notification neither aborts the model nor finishes the hosted
+invocation. The hosted request has a **27-second total deadline**, beginning before
+runtime initialization and including both graph reads and the provider call. It
+can therefore shorten the provider's own 25-second budget when setup/reads take
+longer. The browser waits **28 seconds**; Vercel's configured function limit is
+**30 seconds**. These are application budgets, not a latency guarantee. A browser
+cancel still suppresses late answers; server work may continue until its bounded
+deadline. No automatic retries are introduced.
+
+See [the v061 review and verification scope](verification/talk-v061-review.md).
 
 ## Validation and acceptance
 

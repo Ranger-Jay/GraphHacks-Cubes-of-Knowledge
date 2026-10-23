@@ -53,7 +53,7 @@ export function talkerFromEnv(env: NodeJS.ProcessEnv = process.env, fetcher: Fet
       if (Buffer.byteLength(context, 'utf8') > 24_000 || ids.size === 0 || ids.size > 32) throw new TalkUnavailable();
       busy = true;
       nextAllowed = Date.now() + 3_000;
-      const signal = AbortSignal.any([callerSignal, AbortSignal.timeout(15_000)]);
+      const signal = AbortSignal.any([callerSignal, AbortSignal.timeout(25_000)]);
       const headers = { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' };
       try {
         signal.throwIfAborted();
@@ -104,7 +104,14 @@ export function talkerFromEnv(env: NodeJS.ProcessEnv = process.env, fetcher: Fet
       } catch (error) {
         if (error instanceof TalkUnavailable) throw error;
         // Never propagate a provider error body, key, prompt, stack or response text.
-        throw new TalkUnavailable();
+        // Error.name is writable and can contain provider data. Emit only fixed
+        // labels; never interpolate an unchecked name, message, cause or stack.
+        const name = error instanceof Error ? error.name : undefined;
+        const failureClass = name === 'AbortError' ? 'AbortError'
+          : name === 'TimeoutError' ? 'TimeoutError'
+          : name === 'TypeError' ? 'TypeError'
+          : name === 'SyntaxError' ? 'SyntaxError' : 'UnknownError';
+        throw new TalkUnavailable(`The model request failed (${failureClass}). No generated answer is shown.`);
       } finally { busy = false; }
     },
   };

@@ -1,15 +1,35 @@
 import * as THREE from 'three';
 import type { AgentId, GraphNode, GraphEdge, SpaceSceneSnapshot } from '@cubes/contracts';
+import { FrameLights, pyramidDetails, solarDial } from './VisualDetails.js';
 
 export type CubeFocus = 'main' | 'disconnected';
 
+export const MAIN_CUBE_SIZE = 6.4;
+export const DISCONNECTED_CUBE_SIZE = 4.6;
+export const MIN_CUBE_GAP = 2 * MAIN_CUBE_SIZE;
 export const MAIN_CUBE_POS = new THREE.Vector3(0, 0, 0);
 export const MAIN_CUBE_CAM_POS = new THREE.Vector3(0, 3.2, 12.5);
 export const MAIN_CUBE_LOOK_AT = new THREE.Vector3(0, 0, 0);
 
-export const DISCONNECTED_CUBE_POS = new THREE.Vector3(5.6, 0.5, -2.0);
-export const DISCONNECTED_CAM_POS = new THREE.Vector3(10.0, 2.3, 5.0);
-export const DISCONNECTED_LOOK_AT = new THREE.Vector3(5.6, 0.5, -2.0);
+// Four main-cube widths between centers leaves at least two full widths of
+// empty space even when both cubes rotate their corners toward each other.
+export const DISCONNECTED_CUBE_POS = new THREE.Vector3(4 * MAIN_CUBE_SIZE, 0.5, -2.0);
+export const DISCONNECTED_CAM_POS = DISCONNECTED_CUBE_POS.clone().add(new THREE.Vector3(4.4, 1.8, 7.0));
+export const DISCONNECTED_LOOK_AT = DISCONNECTED_CUBE_POS.clone();
+
+/** Bounds cover every cube rotation, including corner lights and the blue aura. */
+export function cubeOverview(aspect: number): { target: THREE.Vector3; distance: number } {
+  const bounds = new THREE.Box3();
+  for (const [center, size] of [[MAIN_CUBE_POS, MAIN_CUBE_SIZE], [DISCONNECTED_CUBE_POS, DISCONNECTED_CUBE_SIZE]] as const) {
+    const radius = size * Math.sqrt(3) / 2 * 1.012 + 0.25;
+    bounds.union(new THREE.Sphere(center, radius).getBoundingBox(new THREE.Box3()));
+  }
+  const half = bounds.getSize(new THREE.Vector3()).multiplyScalar(0.5);
+  const vertical = Math.tan(THREE.MathUtils.degToRad(45 / 2));
+  const horizontal = vertical * (Number.isFinite(aspect) && aspect > 0 ? aspect : 4 / 3);
+  return { target: bounds.getCenter(new THREE.Vector3()),
+    distance: half.z + Math.max(half.x / horizontal, half.y / vertical) * 1.25 };
+}
 
 export interface SceneThreeCallbacks {
   onSunClick: () => void;
@@ -50,6 +70,8 @@ export class SceneThreeRenderer {
   private purpleFrameGroup: THREE.Group | null = null;
   private purpleStruts: THREE.Mesh[] = [];
   private purpleBeacons: THREE.Mesh[] = [];
+  private solarDial: THREE.Group | null = null;
+  private frameLights: FrameLights | null = null;
   private cornerSpheres: THREE.Mesh[] = [];
   private electronBeads: Array<{ mesh: THREE.Mesh; orbitRadius: number; baseAngle: number; speed: number; tilt: THREE.Euler }> = [];
   private starfield: THREE.Points | null = null;
@@ -119,6 +141,11 @@ export class SceneThreeRenderer {
   private dragMode: 'cube' | 'orbit' | null = null;
   private cameraOrbit = { theta: 0.0, phi: 0.251 };
   private cameraDistance = 12.903;
+  private overview = false;
+  private touchPointers = new Map<number, { x: number; y: number }>();
+  private pinchDistance: number | null = null;
+  private suppressTouchClick = false;
+  private suppressSunClick = false;
 
   // Bound Event Handlers for Reliable Removal
   private handleResizeBound: () => void;
@@ -128,6 +155,8 @@ export class SceneThreeRenderer {
   private handleClickBound: (e: MouseEvent) => void;
   private handleVisibilityChangeBound: () => void;
   private handleContextMenuBound: (e: MouseEvent) => void;
+  private handleWheelBound: (e: WheelEvent) => void;
+  private handlePointerCancelBound: (e: PointerEvent) => void;
 
   constructor(container: HTMLElement, callbacks: SceneThreeCallbacks) {
     this.container = container;
@@ -139,6 +168,8 @@ export class SceneThreeRenderer {
     this.handleClickBound = this.handleClick.bind(this);
     this.handleVisibilityChangeBound = this.handleVisibilityChange.bind(this);
     this.handleContextMenuBound = (e: MouseEvent) => e.preventDefault();
+    this.handleWheelBound = this.handleWheel.bind(this);
+    this.handlePointerCancelBound = this.handlePointerCancel.bind(this);
 
     this.init();
   }
@@ -169,6 +200,7 @@ export class SceneThreeRenderer {
       this.canvas.style.display = 'block';
       this.canvas.style.width = '100%';
       this.canvas.style.height = '100%';
+      this.canvas.style.touchAction = 'none';
       this.canvas.tabIndex = 0;
       this.container.appendChild(this.canvas);
 
@@ -188,6 +220,8 @@ export class SceneThreeRenderer {
       this.cometsGroup = new THREE.Group();
       this.scene.add(this.cometsGroup);
 
+      this.showBothCubes();
+
       // Attach Listeners
       if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
         window.addEventListener('resize', this.handleResizeBound);
@@ -200,6 +234,8 @@ export class SceneThreeRenderer {
       this.canvas.addEventListener('pointerup', this.handlePointerUpBound);
       this.canvas.addEventListener('click', this.handleClickBound);
       this.canvas.addEventListener('contextmenu', this.handleContextMenuBound);
+      this.canvas.addEventListener('wheel', this.handleWheelBound, { passive: false });
+      this.canvas.addEventListener('pointercancel', this.handlePointerCancelBound);
 
       // Start Render Loop
       this.startLoop();
@@ -412,7 +448,7 @@ export class SceneThreeRenderer {
     this.cubeGroup.userData = { isMainCube: true };
     this.scene.add(this.cubeGroup);
 
-    const size = 6.4;
+    const size = MAIN_CUBE_SIZE;
     const boxGeo = new THREE.BoxGeometry(size, size, size);
     const wireGeo = new THREE.WireframeGeometry(boxGeo);
 
@@ -533,7 +569,7 @@ export class SceneThreeRenderer {
 
   private buildCornerSpheres(): void {
     if (!this.cubeGroup) return;
-    const size = 6.4;
+    const size = MAIN_CUBE_SIZE;
     const half = size / 2;
     const coords = [-half, half];
     const geo = new THREE.SphereGeometry(0.18, 16, 16);
@@ -562,6 +598,10 @@ export class SceneThreeRenderer {
     this.sunGroup = new THREE.Group();
     this.sunGroup.userData = { isMainCube: true, isSunCore: true };
     this.cubeGroup.add(this.sunGroup);
+    this.solarDial = solarDial();
+    this.sunGroup.add(this.solarDial);
+    this.frameLights = new FrameLights(MAIN_CUBE_SIZE / 2);
+    this.cubeGroup.add(this.frameLights.group);
 
     // 1. Dynamic Turbulent Plasma Mantle Wireframe
     const sunGeo = new THREE.SphereGeometry(0.96, 32, 32);
@@ -765,6 +805,9 @@ export class SceneThreeRenderer {
       group.add(ringMesh);
 
       const r = 5.2;
+      const details = pyramidDetails(ag.color, ag.id.toUpperCase());
+      details.traverse(child => { child.userData = { isMainCube: true, isPyramid: true, agentId: ag.id }; });
+      group.add(details);
       group.position.set(Math.cos(ag.angle) * r, 0, Math.sin(ag.angle) * r);
       group.userData = { isMainCube: true, isPyramid: true, agentId: ag.id, baseAngle: ag.angle };
       this.pyramidsGroup?.add(group);
@@ -780,7 +823,7 @@ export class SceneThreeRenderer {
     this.scene.add(this.disconnectedCubeGroup);
 
     // 1. Red Damaged Wireframe Cube (Scale ~0.72 of main cube, size 4.6)
-    const size = 4.6;
+    const size = DISCONNECTED_CUBE_SIZE;
     const boxGeo = new THREE.BoxGeometry(size, size, size);
     const wireGeo = new THREE.WireframeGeometry(boxGeo);
     const wireMat = new THREE.LineBasicMaterial({
@@ -914,6 +957,9 @@ export class SceneThreeRenderer {
 
   public update(snapshot: SpaceSceneSnapshot): void {
     this.currentSnapshot = snapshot;
+    // Ornament is not proof: remove its ready-state glow when current evidence is unavailable.
+    if (this.solarDial) this.solarDial.visible = snapshot.runtime.phase === 'READY';
+    if (this.frameLights) this.frameLights.group.visible = snapshot.runtime.phase === 'READY';
     this.reducedMotion = snapshot.reducedMotion;
 
     const isReady = snapshot.runtime.phase === 'READY' && snapshot.data.status === 'AVAILABLE';
@@ -1246,6 +1292,8 @@ export class SceneThreeRenderer {
       const elapsed = (now - this.startTime) / 1000;
 
       if (!this.reducedMotion) {
+        if (this.solarDial) this.solarDial.rotation.z = elapsed * 0.1;
+        this.frameLights?.update(elapsed);
         // 360° Spherical Celestial Camera Orbit (Rotation 2: Entire 360° Cosmos)
         if (this.camera) {
           const lerpFactor = Math.min(delta * 4.0, 0.25);
@@ -1583,6 +1631,66 @@ export class SceneThreeRenderer {
     this.camera.aspect = width / height;
     this.camera.updateProjectionMatrix();
     this.renderer.setSize(width, height);
+    if (this.overview) this.showBothCubes();
+    else this.zoomBy(1);
+  }
+
+  private aspect(): number {
+    return this.camera?.aspect ?? ((this.container.clientWidth || 800) / (this.container.clientHeight || 600));
+  }
+
+  private applyCameraView(): void {
+    if (!this.camera) return;
+    this.currentLookAt.copy(this.cameraTargetLookAt);
+    this.cameraTargetPosition.set(
+      this.currentLookAt.x + this.cameraDistance * Math.cos(this.cameraOrbit.phi) * Math.sin(this.cameraOrbit.theta),
+      this.currentLookAt.y + this.cameraDistance * Math.sin(this.cameraOrbit.phi),
+      this.currentLookAt.z + this.cameraDistance * Math.cos(this.cameraOrbit.phi) * Math.cos(this.cameraOrbit.theta));
+    this.camera.position.copy(this.cameraTargetPosition);
+    this.camera.lookAt(this.currentLookAt);
+    // Retain cube contrast when pulling back, rather than hiding it in dense fog.
+    if (this.scene?.fog instanceof THREE.FogExp2) this.scene.fog.density = 0.022 * Math.min(1, 12.903 / this.cameraDistance);
+    if (this.renderer && this.scene) this.renderer.render(this.scene, this.camera);
+  }
+
+  private zoomBy(factor: number): void {
+    if (!Number.isFinite(factor) || factor <= 0 || this.isDisposed) return;
+    this.cameraDistance = Math.max(8, Math.min(Math.max(80, cubeOverview(this.aspect()).distance * 1.5), this.cameraDistance * factor));
+    this.overview = false;
+    this.applyCameraView();
+  }
+
+  public zoomIn(): void { this.zoomBy(1 / 1.2); }
+  public zoomOut(): void { this.zoomBy(1.2); }
+
+  public showBothCubes(): void {
+    if (this.isDisposed) return;
+    const view = cubeOverview(this.aspect());
+    this.cameraTargetLookAt.copy(view.target);
+    this.cameraDistance = view.distance;
+    this.cameraOrbit = { theta: 0, phi: 0 };
+    this.overview = true;
+    this.applyCameraView();
+  }
+
+  private handleWheel(event: WheelEvent): void {
+    if (!Number.isFinite(event.deltaY) || event.deltaY === 0) return;
+    event.preventDefault();
+    const unit = event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? (this.container.clientHeight || 600) : 1;
+    this.zoomBy(Math.exp(Math.max(-0.5, Math.min(0.5, event.deltaY * unit * 0.0015))));
+  }
+
+  private touchSpan(): number {
+    const points = [...this.touchPointers.values()];
+    return points.length < 2 ? 0 : Math.hypot(points[0]!.x - points[1]!.x, points[0]!.y - points[1]!.y);
+  }
+
+  private handlePointerCancel(event: PointerEvent): void {
+    this.touchPointers.delete(event.pointerId);
+    this.pinchDistance = null;
+    this.isDragging = false;
+    this.dragMode = null;
+    this.pendingClickObj = null;
   }
 
   /**
@@ -1604,11 +1712,12 @@ export class SceneThreeRenderer {
     const sx = rect.left + (p.x * 0.5 + 0.5) * rect.width;
     const sy = rect.top + (-(p.y * 0.5) + 0.5) * rect.height;
 
-    // Dynamic visible radius from 3D corona extent (2.4 units) projected to screen pixels
-    const edgePos = sunWorldPos.clone().add(new THREE.Vector3(2.4, 0, 0));
+    // Project the core along camera-right; a fixed 90px minimum swallowed agents when zoomed out.
+    const right = new THREE.Vector3().setFromMatrixColumn(this.camera.matrixWorld, 0);
+    const edgePos = sunWorldPos.clone().addScaledVector(right, 1.25);
     const edgeP = edgePos.project(this.camera);
     const edgeX = rect.left + (edgeP.x * 0.5 + 0.5) * rect.width;
-    const radiusPx = Math.max(90, Math.min(280, Math.abs(edgeX - sx)));
+    const radiusPx = Math.max(10, Math.min(180, Math.abs(edgeX - sx)));
 
     return { x: sx, y: sy, radiusPx, worldPos: sunWorldPos };
   }
@@ -1622,6 +1731,7 @@ export class SceneThreeRenderer {
   }
 
   private handleClick(event: MouseEvent): void {
+    if (this.suppressTouchClick || this.suppressSunClick) return;
     if (this.cubeFocus === 'disconnected') return;
     const sunMetrics = this.getSunScreenMetrics();
     if (sunMetrics) {
@@ -1637,6 +1747,20 @@ export class SceneThreeRenderer {
     const rect = this.canvas?.getBoundingClientRect();
     if (!rect) return;
 
+    if (this.touchPointers.size === 0) this.suppressTouchClick = false;
+    if (event.pointerType === 'touch') {
+      this.touchPointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+      this.canvas?.setPointerCapture?.(event.pointerId);
+      if (this.touchPointers.size >= 2) {
+        this.pinchDistance = this.touchSpan();
+        this.suppressTouchClick = true;
+        this.isDragging = false;
+        this.dragMode = null;
+        this.pendingClickObj = null;
+        return;
+      }
+    }
+
     this.mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
     this.mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
 
@@ -1644,6 +1768,7 @@ export class SceneThreeRenderer {
     this.dragStartPos = { x: event.clientX, y: event.clientY };
     this.previousMousePos = { x: event.clientX, y: event.clientY };
     this.pendingClickObj = null;
+    this.suppressSunClick = false;
 
     if (this.cubeGroup) this.cubeGroup.updateMatrixWorld(true);
     if (this.sunGroup) this.sunGroup.updateMatrixWorld(true);
@@ -1671,7 +1796,7 @@ export class SceneThreeRenderer {
       if (!isTargetingSun && this.sunGroup) {
         const sunWorldPos = new THREE.Vector3();
         this.sunGroup.getWorldPosition(sunWorldPos);
-        if (this.raycaster.ray.distanceToPoint(sunWorldPos) <= 2.2) {
+        if (this.raycaster.ray.distanceToPoint(sunWorldPos) <= 1.25) {
           isTargetingSun = true;
         }
       }
@@ -1691,6 +1816,7 @@ export class SceneThreeRenderer {
             h.object.userData.isSunCore)
       );
       const cometHit = hits.find((h) => h.object.userData && h.object.userData.isComet);
+      const selectedHit = hits.find(h => h.object.userData.isGraphNode || h.object.userData.isPyramid);
 
       if (this.cubeFocus === 'disconnected') {
         if (mainHit) {
@@ -1706,6 +1832,9 @@ export class SceneThreeRenderer {
           hitInteractiveTarget = true;
         } else if (cometHit) {
           this.pendingClickObj = cometHit.object;
+          hitInteractiveTarget = true;
+        } else if (selectedHit) {
+          this.pendingClickObj = selectedHit.object;
           hitInteractiveTarget = true;
         } else if (isTargetingSun) {
           this.pendingClickObj = this.sunHitSphere || this.sunGroup;
@@ -1731,6 +1860,17 @@ export class SceneThreeRenderer {
   private handlePointerMove(event: PointerEvent): void {
     const rect = this.canvas?.getBoundingClientRect();
     if (!rect || rect.width <= 0 || rect.height <= 0) return;
+
+    if (event.pointerType === 'touch' && this.touchPointers.has(event.pointerId)) {
+      this.touchPointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+      if (this.touchPointers.size >= 2) {
+        const span = this.touchSpan();
+        if (this.pinchDistance && span > 0) this.zoomBy(this.pinchDistance / span);
+        this.pinchDistance = span;
+        return;
+      }
+      if (this.suppressTouchClick) return;
+    }
 
     this.mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
     this.mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
@@ -1832,6 +1972,13 @@ export class SceneThreeRenderer {
   }
 
   private handlePointerUp(event: PointerEvent): void {
+    if (event.pointerType === 'touch') {
+      this.touchPointers.delete(event.pointerId);
+      if (this.suppressTouchClick) {
+        this.handlePointerCancel(event);
+        return;
+      }
+    }
     const dragDist = Math.hypot(event.clientX - this.dragStartPos.x, event.clientY - this.dragStartPos.y);
 
     let isSunScreenTarget = false;
@@ -1873,7 +2020,9 @@ export class SceneThreeRenderer {
       }
 
       // 3. Normal Main Cube interactions
-      const isSun = isSunScreenTarget || u.isSunCore || this.pendingClickObj === this.sunGroup || this.pendingClickObj === this.sunHitSphere;
+      const explicitSelection = u.isComet || u.isGraphNode || u.isPyramid;
+      const isSun = (!explicitSelection && isSunScreenTarget) || u.isSunCore || this.pendingClickObj === this.sunGroup || this.pendingClickObj === this.sunHitSphere;
+      this.suppressSunClick = explicitSelection || dragDist > 12;
       const maxDrag = isSun || u.isComet ? 32 : 12;
 
       if (dragDist <= maxDrag) {
@@ -1898,7 +2047,7 @@ export class SceneThreeRenderer {
           this.raycaster.setFromCamera(this.mouse, this.camera);
           const sunWorldPos = new THREE.Vector3();
           this.sunGroup.getWorldPosition(sunWorldPos);
-          if (this.raycaster.ray.distanceToPoint(sunWorldPos) <= 2.2) {
+          if (this.raycaster.ray.distanceToPoint(sunWorldPos) <= 1.25) {
             this.triggerSunClick();
           }
         }
@@ -1921,7 +2070,7 @@ export class SceneThreeRenderer {
   }
 
   public setCubeFocus(focus: CubeFocus): void {
-    if (this.cubeFocus === focus) return;
+    this.overview = false;
     this.cubeFocus = focus;
 
     if (focus === 'main') {
@@ -1938,20 +2087,8 @@ export class SceneThreeRenderer {
       this.cameraOrbit.phi = 0.214;
     }
 
-    if (this.reducedMotion && this.camera) {
-      const targetCamX = this.cameraTargetLookAt.x + this.cameraDistance * Math.cos(this.cameraOrbit.phi) * Math.sin(this.cameraOrbit.theta);
-      const targetCamY = this.cameraTargetLookAt.y + this.cameraDistance * Math.sin(this.cameraOrbit.phi);
-      const targetCamZ = this.cameraTargetLookAt.z + this.cameraDistance * Math.cos(this.cameraOrbit.phi) * Math.cos(this.cameraOrbit.theta);
-      this.cameraTargetPosition.set(targetCamX, targetCamY, targetCamZ);
-      this.camera.position.copy(this.cameraTargetPosition);
-      this.currentLookAt.copy(this.cameraTargetLookAt);
-      this.camera.lookAt(this.currentLookAt);
-      if (this.renderer && this.scene) {
-        this.renderer.render(this.scene, this.camera);
-      }
-    }
-
     this.callbacks.onCubeFocusChange?.(focus);
+    this.applyCameraView();
   }
 
   public toggleCubeFocus(): void {
@@ -1964,14 +2101,15 @@ export class SceneThreeRenderer {
         child instanceof THREE.Mesh ||
         child instanceof THREE.LineSegments ||
         child instanceof THREE.Line ||
-        child instanceof THREE.Points
+        child instanceof THREE.Points ||
+        child instanceof THREE.Sprite
       ) {
         if (child.geometry) child.geometry.dispose();
         if (child.material) {
-          if (Array.isArray(child.material)) {
-            child.material.forEach((m) => m.dispose());
-          } else {
-            child.material.dispose();
+          const materials = Array.isArray(child.material) ? child.material : [child.material];
+          for (const material of materials) {
+            if ('map' in material && material.map instanceof THREE.Texture) material.map.dispose();
+            material.dispose();
           }
         }
       }
@@ -2000,6 +2138,8 @@ export class SceneThreeRenderer {
       this.canvas.removeEventListener('pointerup', this.handlePointerUpBound);
       this.canvas.removeEventListener('click', this.handleClickBound);
       this.canvas.removeEventListener('contextmenu', this.handleContextMenuBound);
+      this.canvas.removeEventListener('wheel', this.handleWheelBound);
+      this.canvas.removeEventListener('pointercancel', this.handlePointerCancelBound);
       if (this.canvas.parentNode) {
         this.canvas.parentNode.removeChild(this.canvas);
       }
@@ -2016,6 +2156,8 @@ export class SceneThreeRenderer {
     }
 
     this.canvas = null;
+    this.touchPointers.clear();
+    this.pinchDistance = null;
     this.camera = null;
     this.cubeGroup = null;
     this.sunGroup = null;

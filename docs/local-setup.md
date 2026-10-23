@@ -7,7 +7,7 @@ The checkout below targets the final-art candidate branch, which contains the ac
 ```sh
 git clone https://github.com/Ranger-Jay/GraphHacks-Cubes-of-Knowledge.git
 cd GraphHacks-Cubes-of-Knowledge
-git switch gem/visual-preservation-v054
+git switch buddy/approved-art-integration-v058
 npm ci
 cp .env.example .env
 ```
