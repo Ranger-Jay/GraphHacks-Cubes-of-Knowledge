@@ -145,6 +145,7 @@ export class SceneThreeRenderer {
   private touchPointers = new Map<number, { x: number; y: number }>();
   private pinchDistance: number | null = null;
   private suppressTouchClick = false;
+  private suppressSunClick = false;
 
   // Bound Event Handlers for Reliable Removal
   private handleResizeBound: () => void;
@@ -1711,11 +1712,12 @@ export class SceneThreeRenderer {
     const sx = rect.left + (p.x * 0.5 + 0.5) * rect.width;
     const sy = rect.top + (-(p.y * 0.5) + 0.5) * rect.height;
 
-    // Dynamic visible radius from 3D corona extent (2.4 units) projected to screen pixels
-    const edgePos = sunWorldPos.clone().add(new THREE.Vector3(2.4, 0, 0));
+    // Project the core along camera-right; a fixed 90px minimum swallowed agents when zoomed out.
+    const right = new THREE.Vector3().setFromMatrixColumn(this.camera.matrixWorld, 0);
+    const edgePos = sunWorldPos.clone().addScaledVector(right, 1.25);
     const edgeP = edgePos.project(this.camera);
     const edgeX = rect.left + (edgeP.x * 0.5 + 0.5) * rect.width;
-    const radiusPx = Math.max(90, Math.min(280, Math.abs(edgeX - sx)));
+    const radiusPx = Math.max(10, Math.min(180, Math.abs(edgeX - sx)));
 
     return { x: sx, y: sy, radiusPx, worldPos: sunWorldPos };
   }
@@ -1729,7 +1731,7 @@ export class SceneThreeRenderer {
   }
 
   private handleClick(event: MouseEvent): void {
-    if (this.suppressTouchClick) return;
+    if (this.suppressTouchClick || this.suppressSunClick) return;
     if (this.cubeFocus === 'disconnected') return;
     const sunMetrics = this.getSunScreenMetrics();
     if (sunMetrics) {
@@ -1766,6 +1768,7 @@ export class SceneThreeRenderer {
     this.dragStartPos = { x: event.clientX, y: event.clientY };
     this.previousMousePos = { x: event.clientX, y: event.clientY };
     this.pendingClickObj = null;
+    this.suppressSunClick = false;
 
     if (this.cubeGroup) this.cubeGroup.updateMatrixWorld(true);
     if (this.sunGroup) this.sunGroup.updateMatrixWorld(true);
@@ -1793,7 +1796,7 @@ export class SceneThreeRenderer {
       if (!isTargetingSun && this.sunGroup) {
         const sunWorldPos = new THREE.Vector3();
         this.sunGroup.getWorldPosition(sunWorldPos);
-        if (this.raycaster.ray.distanceToPoint(sunWorldPos) <= 2.2) {
+        if (this.raycaster.ray.distanceToPoint(sunWorldPos) <= 1.25) {
           isTargetingSun = true;
         }
       }
@@ -1813,6 +1816,7 @@ export class SceneThreeRenderer {
             h.object.userData.isSunCore)
       );
       const cometHit = hits.find((h) => h.object.userData && h.object.userData.isComet);
+      const selectedHit = hits.find(h => h.object.userData.isGraphNode || h.object.userData.isPyramid);
 
       if (this.cubeFocus === 'disconnected') {
         if (mainHit) {
@@ -1828,6 +1832,9 @@ export class SceneThreeRenderer {
           hitInteractiveTarget = true;
         } else if (cometHit) {
           this.pendingClickObj = cometHit.object;
+          hitInteractiveTarget = true;
+        } else if (selectedHit) {
+          this.pendingClickObj = selectedHit.object;
           hitInteractiveTarget = true;
         } else if (isTargetingSun) {
           this.pendingClickObj = this.sunHitSphere || this.sunGroup;
@@ -2013,7 +2020,9 @@ export class SceneThreeRenderer {
       }
 
       // 3. Normal Main Cube interactions
-      const isSun = isSunScreenTarget || u.isSunCore || this.pendingClickObj === this.sunGroup || this.pendingClickObj === this.sunHitSphere;
+      const explicitSelection = u.isComet || u.isGraphNode || u.isPyramid;
+      const isSun = (!explicitSelection && isSunScreenTarget) || u.isSunCore || this.pendingClickObj === this.sunGroup || this.pendingClickObj === this.sunHitSphere;
+      this.suppressSunClick = explicitSelection || dragDist > 12;
       const maxDrag = isSun || u.isComet ? 32 : 12;
 
       if (dragDist <= maxDrag) {
@@ -2038,7 +2047,7 @@ export class SceneThreeRenderer {
           this.raycaster.setFromCamera(this.mouse, this.camera);
           const sunWorldPos = new THREE.Vector3();
           this.sunGroup.getWorldPosition(sunWorldPos);
-          if (this.raycaster.ray.distanceToPoint(sunWorldPos) <= 2.2) {
+          if (this.raycaster.ray.distanceToPoint(sunWorldPos) <= 1.25) {
             this.triggerSunClick();
           }
         }
