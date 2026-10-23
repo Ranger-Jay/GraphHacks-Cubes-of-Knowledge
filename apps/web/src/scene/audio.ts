@@ -42,6 +42,11 @@ export function getActiveAgentId(): AgentId | null {
   return activeAgentId;
 }
 
+/** Presentation-only query: cosmetic effects must yield to both recorded and local read-aloud speech. */
+export function isSpeechActive(): boolean {
+  return activeAudio !== null || activeReadAloud !== null;
+}
+
 export function setAudioMuted(muted: boolean): void {
   const changed = audioMuted !== muted;
   audioMuted = muted;

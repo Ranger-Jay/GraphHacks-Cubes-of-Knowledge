@@ -1,5 +1,5 @@
 import type { ScenePhase } from '@cubes/contracts';
-import { getActiveAgentId, isAudioMuted, subscribeAudioMuted } from '../audio.js';
+import { isSpeechActive, isAudioMuted, subscribeAudioMuted } from '../audio.js';
 
 /** Short, local cosmetic sounds. Never speech, workflow feedback, or a network request. */
 export class SceneSoundEffects {
@@ -20,7 +20,7 @@ export class SceneSoundEffects {
   update(phase: ScenePhase): void { this.phase = phase; if (phase !== 'READY') this.stop(); }
 
   private allowed(): boolean {
-    return !this.disposed && this.phase === 'READY' && !isAudioMuted() && getActiveAgentId() === null
+    return !this.disposed && this.phase === 'READY' && !isAudioMuted() && !isSpeechActive()
       && typeof document !== 'undefined' && !document.hidden;
   }
 
