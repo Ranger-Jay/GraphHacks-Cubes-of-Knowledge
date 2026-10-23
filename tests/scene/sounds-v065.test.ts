@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { SceneSoundEffects } from '../../apps/web/src/scene/space/SceneSoundEffects';
-import { setAudioMuted } from '../../apps/web/src/scene/audio';
+import { setAudioMuted, readCurrentExplanation, speakAuthorizedClip, cancelSpeech, isSpeechActive } from '../../apps/web/src/scene/audio';
 
 function environment() {
   const originals = new Map(['document', 'navigator', 'AudioContext'].map(key => [key, Object.getOwnPropertyDescriptor(globalThis, key)]));
@@ -56,5 +56,33 @@ test('outage, hidden page and disposal cancel cosmetic audio without changing gl
       assert.equal(env.contexts[0]!.closed, true);
       sound.play('chime'); assert.equal(env.contexts.length, 1);
     } finally { sound.dispose(); assert.equal(env.listeners.size, 0); env.restore(); }
+  }
+});
+
+test('recorded and local read-aloud speech suppress and preempt cosmetic audio', async () => {
+  const env = environment();
+  const keys = ['window', 'Audio', 'SpeechSynthesisUtterance'];
+  const original = new Map(keys.map(key => [key, Object.getOwnPropertyDescriptor(globalThis, key)]));
+  class FakeAudio { onended = null; onerror = null; currentTime = 0; async play() {} pause() {} }
+  class Utterance { voice = null; lang = ''; rate = 1; pitch = 1; onend = null; onerror = null; constructor(public text: string) {} }
+  const voice = { localService: true, voiceURI: 'device-fixture', lang: 'en-US' };
+  for (const [key, value] of Object.entries({ window: { speechSynthesis: { cancel() {}, getVoices: () => [voice], speak() {} } }, Audio: FakeAudio, SpeechSynthesisUtterance: Utterance })) Object.defineProperty(globalThis, key, { configurable: true, value });
+  try {
+    for (const mode of ['recorded', 'read-aloud']) {
+      const sound = new SceneSoundEffects();
+      try {
+        setAudioMuted(false); env.activation.isActive = true; sound.update('READY'); sound.play('chime');
+        const context = env.contexts.at(-1)!;
+        if (mode === 'recorded') speakAuthorizedClip('ava', 'greeting', 'READY');
+        else assert.equal(readCurrentExplanation('Actual current explanation.', 'ava', voice.voiceURI, 'READY').started, true);
+        assert.equal(isSpeechActive(), true);
+        await new Promise(resolve => setTimeout(resolve, 45));
+        assert.equal(context.closed, true);
+        const count = env.contexts.length; sound.play('aperture'); assert.equal(env.contexts.length, count);
+      } finally { cancelSpeech(); sound.dispose(); }
+    }
+  } finally {
+    for (const [key, descriptor] of original) { if (descriptor) Object.defineProperty(globalThis, key, descriptor); else Reflect.deleteProperty(globalThis, key); }
+    env.restore();
   }
 });
