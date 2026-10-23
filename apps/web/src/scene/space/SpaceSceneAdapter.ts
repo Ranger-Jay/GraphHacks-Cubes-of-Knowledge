@@ -8,6 +8,7 @@ import type {
 import type { SpaceSceneBridge, SpaceSceneInstance, SpaceSceneMountOptions } from './types.js';
 import { SolarCorePanel } from './SolarCorePanel.js';
 import { SceneThreeRenderer } from './SceneThreeRenderer.js';
+import { SceneSoundEffects } from './SceneSoundEffects.js';
 
 const SPACE_SCENE_ADAPTER_STYLES = `
 /* Scoped Space Scene & Solar Core Styles (Self-Contained, Zero Tailwind Dependency) */
@@ -456,6 +457,7 @@ export class SpaceSceneAdapter implements SpaceSceneInstance {
 
   // Multi-Cube Focus State ('main' | 'disconnected')
   private currentCubeFocus: 'main' | 'disconnected' = 'main';
+  private readonly soundEffects = new SceneSoundEffects();
 
   constructor(
     container: HTMLElement,
@@ -643,9 +645,9 @@ export class SpaceSceneAdapter implements SpaceSceneInstance {
   private wireHUDControls(): void {
     if (!this.hudEl) return;
 
-    this.hudEl.querySelector<HTMLButtonElement>('.btn-zoom-in')?.addEventListener('click', () => this.threeRenderer?.zoomIn());
-    this.hudEl.querySelector<HTMLButtonElement>('.btn-zoom-out')?.addEventListener('click', () => this.threeRenderer?.zoomOut());
-    this.hudEl.querySelector<HTMLButtonElement>('.btn-show-both')?.addEventListener('click', () => this.threeRenderer?.showBothCubes());
+    this.hudEl.querySelector<HTMLButtonElement>('.btn-zoom-in')?.addEventListener('click', () => { this.threeRenderer?.zoomIn(); this.soundEffects.play('chime'); });
+    this.hudEl.querySelector<HTMLButtonElement>('.btn-zoom-out')?.addEventListener('click', () => { this.threeRenderer?.zoomOut(); this.soundEffects.play('chime'); });
+    this.hudEl.querySelector<HTMLButtonElement>('.btn-show-both')?.addEventListener('click', () => { this.threeRenderer?.showBothCubes(); this.soundEffects.play('chime'); });
 
     // Focus Disconnected Cube Button
     const focusDiscBtn = this.hudEl.querySelector<HTMLButtonElement>('.btn-focus-disconnected');
@@ -712,6 +714,7 @@ export class SpaceSceneAdapter implements SpaceSceneInstance {
   public update(snapshot: SpaceSceneSnapshot): void {
     if (this.isDestroyed) return;
     this.snapshot = snapshot;
+    this.soundEffects.update(snapshot.runtime.phase);
     this.rootEl?.setAttribute('data-phase', snapshot.runtime.phase);
 
     // Update Three.js scene
@@ -958,6 +961,7 @@ export class SpaceSceneAdapter implements SpaceSceneInstance {
 
   public openSolarPanel(opener?: HTMLElement | null): void {
     if (this.currentCubeFocus === 'disconnected') return;
+    this.soundEffects.play('aperture');
     this.lastSolarOpener = opener ?? null;
     this.solarPanel?.open(opener);
   }
@@ -985,6 +989,7 @@ export class SpaceSceneAdapter implements SpaceSceneInstance {
   public unmount(): void {
     if (this.isDestroyed) return;
     this.isDestroyed = true;
+    this.soundEffects.dispose();
 
     if (this.unbindAddedListener) {
       this.unbindAddedListener();
